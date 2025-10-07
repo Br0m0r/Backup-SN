@@ -1,0 +1,60 @@
+# Docker Compose for Social Network Microservices
+# Each service runs its own main.go on its own port
+version: '3.8'
+
+# Network for service-to-service communication
+networks:
+  social-network:
+    driver: bridge
+
+services:
+  # Shared database - all services connect to this
+  database:
+    image: alpine:latest
+    container_name: social-db
+    volumes:
+      - ./social_network.db:/app/social_network.db
+      - ./db/migrations:/app/migrations
+    networks:
+      - social-network
+
+  # Auth Service - services/auth/main.go runs on port 8081
+  auth-service:
+    build: ./services/auth  # Uses services/auth/Dockerfile
+    container_name: auth-service
+    ports:
+      - "8081:8081"
+    depends_on:
+      - database
+    networks:
+      - social-network
+    environment:
+      - DB_PATH=/app/social_network.db
+    volumes:
+      - ./social_network.db:/app/social_network.db
+
+  # User Service - services/users/main.go runs on port 8082
+  user-service:
+    build: ./services/users  # Uses services/users/Dockerfile
+    container_name: user-service
+    ports:
+      - "8082:8082"
+    depends_on:
+      - database
+      - auth-service  # User service needs auth service for token verification
+    networks:
+      - social-network
+    environment:
+      - DB_PATH=/app/social_network.db
+      - AUTH_SERVICE_URL=http://auth-service:8081  # How user service finds auth service
+    volumes:
+      - ./social_network.db:/app/social_network.db
+
+# To run:
+# docker-compose up --build
+# 
+# To test:
+# curl http://localhost:8081/health  (auth service)
+# curl http://localhost:8082/health  (user service)
+#
+# Each service runs independently with its own main.go!
