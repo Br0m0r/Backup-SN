@@ -122,3 +122,12 @@ func (s *AuthService) Logout(token string) error {
 	s.tokenService.InvalidateToken(token)
 	return nil
 }
+
+// GetUserByID retrieves user information by ID (for internal service communication)
+func (s *AuthService) GetUserByID(userID int) (*models.User, error) {
+	user, err := db.GetUserByID(s.database, userID)
+	if err != nil {
+		return nil, err
+	}
+	return user, nil
+}

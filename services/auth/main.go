@@ -33,13 +33,15 @@ func main() {
 	// Setup routes
 	mux := http.NewServeMux()
 
-	// Authentication routes
+	// Authentication routes (as per flowchart)
 	mux.HandleFunc("/register", authHandlers.Register)
 	mux.HandleFunc("/login", authHandlers.Login)
 	mux.HandleFunc("/logout", authHandlers.Logout)
+	mux.HandleFunc("/session", tokenHandlers.GetSession)
 
-	// Token verification route (for other services)
-	mux.HandleFunc("/verify-token", tokenHandlers.VerifyToken)
+	// Internal routes (for microservice communication)
+	mux.HandleFunc("/internal/verify-token", tokenHandlers.VerifyToken)
+	mux.HandleFunc("/internal/user/", tokenHandlers.GetUserByID)
 
 	// Health check
 	mux.HandleFunc("/health", handlers.HealthHandler)
