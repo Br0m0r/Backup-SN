@@ -26,7 +26,7 @@ func NewAuthService(database *sql.DB) *AuthService {
 // Register creates a new user account
 func (s *AuthService) Register(req *models.RegisterRequest) (*models.AuthResponse, error) {
 	// Validate request
-	if err := req.Validate(); err != nil {
+	if err := utils.ValidateRegisterRequest(req); err != nil {
 		return nil, err
 	}
 
@@ -71,7 +71,7 @@ func (s *AuthService) Register(req *models.RegisterRequest) (*models.AuthRespons
 // Login authenticates a user
 func (s *AuthService) Login(req *models.LoginRequest) (*models.AuthResponse, error) {
 	// Validate request
-	if err := req.Validate(); err != nil {
+	if err := utils.ValidateLoginRequest(req); err != nil {
 		return nil, err
 	}
 
