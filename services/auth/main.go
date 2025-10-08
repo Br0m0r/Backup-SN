@@ -2,34 +2,61 @@ package main
 
 import (
 	"database/sql"
-	"encoding/json"
 	"log"
 	"net/http"
 
-	_ "github.com/mattn/go-sqlite3" // SQLite driver - needed for database connection
+	_ "github.com/mattn/go-sqlite3"
+
+	"social-network/services/auth/handlers"
+	"social-network/services/auth/middleware"
+	"social-network/services/auth/services"
 )
 
 func main() {
+	// Initialize database connection
 	db, err := OpenDB("/app/social_network.db")
 	if err != nil {
-		log.Fatal(err)
+		log.Fatalf("Failed to open database: %v", err)
 	}
 	defer db.Close()
 
-	// ONLY auth-related routes - AUTH SERVICE RESPONSIBILITY
-	http.HandleFunc("/register", registerHandler(db))
-	http.HandleFunc("/login", loginHandler(db))
-	http.HandleFunc("/logout", logoutHandler(db))
-	http.HandleFunc("/verify-token", verifyTokenHandler(db))
-	http.HandleFunc("/health", healthHandler)
+	// Initialize services
+	authService := services.NewAuthService(db)
 
-	// Auth Service runs on port 8081
-	log.Println("Auth Service listening on :8081")
-	log.Fatal(http.ListenAndServe(":8081", nil))
+	// Initialize handlers
+	authHandlers := handlers.NewAuthHandlers(authService)
+	tokenHandlers := handlers.NewTokenHandlers(authService)
+
+	// Initialize middleware
+	rateLimiter := middleware.NewRateLimiter()
+
+	// Setup routes
+	mux := http.NewServeMux()
+
+	// Authentication routes
+	mux.HandleFunc("/register", authHandlers.Register)
+	mux.HandleFunc("/login", authHandlers.Login)
+	mux.HandleFunc("/logout", authHandlers.Logout)
+
+	// Token verification route (for other services)
+	mux.HandleFunc("/verify-token", tokenHandlers.VerifyToken)
+
+	// Health check
+	mux.HandleFunc("/health", handlers.HealthHandler)
+
+	// Apply middleware chain
+	handler := middleware.CORS(
+		middleware.Logging(
+			rateLimiter.RateLimit(mux),
+		),
+	)
+
+	// Start server
+	log.Println("Auth Service starting on port :8081")
+	log.Fatal(http.ListenAndServe(":8081", handler))
 }
 
 // OpenDB opens a connection to the SQLite database
-// Each service uses this same function to connect to the SHARED database
 func OpenDB(path string) (*sql.DB, error) {
 	db, err := sql.Open("sqlite3", path)
 	if err != nil {
@@ -43,76 +70,11 @@ func OpenDB(path string) (*sql.DB, error) {
 		return nil, err
 	}
 
+	// Test the connection
+	if err = db.Ping(); err != nil {
+		db.Close()
+		return nil, err
+	}
+
 	return db, nil
-}
-
-// AUTH SERVICE HANDLERS - Only authentication logic
-
-func registerHandler(db *sql.DB) http.HandlerFunc {
-	return func(w http.ResponseWriter, r *http.Request) {
-		if r.Method != "POST" {
-			http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
-			return
-		}
-
-		// Registration logic here
-		// 1. Parse request body for email/password
-		// 2. Hash password
-		// 3. Insert into users table
-		// 4. Generate JWT token or create session
-		// 5. Return token to client
-		log.Println("AUTH SERVICE: Registration request received")
-	}
-}
-
-func loginHandler(db *sql.DB) http.HandlerFunc {
-	return func(w http.ResponseWriter, r *http.Request) {
-		// Login logic here
-		log.Println("AUTH SERVICE: Login request received")
-	}
-}
-
-func logoutHandler(db *sql.DB) http.HandlerFunc {
-	return func(w http.ResponseWriter, r *http.Request) {
-		// Logout logic here
-		log.Println("AUTH SERVICE: Logout request received")
-	}
-}
-
-func verifyTokenHandler(db *sql.DB) http.HandlerFunc {
-	return func(w http.ResponseWriter, r *http.Request) {
-		// CRITICAL: OTHER SERVICES call this endpoint to verify authentication
-		token := r.Header.Get("Authorization")
-
-		// Verify token logic (JWT validation, session check, etc.)
-		if isValidToken(token) {
-			w.WriteHeader(http.StatusOK)
-			json.NewEncoder(w).Encode(map[string]string{
-				"status":  "valid",
-				"userId":  getUserIdFromToken(token),
-				"service": "auth",
-			})
-			log.Println("AUTH SERVICE: Token verified successfully")
-		} else {
-			http.Error(w, "Invalid token", http.StatusUnauthorized)
-			log.Println("AUTH SERVICE: Token verification failed")
-		}
-	}
-}
-
-// Health check endpoint
-func healthHandler(w http.ResponseWriter, r *http.Request) {
-	w.WriteHeader(http.StatusOK)
-	json.NewEncoder(w).Encode(map[string]string{"status": "healthy", "service": "auth"})
-}
-
-// Helper functions
-func isValidToken(token string) bool {
-	// For study purposes, let's just check if token is not empty
-	return token != ""
-}
-
-func getUserIdFromToken(token string) string {
-	// For study purposes, return a dummy user ID
-	return "user123"
 }

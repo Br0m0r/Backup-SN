@@ -1,6 +1,6 @@
 # Social Network Project - Complete Flowchart
 
-**Project Owner:** Br0m0r
+
 
 ---
 
