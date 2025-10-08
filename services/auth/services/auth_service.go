@@ -19,7 +19,7 @@ type AuthService struct {
 func NewAuthService(database *sql.DB) *AuthService {
 	return &AuthService{
 		database:     database,
-		tokenService: NewTokenService(),
+		tokenService: NewTokenService(database),
 	}
 }
 
@@ -119,8 +119,7 @@ func (s *AuthService) VerifyToken(token string) (*models.User, error) {
 
 // Logout invalidates a user's token
 func (s *AuthService) Logout(token string) error {
-	s.tokenService.InvalidateToken(token)
-	return nil
+	return s.tokenService.InvalidateToken(token)
 }
 
 // GetUserByID retrieves user information by ID (for internal service communication)

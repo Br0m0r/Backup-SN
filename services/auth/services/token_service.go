@@ -2,31 +2,30 @@ package services
 
 import (
 	"crypto/rand"
+	"database/sql"
 	"encoding/hex"
 	"errors"
-	"sync"
 	"time"
 )
 
-// TokenService manages authentication tokens
+// TokenService manages authentication tokens and sessions
 type TokenService struct {
-	sessions map[string]SessionData
-	mutex    sync.RWMutex
+	database *sql.DB
 }
 
-// SessionData represents session information
+// SessionData represents session information stored in database
 type SessionData struct {
+	ID        int
 	UserID    int
-	Username  string
-	Email     string
+	Token     string
 	CreatedAt time.Time
 	ExpiresAt time.Time
 }
 
 // NewTokenService creates a new token service
-func NewTokenService() *TokenService {
+func NewTokenService(db *sql.DB) *TokenService {
 	service := &TokenService{
-		sessions: make(map[string]SessionData),
+		database: db,
 	}
 
 	// Start cleanup goroutine to remove expired sessions
@@ -35,76 +34,69 @@ func NewTokenService() *TokenService {
 	return service
 }
 
-// GenerateToken creates a new session token for a user
+// GenerateToken creates a new session token for a user and stores it in the database
 func (ts *TokenService) GenerateToken(userID int, username, email string) (string, error) {
-	// Generate random token
+	// Generate random token (64 character hex string)
 	bytes := make([]byte, 32)
 	if _, err := rand.Read(bytes); err != nil {
 		return "", err
 	}
 	token := hex.EncodeToString(bytes)
 
-	// Store session data
-	ts.mutex.Lock()
-	defer ts.mutex.Unlock()
+	// Calculate expiration (24 hours from now)
+	now := time.Now()
+	expiresAt := now.Add(24 * time.Hour)
 
-	sessionData := SessionData{
-		UserID:    userID,
-		Username:  username,
-		Email:     email,
-		CreatedAt: time.Now(),
-		ExpiresAt: time.Now().Add(24 * time.Hour), // 24 hour expiry
+	// Store session in database
+	query := `INSERT INTO sessions (user_id, token, created_at, expires_at) VALUES (?, ?, ?, ?)`
+	_, err := ts.database.Exec(query, userID, token, now, expiresAt)
+	if err != nil {
+		return "", err
 	}
-
-	ts.sessions[token] = sessionData
 
 	return token, nil
 }
 
-// ValidateToken checks if a token is valid and returns user info
+// ValidateToken checks if a token is valid in the database and returns user info
 func (ts *TokenService) ValidateToken(token string) (*SessionData, error) {
-	ts.mutex.RLock()
-	defer ts.mutex.RUnlock()
+	query := `
+		SELECT id, user_id, token, created_at, expires_at 
+		FROM sessions 
+		WHERE token = ? AND expires_at > datetime('now')
+	`
 
-	sessionData, exists := ts.sessions[token]
-	if !exists {
-		return nil, errors.New("invalid token")
+	var session SessionData
+	err := ts.database.QueryRow(query, token).Scan(
+		&session.ID,
+		&session.UserID,
+		&session.Token,
+		&session.CreatedAt,
+		&session.ExpiresAt,
+	)
+	if err != nil {
+		if err == sql.ErrNoRows {
+			return nil, errors.New("invalid or expired token")
+		}
+		return nil, err
 	}
 
-	// Check if token is expired
-	if time.Now().After(sessionData.ExpiresAt) {
-		// Remove expired token
-		ts.mutex.RUnlock()
-		ts.mutex.Lock()
-		delete(ts.sessions, token)
-		ts.mutex.Unlock()
-		ts.mutex.RLock()
-		return nil, errors.New("token expired")
-	}
-
-	return &sessionData, nil
+	return &session, nil
 }
 
-// InvalidateToken removes a token from the session store
-func (ts *TokenService) InvalidateToken(token string) {
-	ts.mutex.Lock()
-	defer ts.mutex.Unlock()
-	delete(ts.sessions, token)
+// InvalidateToken removes a token from the database (logout)
+func (ts *TokenService) InvalidateToken(token string) error {
+	query := `DELETE FROM sessions WHERE token = ?`
+	_, err := ts.database.Exec(query, token)
+	return err
 }
 
-// cleanupExpiredSessions runs periodically to clean up expired sessions
+// cleanupExpiredSessions runs periodically to clean up expired sessions from database
 func (ts *TokenService) cleanupExpiredSessions() {
 	ticker := time.NewTicker(1 * time.Hour)
 	defer ticker.Stop()
 
 	for range ticker.C {
-		ts.mutex.Lock()
-		now := time.Now()
-		for token, session := range ts.sessions {
-			if now.After(session.ExpiresAt) {
-				delete(ts.sessions, token)
-			}
-		}
-		ts.mutex.Unlock()
+		query := `DELETE FROM sessions WHERE expires_at < datetime('now')`
+		ts.database.Exec(query)
 	}
 }

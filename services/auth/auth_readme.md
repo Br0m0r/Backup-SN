@@ -23,7 +23,9 @@ services/auth/
 **What it does:** Starts everything up
 1. Connects to database
 2. Creates all handlers and services  
-3. Sets up routes (/register, /login, /logout, /session)
+3. Sets up routes:
+   - Public: /register, /login, /logout, /session
+   - Internal: /internal/verify-token, /internal/user/:id
 4. Adds security middleware
 5. Starts server on port 8081
 
@@ -34,8 +36,10 @@ services/auth/
   - `Register()` - Creates new accounts
   - `Login()` - Verifies credentials  
   - `Logout()` - Destroys sessions
-- **`token.go`** - ID Card Checker
-  - `VerifyToken()` - Checks if tokens are valid
+- **`token.go`** - Session & Token Management
+  - `GetSession()` - Get current user session (for frontend)
+  - `VerifyToken()` - Verify tokens (for microservices)
+  - `GetUserByID()` - Get user info (for microservices)
 - **`health.go`** - Health Check
   - `HealthHandler()` - "Are you alive?" checker
 
@@ -47,26 +51,26 @@ services/auth/
 - **`logging.go`** - Records all requests for debugging
 
 ### 📁 **MODELS** - *The Blueprints*
-**What they define:** Data structures
+**What they define:** Data structures (no business logic)
 
 - **`User`** struct - User profile info (ID, username, email, etc.)
 - **`LoginRequest`** - Email + password for login
 - **`RegisterRequest`** - All info needed to create account
 - **`AuthResponse`** - What we send back (user info + token)
-- **`Validate()`** functions - Check if data is correct
 
 ### 📁 **SERVICES** - *The Brain*
 **What they do:** Smart business logic
 
 - **`auth_service.go`** - Main auth logic
-  - `Register()` - Complete signup process
+  - `Register()` - Complete signup process with validation
   - `Login()` - Complete login process
   - `VerifyToken()` - Check if token is real
-  - `Logout()` - Destroy session
-- **`token_service.go`** - Session management
-  - `GenerateToken()` - Create new session tokens
-  - `ValidateToken()` - Check token validity
-  - Auto-cleanup of expired sessions
+  - `Logout()` - Destroy session from database
+  - `GetUserByID()` - Get user info (for microservices)
+- **`token_service.go`** - Database-backed session management
+  - `GenerateToken()` - Create & store session tokens in DB
+  - `ValidateToken()` - Check token validity from DB
+  - Auto-cleanup of expired sessions from database
 
 ### 📁 **DB** - *The Librarian*
 **What it does:** Talks to the database
@@ -87,6 +91,9 @@ services/auth/
 - **`response.go`** - Response formatting
   - `SuccessResponse()` - Send success JSON
   - `ErrorResponse()` - Send error JSON
+- **`validation.go`** - Input validation
+  - `ValidateRegisterRequest()` - Check registration data
+  - `ValidateLoginRequest()` - Check login data
 
 ---
 
@@ -102,26 +109,27 @@ services/auth/
 4. 🍽️ Handler: "Registration request received"
 
 5. 🧠 Service: 
-   - Validates data
+   - Validates data (using utils.ValidateRegisterRequest)
    - Checks if username/email exists
    - Hashes password
    - Saves to database
-   - Creates session token
+   - Creates session token (stored in sessions table)
 
-6. 📚 Database: Saves new user
+6. 📚 Database: Saves new user + session token
 
-7. 📦 Response: {user: {...}, token: "abc123"}
+7. 📦 Response: {user: {...}, token: "abc123..."}
 
 8. 👤 User: Gets account + session token
 ```
 
 ## 🎯 WHAT THE AUTH SERVICE DOES
 
-- ✅ **User Registration** - Create new accounts
-- ✅ **User Login** - Verify credentials and create sessions
-- ✅ **Token Management** - Generate and validate session tokens
-- ✅ **User Logout** - Destroy sessions
-- ✅ **Security** - Rate limiting, CORS, password hashing
+- ✅ **User Registration** - Create new accounts with validation
+- ✅ **User Login** - Verify credentials and create database-backed sessions
+- ✅ **Token Management** - Generate & validate session tokens (stored in DB)
+- ✅ **User Logout** - Destroy sessions from database
+- ✅ **Microservice Support** - Internal endpoints for other services
+- ✅ **Security** - Rate limiting, CORS, password hashing (bcrypt)
 - ✅ **Health Checks** - Monitor service status
 
 **Bottom line:** It's your app's security department that handles who can join and who can access what! 🚀
