@@ -1,7 +1,3 @@
-# Docker Compose for Social Network Microservices
-# Each service runs its own main.go on its own port
-version: '3.8'
-
 # Network for service-to-service communication
 networks:
   social-network:
@@ -20,7 +16,9 @@ services:
 
   # Auth Service - services/auth/main.go runs on port 8081
   auth-service:
-    build: ./services/auth  # Uses services/auth/Dockerfile
+    build:
+      context: .  # Build from root, not ./services/auth
+      dockerfile: ./services/auth/Dockerfile
     container_name: auth-service
     ports:
       - "8081:8081"

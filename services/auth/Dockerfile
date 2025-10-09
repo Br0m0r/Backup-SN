@@ -1,17 +1,22 @@
 # Dockerfile for Auth Service
 FROM golang:1.24-alpine AS builder
 
+# Install build dependencies for CGO(this was added because there was an error compiling with sqlite,
+# particularly: sqlite3.Error: no such module: sqlite3)
+RUN apk add --no-cache gcc musl-dev sqlite-dev
+
 WORKDIR /app
 
 # Copy go mod files from root project
-COPY ../../go.mod ../../go.sum ./
+COPY go.mod go.sum ./
 RUN go mod download
 
 # Copy auth service source code
-COPY . .
+COPY services/auth/ ./services/auth/
 
-# Build the auth service binary
-RUN go build -o auth-service .
+# Build the auth service binary with CGO enabled
+ENV CGO_ENABLED=1
+RUN go build -o auth-service ./services/auth
 
 # Final stage
 FROM alpine:latest
