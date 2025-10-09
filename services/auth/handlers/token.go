@@ -112,3 +112,5 @@ func (h *TokenHandlers) GetUserByID(w http.ResponseWriter, r *http.Request) {
 		"user": user,
 	})
 }
+
+//Maybe keep either verifyToken or GetSession, not both?We ll see

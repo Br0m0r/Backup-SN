@@ -30,32 +30,37 @@ func main() {
 	// Initialize middleware
 	rateLimiter := middleware.NewRateLimiter()
 
-	// Setup routes
-	mux := http.NewServeMux()
+	// Public endpoints (need CORS for browsers)
+	publicMux := http.NewServeMux()
+	publicMux.HandleFunc("/register", rateLimiter.RateLimit(http.HandlerFunc(authHandlers.Register)).ServeHTTP)
+	publicMux.HandleFunc("/login", rateLimiter.RateLimit(http.HandlerFunc(authHandlers.Login)).ServeHTTP)
+	publicMux.HandleFunc("/logout", authHandlers.Logout)
+	publicMux.HandleFunc("/session", tokenHandlers.GetSession)
 
-	// Authentication routes (as per flowchart)
-	mux.HandleFunc("/register", authHandlers.Register)
-	mux.HandleFunc("/login", authHandlers.Login)
-	mux.HandleFunc("/logout", authHandlers.Logout)
-	mux.HandleFunc("/session", tokenHandlers.GetSession)
+	// Internal endpoints (no CORS needed)
+	internalMux := http.NewServeMux()
+	internalMux.HandleFunc("/internal/verify-token", tokenHandlers.VerifyToken)
+	internalMux.HandleFunc("/internal/user/", tokenHandlers.GetUserByID)
+	internalMux.HandleFunc("/health", handlers.HealthHandler)
 
-	// Internal routes (for microservice communication)
-	mux.HandleFunc("/internal/verify-token", tokenHandlers.VerifyToken)
-	mux.HandleFunc("/internal/user/", tokenHandlers.GetUserByID)
+	// Main router
+	mainMux := http.NewServeMux()
 
-	// Health check
-	mux.HandleFunc("/health", handlers.HealthHandler)
-
-	// Apply middleware chain
-	handler := middleware.CORS(
-		middleware.Logging(
-			rateLimiter.RateLimit(mux),
-		),
+	// Apply CORS only to public routes
+	publicHandler := middleware.CORS(
+		middleware.Logging(publicMux),
 	)
 
-	// Start server
+	// No CORS for internal routes (just logging)
+	internalHandler := middleware.Logging(internalMux)
+
+	// Route based on path
+	mainMux.Handle("/internal/", internalHandler)
+	mainMux.Handle("/health", internalHandler)
+	mainMux.Handle("/", publicHandler)
+
 	log.Println("Auth Service starting on port :8081")
-	log.Fatal(http.ListenAndServe(":8081", handler))
+	log.Fatal(http.ListenAndServe(":8081", mainMux))
 }
 
 // OpenDB opens a connection to the SQLite database
