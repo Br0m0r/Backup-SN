@@ -1,25 +1,26 @@
-# 🚀 Quick Start Guide
+# Quick Start Guide
 
 > **Quick Navigation:** Use `Ctrl+F` to search, or click any link in the Table of Contents below.
 
-## 📑 Table of Contents
+## Table of Contents
 - [Prerequisites](#prerequisites)
-- [1️⃣ Database Setup](#1️⃣-database-setup-first-time-only)
-- [2️⃣ Start Services](#2️⃣-start-services)
-- [3️⃣ Test the API](#3️⃣-test-the-api)
-- [🗄️ Database Inspection (Docker)](#️-database-inspection-docker)
+- [Database Setup](#database-setup)
+- [Start Services](#start-services)
+- [Test the API](#test-the-api)
+- [Database Inspection (Docker)](#database-inspection-docker)
   - [View Users](#view-users)
   - [View Posts & Comments](#view-posts--comments)
   - [View Sessions](#view-sessions)
   - [View Relationships](#view-relationships-follows)
   - [View Messages](#view-messages)
   - [Advanced Queries](#advanced-queries)
-- [🔄 When to Rebuild/Restart](#-when-to-rebuildrestart)
-- [🔍 Troubleshooting](#-troubleshooting)
-- [📊 Useful Commands](#-useful-commands)
-- [📝 Adding New Migrations](#-adding-new-database-migrations)
-- [✅ Health Check](#-health-check)
-- [📚 Port Reference](#-port-reference)
+- [When to Rebuild/Restart](#when-to-rebuildrestart)
+- [Troubleshooting](#troubleshooting)
+- [Useful Commands](#useful-commands)
+- [Adding New Migrations](#adding-new-migrations)
+- [Health Check](#health-check)
+- [Port Reference](#port-reference)
+- [Quick Command Reference](#quick-command-reference)
 
 ---
 
@@ -30,7 +31,7 @@
 
 ---
 
-## 1️⃣ Database Setup (First Time Only)
+## Database Setup
 
 ```bash
 cd /home/mfoteino/Zone/social-network
@@ -52,11 +53,11 @@ sqlite3 social_network.db ".tables"
 - ✅ Immediate data visibility
 - ⚠️ Database locked while containers access it (use Docker exec for queries)
 
-**[↑ Back to Top](#-quick-start-guide)**
+**[Back to Top](#quick-start-guide)**
 
 ---
 
-## 2️⃣ Start Services
+## Start Services
 
 ```bash
 # Build and start all containers
@@ -71,11 +72,11 @@ sudo docker compose logs -f
 # Look for: "Connected to database" and "Service starting on port"
 ```
 
-**[↑ Back to Top](#-quick-start-guide)**
+**[Back to Top](#quick-start-guide)**
 
 ---
 
-## 3️⃣ Test the API
+## Test the API
 
 ### Using Frontend (Simple)
 ```bash
@@ -107,11 +108,11 @@ curl http://localhost:8082/profile \
   -H "Authorization: Bearer YOUR_TOKEN_HERE"
 ```
 
-**[↑ Back to Top](#-quick-start-guide)**
+**[Back to Top](#quick-start-guide)**
 
 ---
 
-## 🗄️ Database Inspection (Docker)
+## Database Inspection (Docker)
 
 **Why Docker exec?** Since we use DELETE journal mode, the database is locked when containers are running. Query through any container to access the shared database.
 
@@ -149,7 +150,7 @@ sudo docker exec auth-service sqlite3 /app/social_network.db \
   "SELECT is_public_profile, COUNT(*) FROM users GROUP BY is_public_profile;"
 ```
 
-**[↑ Back to Top](#-quick-start-guide)**
+**[Back to Top](#quick-start-guide)**
 
 ---
 
@@ -188,7 +189,7 @@ sudo docker exec post-service sqlite3 /app/social_network.db \
    WHERE c.post_id=1;"
 ```
 
-**[↑ Back to Top](#-quick-start-guide)**
+**[Back to Top](#quick-start-guide)**
 
 ---
 
@@ -217,7 +218,7 @@ sudo docker exec auth-service sqlite3 /app/social_network.db \
    GROUP BY u.id;"
 ```
 
-**[↑ Back to Top](#-quick-start-guide)**
+**[Back to Top](#quick-start-guide)**
 
 ---
 
@@ -255,7 +256,7 @@ sudo docker exec user-service sqlite3 /app/social_network.db \
    LIMIT 10;"
 ```
 
-**[↑ Back to Top](#-quick-start-guide)**
+**[Back to Top](#quick-start-guide)**
 
 ---
 
@@ -289,7 +290,7 @@ sudo docker exec user-service sqlite3 /app/social_network.db \
    LIMIT 20;"
 ```
 
-**[↑ Back to Top](#-quick-start-guide)**
+**[Back to Top](#quick-start-guide)**
 
 ---
 
@@ -353,11 +354,11 @@ sudo docker exec auth-service sqlite3 /app/social_network.db \
   ".mode column" ".headers on" "SELECT * FROM users LIMIT 3;"
 ```
 
-**[↑ Back to Top](#-quick-start-guide)**
+**[Back to Top](#quick-start-guide)**
 
 ---
 
-## 🔄 When to Rebuild/Restart
+## When to Rebuild/Restart
 
 | Change Type | Command | Why |
 |-------------|---------|-----|
@@ -371,11 +372,11 @@ sudo docker exec auth-service sqlite3 /app/social_network.db \
 sudo docker compose up --build -d user-service
 ```
 
-**[↑ Back to Top](#-quick-start-guide)**
+**[Back to Top](#quick-start-guide)**
 
 ---
 
-## 🔍 Troubleshooting
+## Troubleshooting
 
 ### Services won't start
 ```bash
@@ -425,11 +426,11 @@ for f in db/migrations/*.up.sql; do sqlite3 social_network.db < "$f"; done
 sudo docker compose up --build -d
 ```
 
-**[↑ Back to Top](#-quick-start-guide)**
+**[Back to Top](#quick-start-guide)**
 
 ---
 
-## 📊 Useful Commands
+## Useful Commands
 
 ### Container Management
 ```bash
@@ -458,7 +459,7 @@ sudo docker compose rm
 ### Database Queries
 **⚠️ Important:** With DELETE journal mode, the database is locked when containers run.
 
-**While containers are running:** Use Docker exec (see [Database Inspection](#️-database-inspection-docker))
+**While containers are running:** Use Docker exec (see [Database Inspection](#database-inspection-docker))
 ```bash
 # Example: List users via Docker
 sudo docker exec auth-service sqlite3 /app/social_network.db "SELECT * FROM users;"
@@ -475,11 +476,11 @@ sqlite3 social_network.db "SELECT * FROM posts;"
 sqlite3 social_network.db ".tables"
 ```
 
-**[↑ Back to Top](#-quick-start-guide)**
+**[Back to Top](#quick-start-guide)**
 
 ---
 
-## 📝 Adding New Database Migrations
+## Adding New Migrations
 
 ```bash
 # 1. Create migration files
@@ -498,11 +499,11 @@ sqlite3 social_network.db < db/migrations/000014_NewFeature.up.sql
 sudo docker compose up -d
 ```
 
-**[↑ Back to Top](#-quick-start-guide)**
+**[Back to Top](#quick-start-guide)**
 
 ---
 
-## ✅ Health Check
+## Health Check
 
 Services are working when:
 - ✅ `sudo docker ps` shows 3 running containers
@@ -512,11 +513,11 @@ Services are working when:
 - ✅ Frontend loads without console errors
 - ✅ Can register and login successfully
 
-**[↑ Back to Top](#-quick-start-guide)**
+**[Back to Top](#quick-start-guide)**
 
 ---
 
-## 📚 Port Reference
+## Port Reference
 
 | Service | Port | Health Check |
 |---------|------|--------------|
@@ -524,11 +525,11 @@ Services are working when:
 | User    | 8082 | `curl http://localhost:8082/health` |
 | Post    | 8083 | `curl http://localhost:8083/health` |
 
-**[↑ Back to Top](#-quick-start-guide)**
+**[Back to Top](#quick-start-guide)**
 
 ---
 
-## 🎯 Quick Command Reference
+## Quick Command Reference
 
 ### Most Common Commands
 ```bash
