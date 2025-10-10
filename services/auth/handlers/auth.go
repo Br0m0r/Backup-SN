@@ -22,7 +22,7 @@ func NewAuthHandlers(authService *services.AuthService) *AuthHandlers {
 	}
 }
 
-// Register handles user registration
+// Register handles POST /register requests
 func (h *AuthHandlers) Register(w http.ResponseWriter, r *http.Request) {
 	if r.Method != "POST" {
 		utils.ErrorResponse(w, "Method not allowed", http.StatusMethodNotAllowed)
@@ -44,7 +44,7 @@ func (h *AuthHandlers) Register(w http.ResponseWriter, r *http.Request) {
 	utils.SuccessResponse(w, authResponse)
 }
 
-// Login handles user authentication
+// Login handles POST /login requests
 func (h *AuthHandlers) Login(w http.ResponseWriter, r *http.Request) {
 	if r.Method != "POST" {
 		utils.ErrorResponse(w, "Method not allowed", http.StatusMethodNotAllowed)
@@ -66,7 +66,7 @@ func (h *AuthHandlers) Login(w http.ResponseWriter, r *http.Request) {
 	utils.SuccessResponse(w, authResponse)
 }
 
-// Logout handles user logout
+// Logout handles POST /logout requests
 func (h *AuthHandlers) Logout(w http.ResponseWriter, r *http.Request) {
 	if r.Method != "POST" {
 		utils.ErrorResponse(w, "Method not allowed", http.StatusMethodNotAllowed)

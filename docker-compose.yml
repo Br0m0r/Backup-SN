@@ -50,11 +50,32 @@ services:
     volumes:
       - ./social_network.db:/app/social_network.db
 
+  # Post Service - services/posts/main.go runs on port 8083
+  post-service:
+    build:
+      context: .  # Build from root
+      dockerfile: ./services/posts/Dockerfile
+    container_name: post-service
+    ports:
+      - "8083:8083"
+    depends_on:
+      - database
+      - auth-service  # Post service needs auth service for token verification
+    networks:
+      - social-network
+    environment:
+      - DB_PATH=/app/social_network.db
+      - AUTH_SERVICE_URL=http://auth-service:8081  # How post service finds auth service
+      - PORT=8083
+    volumes:
+      - ./social_network.db:/app/social_network.db
+
 # To run:
 # docker-compose up --build
 # 
 # To test:
 # curl http://localhost:8081/health  (auth service)
 # curl http://localhost:8082/health  (user service)
+# curl http://localhost:8083/posts   (post service - requires auth token)
 #
 # Each service runs independently with its own main.go!

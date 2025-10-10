@@ -17,6 +17,23 @@ type User struct {
 	CreatedAt       time.Time `json:"created_at"`
 }
 
+// PublicProfile returns a user profile without sensitive information
+func (u *User) PublicProfile() *User {
+	return &User{
+		ID:       u.ID,
+		Username: u.Username,
+		// Email omitted for privacy
+		// DateOfBirth omitted for privacy
+		FirstName:       u.FirstName,
+		LastName:        u.LastName,
+		AvatarPath:      u.AvatarPath,
+		Nickname:        u.Nickname,
+		AboutMe:         u.AboutMe,
+		IsPublicProfile: u.IsPublicProfile,
+		CreatedAt:       u.CreatedAt,
+	}
+}
+
 // UpdateProfileRequest represents profile update payload
 type UpdateProfileRequest struct {
 	FirstName       *string `json:"first_name,omitempty"`

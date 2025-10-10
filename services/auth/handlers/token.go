@@ -22,7 +22,8 @@ func NewTokenHandlers(authService *services.AuthService) *TokenHandlers {
 	}
 }
 
-// VerifyToken handles token verification requests(Called by other microservices via /internal/verify-token)
+// VerifyToken handles GET/POST /internal/verify-token requests
+// Called by other microservices for token validation
 func (h *TokenHandlers) VerifyToken(w http.ResponseWriter, r *http.Request) {
 	if r.Method != "GET" && r.Method != "POST" {
 		utils.ErrorResponse(w, "Method not allowed", http.StatusMethodNotAllowed)
@@ -56,7 +57,8 @@ func (h *TokenHandlers) VerifyToken(w http.ResponseWriter, r *http.Request) {
 	json.NewEncoder(w).Encode(response)
 }
 
-// GetSession handles session info requests (replaces VerifyToken for frontend)(Called by React frontend or whatever)
+// GetSession handles GET /session requests
+// Called by frontend to get current authenticated user info
 func (h *TokenHandlers) GetSession(w http.ResponseWriter, r *http.Request) {
 	if r.Method != "GET" {
 		utils.ErrorResponse(w, "Method not allowed", http.StatusMethodNotAllowed)
@@ -85,7 +87,8 @@ func (h *TokenHandlers) GetSession(w http.ResponseWriter, r *http.Request) {
 	})
 }
 
-// GetUserByID handles internal requests for user information by ID
+// GetUserByID handles GET /internal/user/{id} requests
+// Internal endpoint for other microservices to get user info by ID
 func (h *TokenHandlers) GetUserByID(w http.ResponseWriter, r *http.Request) {
 	if r.Method != "GET" {
 		utils.ErrorResponse(w, "Method not allowed", http.StatusMethodNotAllowed)
@@ -112,5 +115,3 @@ func (h *TokenHandlers) GetUserByID(w http.ResponseWriter, r *http.Request) {
 		"user": user,
 	})
 }
-
-//Maybe keep either verifyToken or GetSession, not both?We ll see

@@ -39,6 +39,9 @@ func (h *UserHandlers) GetProfile(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	// Get authenticated user ID from context
+	authUserID, _ := middleware.GetUserIDFromContext(r)
+
 	// Get user profile
 	user, err := h.userService.GetProfile(userID)
 	if err != nil {
@@ -46,9 +49,17 @@ func (h *UserHandlers) GetProfile(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	utils.SuccessResponse(w, map[string]interface{}{
-		"user": user,
-	})
+	// Only show full profile (with email and DOB) to the user themselves
+	if authUserID == userID {
+		utils.SuccessResponse(w, map[string]interface{}{
+			"user": user,
+		})
+	} else {
+		// Show public profile to others (no email, no DOB)
+		utils.SuccessResponse(w, map[string]interface{}{
+			"user": user.PublicProfile(),
+		})
+	}
 }
 
 // UpdateProfile handles PUT /profile requests
