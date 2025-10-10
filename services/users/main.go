@@ -69,12 +69,15 @@ func main() {
 
 	// Apply middleware
 	authMiddleware := middleware.AuthMiddleware(authServiceURL)
+	rateLimiter := middleware.NewRateLimiter()
 
 	// Protected routes (everything except health)
 	protectedMux := http.NewServeMux()
 	protectedMux.Handle("/profile/", authMiddleware(http.HandlerFunc(userHandlers.GetProfile)))
 	protectedMux.Handle("/profile", authMiddleware(http.HandlerFunc(userHandlers.UpdateProfile)))
-	protectedMux.Handle("/follow", authMiddleware(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+
+	// Rate limit the follow endpoint (prevent spam following)
+	protectedMux.Handle("/follow", authMiddleware(rateLimiter.RateLimit(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		switch r.Method {
 		case "POST":
 			userHandlers.FollowUser(w, r)
@@ -83,7 +86,8 @@ func main() {
 		default:
 			http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
 		}
-	})))
+	}))))
+
 	protectedMux.Handle("/followers", authMiddleware(http.HandlerFunc(userHandlers.GetFollowers)))
 	protectedMux.Handle("/following", authMiddleware(http.HandlerFunc(userHandlers.GetFollowing)))
 	protectedMux.Handle("/search", authMiddleware(http.HandlerFunc(userHandlers.SearchUsers)))

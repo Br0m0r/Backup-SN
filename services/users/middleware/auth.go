@@ -8,6 +8,17 @@ import (
 )
 
 // AuthMiddleware verifies the token with the auth service
+//explanation of this matryoshka pattern:
+// We have three layers of functions here, each serving a specific purpose:
+// 1. The outermost function `AuthMiddleware` takes the `authServiceURL` as a parameter.
+//    This allows us to configure the middleware with the URL of the auth service when we set it up.
+//    It returns a function that takes an `http.Handler` and returns another `http.Handler`.
+// 2. The middle function (returned by `AuthMiddleware`) takes the next handler in the chain as a parameter.
+//    This is the actual handler that will process the request if authentication succeeds.
+//    It returns an `http.HandlerFunc`, which is the innermost layer.
+// 3. The innermost function (the `http.HandlerFunc`) is where the actual request processing happens.
+//    It checks the token, calls the auth service, adds user info to the context, and finally calls the next handler if everything is valid.
+
 func AuthMiddleware(authServiceURL string) func(http.Handler) http.Handler {
 	return func(next http.Handler) http.Handler {
 		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
@@ -31,7 +42,7 @@ func AuthMiddleware(authServiceURL string) func(http.Handler) http.Handler {
 			req.Header.Set("Authorization", "Bearer "+token)
 
 			client := &http.Client{}
-			resp, err := client.Do(req)
+			resp, err := client.Do(req) //this is the actual HTTP call to auth service,creates an http client
 			if err != nil || resp.StatusCode != http.StatusOK {
 				http.Error(w, "Invalid or expired token", http.StatusUnauthorized)
 				return

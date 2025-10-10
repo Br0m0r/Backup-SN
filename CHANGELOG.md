@@ -18,6 +18,9 @@
 ### Standardized API Response Format
 **Updated auth service response.go to match user service pattern.** All services now use consistent Response struct with `success`, `data`, and `error` fields for uniform API responses across microservices.
 
+### Rate Limiting and Connection Pooling
+**Added selective rate limiting to user service /follow endpoint and connection pool settings to auth service.** Rate limiting prevents spam following (10 requests/sec per IP), and connection pooling (MaxOpenConns=25, MaxIdleConns=5) improves database performance for both services.
+
 ---
 
 ## Template for Future Entries

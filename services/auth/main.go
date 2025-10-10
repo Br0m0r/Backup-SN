@@ -64,6 +64,7 @@ func main() {
 }
 
 // OpenDB opens a connection to the SQLite database
+// OpenDB opens a connection to the SQLite database
 func OpenDB(path string) (*sql.DB, error) {
 	db, err := sql.Open("sqlite3", path)
 	if err != nil {
@@ -83,5 +84,10 @@ func OpenDB(path string) (*sql.DB, error) {
 		return nil, err
 	}
 
+	// Set connection pool settings
+	db.SetMaxOpenConns(25)
+	db.SetMaxIdleConns(5)
+
+	log.Printf("Connected to database: %s", path)
 	return db, nil
 }
