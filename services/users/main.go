@@ -101,8 +101,16 @@ func OpenDB(dbPath string) (*sql.DB, error) {
 		return nil, err
 	}
 
+	// Enable foreign key constraints
+	_, err = db.Exec("PRAGMA foreign_keys = ON;")
+	if err != nil {
+		db.Close()
+		return nil, err
+	}
+
 	// Test the connection
 	if err = db.Ping(); err != nil {
+		db.Close()
 		return nil, err
 	}
 

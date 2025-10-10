@@ -20,15 +20,24 @@ func OpenDB(dbPath string) (*sql.DB, error) {
 		return nil, err
 	}
 
-	// Test the connection
-	if err := db.Ping(); err != nil {
+	// Enable foreign key constraints
+	_, err = db.Exec("PRAGMA foreign_keys = ON;")
+	if err != nil {
+		db.Close()
 		return nil, err
 	}
 
-	// Set connection pool settings for better performance
+	// Test the connection
+	if err := db.Ping(); err != nil {
+		db.Close()
+		return nil, err
+	}
+
+	// Set connection pool settings
 	db.SetMaxOpenConns(25)
 	db.SetMaxIdleConns(5)
 
+	log.Printf("Connected to database: %s", dbPath)
 	return db, nil
 }
 

@@ -4,6 +4,7 @@ import (
 	"database/sql"
 	"log"
 	"net/http"
+	"os"
 
 	_ "github.com/mattn/go-sqlite3"
 
@@ -13,8 +14,14 @@ import (
 )
 
 func main() {
+	// Get database path from environment or use default
+	dbPath := os.Getenv("DATABASE_PATH")
+	if dbPath == "" {
+		dbPath = "/app/social_network.db"
+	}
+
 	// Initialize database connection
-	db, err := OpenDB("/app/social_network.db")
+	db, err := OpenDB(dbPath)
 	if err != nil {
 		log.Fatalf("Failed to open database: %v", err)
 	}
