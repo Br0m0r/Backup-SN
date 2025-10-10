@@ -2,192 +2,121 @@ package main
 
 import (
 	"database/sql"
-	"encoding/json"
 	"log"
 	"net/http"
 	"os"
 
-	_ "github.com/mattn/go-sqlite3" // SQLite driver
+	_ "github.com/mattn/go-sqlite3"
+
+	"social-network/services/users/handlers"
+	"social-network/services/users/middleware"
+	"social-network/services/users/services"
 )
 
 func main() {
-	db, err := OpenDB("/app/social_network.db")
+	// Get database path from environment or use default
+	dbPath := os.Getenv("DB_PATH")
+	if dbPath == "" {
+		dbPath = "./social_network.db"
+	}
+
+	// Open database connection
+	db, err := OpenDB(dbPath)
 	if err != nil {
-		log.Fatal(err)
+		log.Fatalf("Failed to connect to database: %v", err)
 	}
 	defer db.Close()
+
+	// Initialize services
+	userService := services.NewUserService(db)
+
+	// Initialize handlers
+	userHandlers := handlers.NewUserHandlers(userService)
 
 	// Get auth service URL from environment
 	authServiceURL := os.Getenv("AUTH_SERVICE_URL")
 	if authServiceURL == "" {
-		authServiceURL = "http://auth-service:8081" // Default for Docker
+		authServiceURL = "http://auth-service:8081"
 	}
 
-	// ONLY user-related routes - USER SERVICE RESPONSIBILITY
-	http.HandleFunc("/profile", profileHandler(db, authServiceURL))
-	http.HandleFunc("/follow", followHandler(db, authServiceURL))
-	http.HandleFunc("/unfollow", unfollowHandler(db, authServiceURL))
-	http.HandleFunc("/followers", followersHandler(db, authServiceURL))
-	http.HandleFunc("/following", followingHandler(db, authServiceURL))
-	http.HandleFunc("/search", searchHandler(db, authServiceURL))
-	http.HandleFunc("/health", healthHandler)
+	// Setup routes
+	mux := http.NewServeMux()
 
-	// User Service runs on port 8082
-	log.Println("User Service listening on :8082")
-	log.Fatal(http.ListenAndServe(":8082", nil))
-}
+	// Health check (no auth required)
+	mux.HandleFunc("/health", handlers.HealthHandler)
 
-// Same OpenDB function as Auth Service - connects to SHARED database
-func OpenDB(path string) (*sql.DB, error) {
-	db, err := sql.Open("sqlite3", path)
-	if err != nil {
-		return nil, err
-	}
+	// Profile routes (auth required)
+	mux.HandleFunc("/profile/", userHandlers.GetProfile)
+	mux.HandleFunc("/profile", userHandlers.UpdateProfile)
 
-	_, err = db.Exec("PRAGMA foreign_keys = ON;")
-	if err != nil {
-		db.Close()
-		return nil, err
-	}
-
-	return db, nil
-}
-
-// USER SERVICE HANDLERS - Only user profile and relationship logic
-
-func profileHandler(db *sql.DB, authServiceURL string) http.HandlerFunc {
-	return func(w http.ResponseWriter, r *http.Request) {
-		// Step 1: Verify authentication by calling Auth Service
-		authToken := r.Header.Get("Authorization")
-
-		if !verifyWithAuthService(authToken, authServiceURL) {
-			http.Error(w, "Unauthorized", http.StatusUnauthorized)
-			return
-		}
-
-		// Step 2: Handle user profile logic
+	// Follow routes (auth required)
+	mux.HandleFunc("/follow", func(w http.ResponseWriter, r *http.Request) {
 		switch r.Method {
-		case "GET":
-			// Get user profile from database
-			log.Println("USER SERVICE: Get profile request")
-		case "PUT":
-			// Update user profile in database
-			log.Println("USER SERVICE: Update profile request")
+		case "POST":
+			userHandlers.FollowUser(w, r)
+		case "DELETE":
+			userHandlers.UnfollowUser(w, r)
 		default:
 			http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
 		}
-	}
-}
+	})
 
-func followHandler(db *sql.DB, authServiceURL string) http.HandlerFunc {
-	return func(w http.ResponseWriter, r *http.Request) {
-		if r.Method != "POST" {
+	mux.HandleFunc("/followers", userHandlers.GetFollowers)
+	mux.HandleFunc("/following", userHandlers.GetFollowing)
+
+	// Search route (auth required)
+	mux.HandleFunc("/search", userHandlers.SearchUsers)
+
+	// Apply middleware
+	authMiddleware := middleware.AuthMiddleware(authServiceURL)
+
+	// Protected routes (everything except health)
+	protectedMux := http.NewServeMux()
+	protectedMux.Handle("/profile/", authMiddleware(http.HandlerFunc(userHandlers.GetProfile)))
+	protectedMux.Handle("/profile", authMiddleware(http.HandlerFunc(userHandlers.UpdateProfile)))
+	protectedMux.Handle("/follow", authMiddleware(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		switch r.Method {
+		case "POST":
+			userHandlers.FollowUser(w, r)
+		case "DELETE":
+			userHandlers.UnfollowUser(w, r)
+		default:
 			http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
-			return
 		}
+	})))
+	protectedMux.Handle("/followers", authMiddleware(http.HandlerFunc(userHandlers.GetFollowers)))
+	protectedMux.Handle("/following", authMiddleware(http.HandlerFunc(userHandlers.GetFollowing)))
+	protectedMux.Handle("/search", authMiddleware(http.HandlerFunc(userHandlers.SearchUsers)))
 
-		authToken := r.Header.Get("Authorization")
-		if !verifyWithAuthService(authToken, authServiceURL) {
-			http.Error(w, "Unauthorized", http.StatusUnauthorized)
-			return
-		}
+	// Health check without auth
+	protectedMux.HandleFunc("/health", handlers.HealthHandler)
 
-		// Follow logic - insert into follows table
-		log.Println("USER SERVICE: Follow request")
-	}
+	// Apply common middleware (CORS and Logging)
+	handler := middleware.CORS(
+		middleware.Logging(protectedMux),
+	)
+
+	// Start server
+	log.Println("User Service starting on port :8082")
+	log.Fatal(http.ListenAndServe(":8082", handler))
 }
 
-func unfollowHandler(db *sql.DB, authServiceURL string) http.HandlerFunc {
-	return func(w http.ResponseWriter, r *http.Request) {
-		if r.Method != "DELETE" {
-			http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
-			return
-		}
-
-		authToken := r.Header.Get("Authorization")
-		if !verifyWithAuthService(authToken, authServiceURL) {
-			http.Error(w, "Unauthorized", http.StatusUnauthorized)
-			return
-		}
-
-		// Unfollow logic - delete from follows table
-		log.Println("USER SERVICE: Unfollow request")
-	}
-}
-
-func followersHandler(db *sql.DB, authServiceURL string) http.HandlerFunc {
-	return func(w http.ResponseWriter, r *http.Request) {
-		authToken := r.Header.Get("Authorization")
-		if !verifyWithAuthService(authToken, authServiceURL) {
-			http.Error(w, "Unauthorized", http.StatusUnauthorized)
-			return
-		}
-
-		// Get followers list from database
-		log.Println("USER SERVICE: Get followers request")
-	}
-}
-
-func followingHandler(db *sql.DB, authServiceURL string) http.HandlerFunc {
-	return func(w http.ResponseWriter, r *http.Request) {
-		authToken := r.Header.Get("Authorization")
-		if !verifyWithAuthService(authToken, authServiceURL) {
-			http.Error(w, "Unauthorized", http.StatusUnauthorized)
-			return
-		}
-
-		// Get following list from database
-		log.Println("USER SERVICE: Get following request")
-	}
-}
-
-func searchHandler(db *sql.DB, authServiceURL string) http.HandlerFunc {
-	return func(w http.ResponseWriter, r *http.Request) {
-		authToken := r.Header.Get("Authorization")
-		if !verifyWithAuthService(authToken, authServiceURL) {
-			http.Error(w, "Unauthorized", http.StatusUnauthorized)
-			return
-		}
-
-		// Search users in database
-		log.Println("USER SERVICE: Search users request")
-	}
-}
-
-func healthHandler(w http.ResponseWriter, r *http.Request) {
-	w.WriteHeader(http.StatusOK)
-	json.NewEncoder(w).Encode(map[string]string{"status": "healthy", "service": "users"})
-}
-
-// Helper function - User Service calls Auth Service to verify tokens
-// This is INTER-SERVICE COMMUNICATION in microservices
-func verifyWithAuthService(token, authServiceURL string) bool {
-	if token == "" {
-		return false
-	}
-
-	// Make HTTP call to Auth Service
-	req, err := http.NewRequest("GET", authServiceURL+"/verify-token", nil)
+// OpenDB opens a connection to the SQLite database
+func OpenDB(dbPath string) (*sql.DB, error) {
+	db, err := sql.Open("sqlite3", dbPath)
 	if err != nil {
-		log.Printf("USER SERVICE: Error creating auth request: %v", err)
-		return false
+		return nil, err
 	}
 
-	req.Header.Set("Authorization", token)
-
-	client := &http.Client{}
-	resp, err := client.Do(req)
-	if err != nil {
-		log.Printf("USER SERVICE: Error calling auth service: %v", err)
-		return false
-	}
-	defer resp.Body.Close()
-
-	if resp.StatusCode == 200 {
-		log.Println("USER SERVICE: Token verified by auth service")
-		return true
+	// Test the connection
+	if err = db.Ping(); err != nil {
+		return nil, err
 	}
 
-	log.Println("USER SERVICE: Token rejected by auth service")
-	return false
+	// Set connection pool settings
+	db.SetMaxOpenConns(25)
+	db.SetMaxIdleConns(5)
+
+	log.Printf("Connected to database: %s", dbPath)
+	return db, nil
 }

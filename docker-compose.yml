@@ -33,7 +33,9 @@ services:
 
   # User Service - services/users/main.go runs on port 8082
   user-service:
-    build: ./services/users  # Uses services/users/Dockerfile
+    build:
+      context: .  # Build from root, not ./services/users
+      dockerfile: ./services/users/Dockerfile
     container_name: user-service
     ports:
       - "8082:8082"

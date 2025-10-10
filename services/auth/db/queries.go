@@ -48,14 +48,14 @@ func CreateUser(db *sql.DB, username, email, passwordHash, firstName, lastName s
 // GetUserByEmail retrieves a user by email address
 func GetUserByEmail(db *sql.DB, email string) (*models.User, error) {
 	query := `
-		SELECT id, username, email, password_hash, first_name, last_name, date_of_birth, Avatar_url, 
-		       about_me, is_public_profile, created_at
+		SELECT id, username, email, password_hash, first_name, last_name, date_of_birth, avatar_path, 
+		       nickname, about_me, is_public_profile, created_at
 		FROM users 
 		WHERE email = ?
 	`
 
 	var user models.User
-	var firstName, lastName, dateOfBirth, avatarUrl, aboutMe sql.NullString
+	var firstName, lastName, dateOfBirth, avatarPath, nickname, aboutMe sql.NullString
 
 	err := db.QueryRow(query, email).Scan(
 		&user.ID,
@@ -65,7 +65,8 @@ func GetUserByEmail(db *sql.DB, email string) (*models.User, error) {
 		&firstName,
 		&lastName,
 		&dateOfBirth,
-		&avatarUrl,
+		&avatarPath,
+		&nickname,
 		&aboutMe,
 		&user.IsPublicProfile,
 		&user.CreatedAt,
@@ -87,8 +88,11 @@ func GetUserByEmail(db *sql.DB, email string) (*models.User, error) {
 	if dateOfBirth.Valid {
 		user.DateOfBirth = &dateOfBirth.String
 	}
-	if avatarUrl.Valid {
-		user.AvatarUrl = &avatarUrl.String
+	if avatarPath.Valid {
+		user.AvatarPath = &avatarPath.String
+	}
+	if nickname.Valid {
+		user.Nickname = &nickname.String
 	}
 	if aboutMe.Valid {
 		user.AboutMe = &aboutMe.String
@@ -100,14 +104,14 @@ func GetUserByEmail(db *sql.DB, email string) (*models.User, error) {
 // GetUserByID retrieves a user by ID
 func GetUserByID(db *sql.DB, userID int) (*models.User, error) {
 	query := `
-		SELECT id, username, email, password_hash, first_name, last_name, date_of_birth, Avatar_url, 
-		       about_me, is_public_profile, created_at
+		SELECT id, username, email, password_hash, first_name, last_name, date_of_birth, avatar_path, 
+		       nickname, about_me, is_public_profile, created_at
 		FROM users 
 		WHERE id = ?
 	`
 
 	var user models.User
-	var firstName, lastName, dateOfBirth, avatarUrl, aboutMe sql.NullString
+	var firstName, lastName, dateOfBirth, avatarPath, nickname, aboutMe sql.NullString
 
 	err := db.QueryRow(query, userID).Scan(
 		&user.ID,
@@ -117,7 +121,8 @@ func GetUserByID(db *sql.DB, userID int) (*models.User, error) {
 		&firstName,
 		&lastName,
 		&dateOfBirth,
-		&avatarUrl,
+		&avatarPath,
+		&nickname,
 		&aboutMe,
 		&user.IsPublicProfile,
 		&user.CreatedAt,
@@ -139,8 +144,11 @@ func GetUserByID(db *sql.DB, userID int) (*models.User, error) {
 	if dateOfBirth.Valid {
 		user.DateOfBirth = &dateOfBirth.String
 	}
-	if avatarUrl.Valid {
-		user.AvatarUrl = &avatarUrl.String
+	if avatarPath.Valid {
+		user.AvatarPath = &avatarPath.String
+	}
+	if nickname.Valid {
+		user.Nickname = &nickname.String
 	}
 	if aboutMe.Valid {
 		user.AboutMe = &aboutMe.String

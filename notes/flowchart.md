@@ -6,25 +6,6 @@
 
 ## Project Phases
 
-### Phase Overview
-
-```
-┌─────────────────┐    ┌─────────────────┐    ┌─────────────────┐    ┌─────────────────┐    ┌─────────────────┐
-│   PHASE 1       │───▶│   PHASE 2       │───▶│   PHASE 3       │───▶│   PHASE 4       │───▶│   PHASE 5       │
-│ PLANNING        │    │ INFRASTRUCTURE  │    │ CORE SERVICES   │    │ FRONTEND        │    │ INTEGRATION     │
-│ (Week 1)        │    │ (Week 2-3)      │    │ (Week 4-8)      │    │ (Week 6-10)     │    │ (Week 11-12)    │
-└─────────────────┘    └─────────────────┘    └─────────────────┘    └─────────────────┘    └─────────────────┘
-        │                        │                        │                        │                        │
-        ▼                        ▼                        ▼                        ▼                        ▼
-┌─────────────────┐    ┌─────────────────┐    ┌─────────────────┐    ┌─────────────────┐    ┌─────────────────┐
-│• Requirements   │    │• Docker Setup   │    │• Auth Service   │    │• Component      │    │• API Integration│
-│• Architecture   │    │• Database       │    │• User Service   │    │  Library        │    │• WebSocket      │
-│• DB Design      │    │• Migrations     │    │• Post Service   │    │• Pages          │    │• Testing        │
-│• API Specs      │    │• CI/CD          │    │• Group Service  │    │• State Mgmt     │    │• Deployment     │
-│• Team Roles     │    │• Basic Auth     │    │• Chat Service   │    │• Responsive     │    │• Monitoring     │
-└─────────────────┘    └─────────────────┘    └─────────────────┘    └─────────────────┘    └─────────────────┘
-```
-
 ---
 
 ## System Architecture

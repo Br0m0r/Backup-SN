@@ -13,7 +13,8 @@ type User struct {
 	FirstName       *string   `json:"first_name,omitempty"`
 	LastName        *string   `json:"last_name,omitempty"`
 	DateOfBirth     *string   `json:"date_of_birth,omitempty"`
-	AvatarUrl       *string   `json:"avatar_url,omitempty"`
+	AvatarPath      *string   `json:"avatar_path,omitempty"`
+	Nickname        *string   `json:"nickname,omitempty"`
 	AboutMe         *string   `json:"about_me,omitempty"`
 	IsPublicProfile bool      `json:"is_public_profile"`
 	CreatedAt       time.Time `json:"created_at"`
