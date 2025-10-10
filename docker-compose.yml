@@ -4,16 +4,6 @@ networks:
     driver: bridge
 
 services:
-  # Shared database - all services connect to this
-  database:
-    image: alpine:latest
-    container_name: social-db
-    volumes:
-      - ./social_network.db:/app/social_network.db
-      - ./db/migrations:/app/migrations
-    networks:
-      - social-network
-
   # Auth Service - services/auth/main.go runs on port 8081
   auth-service:
     build:
@@ -22,14 +12,12 @@ services:
     container_name: auth-service
     ports:
       - "8081:8081"
-    depends_on:
-      - database
     networks:
       - social-network
     environment:
-      - DB_PATH=/app/social_network.db
+      - DATABASE_PATH=/app/social_network.db
     volumes:
-      - ./social_network.db:/app/social_network.db
+      - ./social_network.db:/app/social_network.db:rw
 
   # User Service - services/users/main.go runs on port 8082
   user-service:
@@ -40,15 +28,14 @@ services:
     ports:
       - "8082:8082"
     depends_on:
-      - database
       - auth-service  # User service needs auth service for token verification
     networks:
       - social-network
     environment:
-      - DB_PATH=/app/social_network.db
+      - DATABASE_PATH=/app/social_network.db
       - AUTH_SERVICE_URL=http://auth-service:8081  # How user service finds auth service
     volumes:
-      - ./social_network.db:/app/social_network.db
+      - ./social_network.db:/app/social_network.db:rw
 
   # Post Service - services/posts/main.go runs on port 8083
   post-service:
@@ -59,16 +46,15 @@ services:
     ports:
       - "8083:8083"
     depends_on:
-      - database
       - auth-service  # Post service needs auth service for token verification
     networks:
       - social-network
     environment:
-      - DB_PATH=/app/social_network.db
+      - DATABASE_PATH=/app/social_network.db
       - AUTH_SERVICE_URL=http://auth-service:8081  # How post service finds auth service
       - PORT=8083
     volumes:
-      - ./social_network.db:/app/social_network.db
+      - ./social_network.db:/app/social_network.db:rw
 
 # To run:
 # docker-compose up --build
@@ -76,6 +62,7 @@ services:
 # To test:
 # curl http://localhost:8081/health  (auth service)
 # curl http://localhost:8082/health  (user service)
-# curl http://localhost:8083/posts   (post service - requires auth token)
+# curl http://localhost:8083/health  (post service)
 #
-# Each service runs independently with its own main.go!
+# Database: SQLite file shared via volume mount
+# Each service connects directly to ./social_network.db

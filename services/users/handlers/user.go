@@ -2,6 +2,8 @@ package handlers
 
 import (
 	"encoding/json"
+	"fmt"
+	"log"
 	"net/http"
 	"strconv"
 	"strings"
@@ -11,6 +13,21 @@ import (
 	"social-network/services/users/services"
 	"social-network/services/users/utils"
 )
+
+// Helper functions for safe pointer logging
+func getStrValue(s *string) string {
+	if s == nil {
+		return "nil"
+	}
+	return *s
+}
+
+func getBoolValue(b *bool) string {
+	if b == nil {
+		return "nil"
+	}
+	return fmt.Sprintf("%v", *b)
+}
 
 // UserHandlers contains all user-related HTTP handlers
 type UserHandlers struct {
@@ -22,6 +39,34 @@ func NewUserHandlers(userService *services.UserService) *UserHandlers {
 	return &UserHandlers{
 		userService: userService,
 	}
+}
+
+// GetCurrentUserProfile handles GET /profile (current authenticated user)
+func (h *UserHandlers) GetCurrentUserProfile(w http.ResponseWriter, r *http.Request) {
+	log.Printf("GetCurrentUserProfile: called for path=%s", r.URL.Path)
+
+	// Get authenticated user ID from context
+	userID, ok := middleware.GetUserIDFromContext(r)
+	if !ok {
+		log.Printf("GetCurrentUserProfile: Failed to get user ID from context")
+		utils.ErrorResponse(w, "Unauthorized", http.StatusUnauthorized)
+		return
+	}
+
+	log.Printf("GetCurrentUserProfile: Fetching profile for user %d", userID)
+
+	// Get user profile
+	user, err := h.userService.GetProfile(userID)
+	if err != nil {
+		log.Printf("GetCurrentUserProfile: Error fetching user %d: %v", userID, err)
+		utils.ErrorResponse(w, err.Error(), http.StatusNotFound)
+		return
+	}
+
+	// Return full profile for current user
+	utils.SuccessResponse(w, map[string]interface{}{
+		"user": user,
+	})
 }
 
 // GetProfile handles GET /profile/:id requests
@@ -79,13 +124,21 @@ func (h *UserHandlers) UpdateProfile(w http.ResponseWriter, r *http.Request) {
 	// Parse request body
 	var req models.UpdateProfileRequest
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
-		utils.ErrorResponse(w, "Invalid request body", http.StatusBadRequest)
+		log.Printf("UpdateProfile: JSON decode error for user %d: %v", userID, err)
+		utils.ErrorResponse(w, "Invalid request body: "+err.Error(), http.StatusBadRequest)
 		return
 	}
+
+	log.Printf("UpdateProfile: Request for user %d: nickname=%s, about_me=%s, is_public=%s",
+		userID,
+		getStrValue(req.Nickname),
+		getStrValue(req.AboutMe),
+		getBoolValue(req.IsPublicProfile))
 
 	// Update profile
 	user, err := h.userService.UpdateProfile(userID, &req)
 	if err != nil {
+		log.Printf("UpdateProfile: Database error for user %d: %v", userID, err)
 		utils.ErrorResponse(w, err.Error(), http.StatusInternalServerError)
 		return
 	}

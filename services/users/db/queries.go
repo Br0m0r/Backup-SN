@@ -3,6 +3,7 @@ package db
 import (
 	"database/sql"
 	"errors"
+	"log"
 
 	"social-network/services/users/models"
 )
@@ -75,7 +76,10 @@ func UpdateUserProfile(db *sql.DB, userID int, req *models.UpdateProfileRequest)
 		WHERE id = ?
 	`
 
-	_, err := db.Exec(query,
+	log.Printf("UpdateUserProfile: Executing query for user %d with values: firstName=%v, lastName=%v, dob=%v, nickname=%v, about=%v, isPublic=%v",
+		userID, req.FirstName, req.LastName, req.DateOfBirth, req.Nickname, req.AboutMe, req.IsPublicProfile)
+
+	result, err := db.Exec(query,
 		req.FirstName,
 		req.LastName,
 		req.DateOfBirth,
@@ -85,7 +89,15 @@ func UpdateUserProfile(db *sql.DB, userID int, req *models.UpdateProfileRequest)
 		userID,
 	)
 
-	return err
+	if err != nil {
+		log.Printf("UpdateUserProfile: Database error: %v", err)
+		return err
+	}
+
+	rowsAffected, _ := result.RowsAffected()
+	log.Printf("UpdateUserProfile: Updated %d rows for user %d", rowsAffected, userID)
+
+	return nil
 }
 
 // CreateFollow creates a follow relationship

@@ -1,0 +1,154 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Social Network - Test Frontend</title>
+    <link rel="stylesheet" href="style.css">
+</head>
+<body>
+    <div class="container">
+        <h1>🚀 Social Network Test Client</h1>
+
+        <!-- Auth Section -->
+        <div class="auth-section" id="authSection">
+            <h2>🔐 Authentication</h2>
+            
+            <div class="tabs">
+                <button class="tab active" onclick="switchAuthTab('register')">Register</button>
+                <button class="tab" onclick="switchAuthTab('login')">Login</button>
+            </div>
+
+            <!-- Register Form -->
+            <div id="registerForm" class="tab-content active">
+                <div class="form-group">
+                    <label>Username:</label>
+                    <input type="text" id="regUsername" placeholder="johndoe">
+                </div>
+                <div class="form-group">
+                    <label>Email:</label>
+                    <input type="email" id="regEmail" placeholder="john@example.com">
+                </div>
+                <div class="form-group">
+                    <label>Password:</label>
+                    <input type="password" id="regPassword" placeholder="password123">
+                </div>
+                <div class="form-group">
+                    <label>First Name:</label>
+                    <input type="text" id="regFirstName" placeholder="John">
+                </div>
+                <div class="form-group">
+                    <label>Last Name:</label>
+                    <input type="text" id="regLastName" placeholder="Doe">
+                </div>
+                <button onclick="register()">Register</button>
+            </div>
+
+            <!-- Login Form -->
+            <div id="loginForm" class="tab-content">
+                <div class="form-group">
+                    <label>Email:</label>
+                    <input type="email" id="loginEmail" placeholder="john@example.com">
+                </div>
+                <div class="form-group">
+                    <label>Password:</label>
+                    <input type="password" id="loginPassword" placeholder="password123">
+                </div>
+                <button onclick="login()">Login</button>
+            </div>
+
+            <div id="authStatus"></div>
+        </div>
+
+        <!-- Main Section (hidden until logged in) -->
+        <div class="main-section hidden" id="mainSection">
+            <div class="user-info" id="userInfo"></div>
+            <button onclick="logout()">Logout</button>
+            <button onclick="getSession()">Get Session</button>
+
+            <div class="tabs" style="margin-top: 20px;">
+                <button class="tab active" onclick="switchMainTab('profile')">Profile</button>
+                <button class="tab" onclick="switchMainTab('posts')">Posts</button>
+                <button class="tab" onclick="switchMainTab('users')">Users</button>
+            </div>
+
+            <!-- Profile Tab -->
+            <div id="profileTab" class="tab-content active">
+                <h2>👤 Profile Management</h2>
+                <button onclick="getProfile()">Get My Profile</button>
+                <button onclick="showUpdateProfile()">Update Profile</button>
+                
+                <div id="updateProfileForm" class="hidden" style="margin-top: 20px;">
+                    <div class="form-group">
+                        <label>Nickname:</label>
+                        <input type="text" id="updateNickname" placeholder="Cool Nickname">
+                    </div>
+                    <div class="form-group">
+                        <label>About Me:</label>
+                        <textarea id="updateAboutMe" placeholder="Tell us about yourself..."></textarea>
+                    </div>
+                    <div class="form-group">
+                        <label>Profile Visibility:</label>
+                        <select id="updateIsPublic">
+                            <option value="1">Public</option>
+                            <option value="0">Private</option>
+                        </select>
+                    </div>
+                    <button onclick="updateProfile()">Save Changes</button>
+                    <button onclick="hideUpdateProfile()">Cancel</button>
+                </div>
+
+                <div class="response-box" id="profileResponse"></div>
+            </div>
+
+            <!-- Posts Tab -->
+            <div id="postsTab" class="tab-content">
+                <h2>📝 Posts & Feed</h2>
+                <button onclick="showCreatePost()">Create Post</button>
+                <button onclick="getFeed()">Get Feed</button>
+
+                <div id="createPostForm" class="hidden" style="margin-top: 20px;">
+                    <div class="form-group">
+                        <label>Content:</label>
+                        <textarea id="postContent" placeholder="What's on your mind?"></textarea>
+                    </div>
+                    <div class="form-group">
+                        <label>Privacy Level:</label>
+                        <select id="postPrivacy">
+                            <option value="public">Public</option>
+                            <option value="private">Private (followers only)</option>
+                            <option value="almost_private">Almost Private (selected users)</option>
+                        </select>
+                    </div>
+                    <button onclick="createPost()">Post</button>
+                    <button onclick="hideCreatePost()">Cancel</button>
+                </div>
+
+                <div id="feedContainer"></div>
+                <div class="response-box" id="postsResponse"></div>
+            </div>
+
+            <!-- Users Tab -->
+            <div id="usersTab" class="tab-content">
+                <h2>👥 Users & Social</h2>
+                <div class="form-group">
+                    <label>Search Users:</label>
+                    <input type="text" id="searchQuery" placeholder="Search by name...">
+                    <button onclick="searchUsers()" style="margin-top: 10px;">Search</button>
+                </div>
+
+                <button onclick="getFollowers()">My Followers</button>
+                <button onclick="getFollowing()">My Following</button>
+
+                <div id="usersContainer"></div>
+                <div class="response-box" id="usersResponse"></div>
+            </div>
+        </div>
+
+        <div id="globalStatus"></div>
+    </div>
+
+    <script src="app.js"></script>
+</body>
+</html>
+    

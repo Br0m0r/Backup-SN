@@ -273,3 +273,16 @@ func (h *PostHandlers) GetComments(w http.ResponseWriter, r *http.Request) {
 		"comments": comments,
 	})
 }
+
+// HealthHandler handles GET /health requests
+func HealthHandler(w http.ResponseWriter, r *http.Request) {
+	if r.Method != "GET" {
+		utils.ErrorResponse(w, "Method not allowed", http.StatusMethodNotAllowed)
+		return
+	}
+
+	utils.SuccessResponse(w, map[string]interface{}{
+		"status":  "healthy",
+		"service": "post-service",
+	})
+}

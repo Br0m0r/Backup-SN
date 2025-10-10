@@ -30,6 +30,33 @@
 ### Post Service Implementation
 **Built complete post microservice with CRUD operations, comments, and three-tier privacy system.** Includes POST/GET/PUT/DELETE /posts, POST/GET /comments endpoints with privacy levels (public, private, almost_private), access control logic, rate limiting on post/comment creation, and integration with auth service for token verification on port 8083.
 
+### Test Frontend Implementation
+**Created single-page HTML/JavaScript test client for all microservices.** Simple browser-based UI with no build tools required, featuring auth (register/login/logout), profile management (view/update/search users/follow system), and posts (create/view feed/comments/delete) with tabbed interface and JSON response viewers for debugging.
+
+### Post Service
+- **FIXED**: Added database connection initialization in main.go. Post service now properly connects to SQLite database with connection pooling.
+- **FIXED**: Added HealthHandler to post handlers for health check endpoint.
+
+### Frontend Fixes
+**Fixed frontend to match actual API requirements and separated code into multiple files.** Removed DOB field from registration (not in API), fixed login to use email instead of identifier, separated HTML/CSS/JS into index.html, style.css, and app.js for better maintainability.
+
+### Database Migration Script and Fixes
+**Created automated migration script and fixed missing tables issue.** Added migrate.sh to apply all pending migrations in order, manually applied missing posts/comments/sessions tables, all 13 migrations now properly executed in database.
+
+### Database Path Standardization
+**Fixed environment variable inconsistency across all services.** Changed user service from DB_PATH to DATABASE_PATH to match auth and post services, ensuring all three microservices correctly reference /app/social_network.db in Docker containers.
+
+### Comprehensive Logging Implementation
+**Added detailed logging with safe pointer dereferencing to user service.** Implemented helper functions (getStrValue, getBoolValue) in user.go handler for logging actual values instead of memory addresses, added route handler logging to debug 404 errors, and enhanced UpdateUserProfile with field-by-field logging.
+
+### Docker Volume Mount Fixes
+**Added explicit read-write flags to all database volume mounts.** Updated docker-compose.yml with :rw flags on all three services' volume mounts to ensure proper shared database access across containers.
+
+### SQLite Journal Mode Migration
+**Switched from WAL to DELETE journal mode for simplified database operations.** Removed WAL autocheckpoint code from all three service main.go files, updated database initialization to use DELETE mode, eliminating .db-wal and .db-shm files for immediate data visibility and single-file simplicity.
+
+
+
 ---
 
 ## Template for Future Entries

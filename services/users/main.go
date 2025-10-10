@@ -15,9 +15,9 @@ import (
 
 func main() {
 	// Get database path from environment or use default
-	dbPath := os.Getenv("DB_PATH")
+	dbPath := os.Getenv("DATABASE_PATH")
 	if dbPath == "" {
-		dbPath = "./social_network.db"
+		dbPath = "/app/social_network.db"
 	}
 
 	// Open database connection
@@ -39,45 +39,34 @@ func main() {
 		authServiceURL = "http://auth-service:8081"
 	}
 
-	// Setup routes
+	// Apply middleware
+	authMiddleware := middleware.AuthMiddleware(authServiceURL)
+	rateLimiter := middleware.NewRateLimiter()
+
+	// Setup routes with middleware
 	mux := http.NewServeMux()
 
 	// Health check (no auth required)
 	mux.HandleFunc("/health", handlers.HealthHandler)
 
 	// Profile routes (auth required)
-	mux.HandleFunc("/profile/", userHandlers.GetProfile)
-	mux.HandleFunc("/profile", userHandlers.UpdateProfile)
-
-	// Follow routes (auth required)
-	mux.HandleFunc("/follow", func(w http.ResponseWriter, r *http.Request) {
+	mux.Handle("/profile/", authMiddleware(http.HandlerFunc(userHandlers.GetProfile)))
+	mux.Handle("/profile", authMiddleware(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		log.Printf("Route /profile matched: method=%s, path=%s", r.Method, r.URL.Path)
 		switch r.Method {
-		case "POST":
-			userHandlers.FollowUser(w, r)
-		case "DELETE":
-			userHandlers.UnfollowUser(w, r)
+		case "GET":
+			log.Printf("Routing GET /profile to GetCurrentUserProfile")
+			userHandlers.GetCurrentUserProfile(w, r)
+		case "PUT":
+			log.Printf("Routing PUT /profile to UpdateProfile")
+			userHandlers.UpdateProfile(w, r)
 		default:
 			http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
 		}
-	})
+	})))
 
-	mux.HandleFunc("/followers", userHandlers.GetFollowers)
-	mux.HandleFunc("/following", userHandlers.GetFollowing)
-
-	// Search route (auth required)
-	mux.HandleFunc("/search", userHandlers.SearchUsers)
-
-	// Apply middleware
-	authMiddleware := middleware.AuthMiddleware(authServiceURL)
-	rateLimiter := middleware.NewRateLimiter()
-
-	// Protected routes (everything except health)
-	protectedMux := http.NewServeMux()
-	protectedMux.Handle("/profile/", authMiddleware(http.HandlerFunc(userHandlers.GetProfile)))
-	protectedMux.Handle("/profile", authMiddleware(http.HandlerFunc(userHandlers.UpdateProfile)))
-
-	// Rate limit the follow endpoint (prevent spam following)
-	protectedMux.Handle("/follow", authMiddleware(rateLimiter.RateLimit(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+	// Follow routes (auth required + rate limited)
+	mux.Handle("/follow", authMiddleware(rateLimiter.RateLimit(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		switch r.Method {
 		case "POST":
 			userHandlers.FollowUser(w, r)
@@ -88,16 +77,16 @@ func main() {
 		}
 	}))))
 
-	protectedMux.Handle("/followers", authMiddleware(http.HandlerFunc(userHandlers.GetFollowers)))
-	protectedMux.Handle("/following", authMiddleware(http.HandlerFunc(userHandlers.GetFollowing)))
-	protectedMux.Handle("/search", authMiddleware(http.HandlerFunc(userHandlers.SearchUsers)))
+	// User relationship routes (auth required)
+	mux.Handle("/followers", authMiddleware(http.HandlerFunc(userHandlers.GetFollowers)))
+	mux.Handle("/following", authMiddleware(http.HandlerFunc(userHandlers.GetFollowing)))
 
-	// Health check without auth
-	protectedMux.HandleFunc("/health", handlers.HealthHandler)
+	// Search route (auth required)
+	mux.Handle("/search", authMiddleware(http.HandlerFunc(userHandlers.SearchUsers)))
 
 	// Apply common middleware (CORS and Logging)
 	handler := middleware.CORS(
-		middleware.Logging(protectedMux),
+		middleware.Logging(mux),
 	)
 
 	// Start server

@@ -13,13 +13,45 @@ import (
 	"social-network/services/posts/services"
 )
 
-func main() {
-	// Open database connection
-	database, err := OpenDB("./social_network.db")
+// OpenDB opens a connection to the SQLite database
+func OpenDB(dbPath string) (*sql.DB, error) {
+	db, err := sql.Open("sqlite3", dbPath)
 	if err != nil {
-		log.Fatal("Failed to open database:", err)
+		return nil, err
+	}
+
+	// Test the connection
+	if err := db.Ping(); err != nil {
+		return nil, err
+	}
+
+	// Set connection pool settings for better performance
+	db.SetMaxOpenConns(25)
+	db.SetMaxIdleConns(5)
+
+	return db, nil
+}
+
+func main() {
+	// Get database path from environment variable or use default
+	dbPath := os.Getenv("DATABASE_PATH")
+	if dbPath == "" {
+		dbPath = "/app/social_network.db"
+	}
+
+	// Open database connection
+	database, err := OpenDB(dbPath)
+	if err != nil {
+		log.Fatalf("Failed to connect to database: %v", err)
 	}
 	defer database.Close()
+	log.Printf("Connected to database: %s", dbPath)
+
+	// Get auth service URL from environment variable
+	authServiceURL := os.Getenv("AUTH_SERVICE_URL")
+	if authServiceURL == "" {
+		authServiceURL = "http://auth-service:8081"
+	}
 
 	// Initialize services
 	postService := services.NewPostService(database)
@@ -27,40 +59,28 @@ func main() {
 	// Initialize handlers
 	postHandlers := handlers.NewPostHandlers(postService)
 
-	// Get auth service URL from environment
-	authServiceURL := os.Getenv("AUTH_SERVICE_URL")
-	if authServiceURL == "" {
-		authServiceURL = "http://auth-service:8081" // Default for Docker
-	}
-
-	// Create middleware
-	authMiddleware := middleware.AuthMiddleware(authServiceURL)
+	// Initialize middleware
 	rateLimiter := middleware.NewRateLimiter()
+	authMiddleware := middleware.AuthMiddleware(authServiceURL)
 
-	// Create base mux with CORS and Logging
+	// Setup routes
 	mux := http.NewServeMux()
 
-	// Apply CORS and Logging to all routes
-	var handler http.Handler = mux
-	handler = middleware.Logging(handler)
-	handler = middleware.CORS(handler)
+	// Health check (no auth, no rate limiting)
+	mux.HandleFunc("/health", handlers.HealthHandler)
 
-	// Protected routes (require authentication)
-	protectedMux := http.NewServeMux()
-
-	// Post routes
-	protectedMux.HandleFunc("/posts", func(w http.ResponseWriter, r *http.Request) {
-		if r.Method == "GET" {
+	// Post endpoints
+	mux.Handle("/posts", authMiddleware(rateLimiter.RateLimit(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.Method == "POST" {
+			postHandlers.CreatePost(w, r)
+		} else if r.Method == "GET" {
 			postHandlers.GetFeed(w, r)
-		} else if r.Method == "POST" {
-			// Apply rate limiting to post creation
-			rateLimiter.RateLimit(http.HandlerFunc(postHandlers.CreatePost)).ServeHTTP(w, r)
 		} else {
 			http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
 		}
-	})
+	}))))
 
-	protectedMux.HandleFunc("/posts/", func(w http.ResponseWriter, r *http.Request) {
+	mux.Handle("/posts/", authMiddleware(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.Method == "GET" {
 			postHandlers.GetPost(w, r)
 		} else if r.Method == "PUT" {
@@ -70,50 +90,25 @@ func main() {
 		} else {
 			http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
 		}
-	})
+	})))
 
-	// Comment routes
-	protectedMux.HandleFunc("/comments", func(w http.ResponseWriter, r *http.Request) {
-		if r.Method == "GET" {
+	// Comment endpoints
+	mux.Handle("/comments", authMiddleware(rateLimiter.RateLimit(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.Method == "POST" {
+			postHandlers.CreateComment(w, r)
+		} else if r.Method == "GET" {
 			postHandlers.GetComments(w, r)
-		} else if r.Method == "POST" {
-			// Apply rate limiting to comment creation
-			rateLimiter.RateLimit(http.HandlerFunc(postHandlers.CreateComment)).ServeHTTP(w, r)
 		} else {
 			http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
 		}
-	})
+	}))))
 
-	// Apply auth middleware to all protected routes
-	mux.Handle("/", authMiddleware(protectedMux))
+	// Apply common middleware
+	handler := middleware.CORS(
+		middleware.Logging(mux),
+	)
 
 	// Start server
-	port := os.Getenv("PORT")
-	if port == "" {
-		port = "8083"
-	}
-
-	log.Printf("Post service starting on port %s...", port)
-	if err := http.ListenAndServe(":"+port, handler); err != nil {
-		log.Fatal("Server failed:", err)
-	}
-}
-
-// OpenDB opens a connection to the SQLite database
-func OpenDB(dbPath string) (*sql.DB, error) {
-	db, err := sql.Open("sqlite3", dbPath)
-	if err != nil {
-		return nil, err
-	}
-
-	// Set connection pool settings
-	db.SetMaxOpenConns(25)
-	db.SetMaxIdleConns(5)
-
-	// Test connection
-	if err = db.Ping(); err != nil {
-		return nil, err
-	}
-
-	return db, nil
+	log.Println("Post Service starting on port :8083")
+	log.Fatal(http.ListenAndServe(":8083", handler))
 }
