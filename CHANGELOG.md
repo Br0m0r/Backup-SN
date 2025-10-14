@@ -55,6 +55,31 @@
 ### SQLite Journal Mode Migration
 **Switched from WAL to DELETE journal mode for simplified database operations.** Removed WAL autocheckpoint code from all three service main.go files, updated database initialization to use DELETE mode, eliminating .db-wal and .db-shm files for immediate data visibility and single-file simplicity.
 
+---
+
+## 2025-10-14
+
+### Group Service Implementation
+**Built complete group microservice with full CRUD operations, member management, and event system.** Implemented groups, group_members, group_messages, events, and event_responses tables with POST/GET/PUT /groups, POST /groups/:id/invite, POST /groups/:id/request, POST/GET /groups/:id/requests/respond, POST/GET /events, POST /events/:id/respond endpoints per exercise requirements, running on port 8084 with proper auth middleware integration.
+
+### Frontend Groups Tab Implementation
+**Added comprehensive Groups UI to test frontend with all group management features.** Created groups tab with create group form, browse/my groups lists, group detail views, member management, event creation/RSVP system, join request handling, and invite system with proper styling matching the purple gradient theme.
+
+### API Response Handling Fix
+**Fixed frontend to properly access nested API response structure.** Updated all 11 group-related JavaScript functions to correctly access result.data.data instead of result.data, resolving "failed to create/load" errors caused by incorrect response object traversal.
+
+### Error Handling Improvements
+**Added user-friendly error messages for duplicate group names and database constraints.** Backend now returns HTTP 409 Conflict with clear messages like "A group with this name already exists" instead of generic 500 errors for UNIQUE constraint violations.
+
+### UX Enhancement for Join Requests
+**Implemented has_pending_request field to prevent duplicate join request errors.** Backend queries now check for pending membership status, frontend displays disabled "Request Pending" button with yellow dashed badge instead of allowing users to click "Request to Join" multiple times.
+
+### Frontend Code Modularization
+**Refactored monolithic app.js into 7 separate module files for better maintainability.** Split into config.js (global state/URLs), utils.js (shared functions), auth.js, users.js, posts.js, groups.js, and events.js modules with proper namespacing and global exports for onclick handlers.
+
+### DOM API Naming Conflict Resolution
+**Fixed createEvent() function conflict with native Document.createEvent() method.** Renamed function to createGroupEvent() to prevent browser from calling native DOM API instead of custom event creation function, resolving "At least 1 argument required" TypeError.
+
 
 
 ---

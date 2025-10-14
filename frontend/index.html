@@ -70,6 +70,7 @@
                 <button class="tab active" onclick="switchMainTab('profile')">Profile</button>
                 <button class="tab" onclick="switchMainTab('posts')">Posts</button>
                 <button class="tab" onclick="switchMainTab('users')">Users</button>
+                <button class="tab" onclick="switchMainTab('groups')">Groups</button>
             </div>
 
             <!-- Profile Tab -->
@@ -143,12 +144,124 @@
                 <div id="usersContainer"></div>
                 <div class="response-box" id="usersResponse"></div>
             </div>
+
+            <!-- Groups Tab -->
+            <div id="groupsTab" class="tab-content">
+                <h2>👥 Groups</h2>
+                
+                <!-- Group Actions -->
+                <div class="button-group">
+                    <button onclick="showCreateGroup()">Create Group</button>
+                    <button onclick="browseGroups()">Browse All Groups</button>
+                    <button onclick="getMyGroups()">My Groups</button>
+                </div>
+
+                <!-- Create Group Form -->
+                <div id="createGroupForm" class="hidden form-section">
+                    <h3>Create New Group</h3>
+                    <div class="form-group">
+                        <label>Group Name:</label>
+                        <input type="text" id="groupName" placeholder="My Awesome Group">
+                    </div>
+                    <div class="form-group">
+                        <label>Description:</label>
+                        <textarea id="groupDescription" placeholder="What's this group about?"></textarea>
+                    </div>
+                    <div class="form-group">
+                        <label>Image URL (optional):</label>
+                        <input type="text" id="groupImageURL" placeholder="https://...">
+                    </div>
+                    <button onclick="createGroup()">Create</button>
+                    <button onclick="hideCreateGroup()">Cancel</button>
+                </div>
+
+                <!-- Groups List Container -->
+                <div id="groupsListContainer"></div>
+
+                <!-- Group Detail View (hidden by default) -->
+                <div id="groupDetailView" class="hidden">
+                    <button onclick="hideGroupDetail()">← Back to Groups</button>
+                    <div id="groupDetailContent"></div>
+                    
+                    <!-- Group Actions (for members) -->
+                    <div id="groupMemberActions" class="hidden">
+                        <h3>Group Actions</h3>
+                        <button onclick="showInviteMember()">Invite Member</button>
+                        <button onclick="showCreateEvent()">Create Event</button>
+                        <button onclick="viewGroupMembers()">View Members</button>
+                        <button onclick="viewGroupEvents()">View Events</button>
+                    </div>
+
+                    <!-- Creator-only Actions -->
+                    <div id="groupCreatorActions" class="hidden">
+                        <button onclick="viewPendingRequests()">View Join Requests</button>
+                    </div>
+
+                    <!-- Invite Member Form -->
+                    <div id="inviteMemberForm" class="hidden form-section">
+                        <h3>Invite Member</h3>
+                        <div class="form-group">
+                            <label>User ID:</label>
+                            <input type="number" id="inviteUserId" placeholder="Enter user ID">
+                        </div>
+                        <button onclick="inviteMember()">Send Invite</button>
+                        <button onclick="hideInviteMember()">Cancel</button>
+                    </div>
+
+                    <!-- Create Event Form -->
+                    <div id="createEventForm" class="hidden form-section">
+                        <h3>Create Event</h3>
+                        <div class="form-group">
+                            <label>Event Title:</label>
+                            <input type="text" id="eventTitle" placeholder="Summer BBQ">
+                        </div>
+                        <div class="form-group">
+                            <label>Description:</label>
+                            <textarea id="eventDescription" placeholder="Event details..."></textarea>
+                        </div>
+                        <div class="form-group">
+                            <label>Event Date & Time:</label>
+                            <input type="datetime-local" id="eventTime">
+                        </div>
+                        <button onclick="createGroupEvent()">Create Event</button>
+                        <button onclick="hideCreateEvent()">Cancel</button>
+                    </div>
+
+                    <!-- Members List -->
+                    <div id="groupMembersList" class="hidden">
+                        <h3>Group Members</h3>
+                        <div id="membersContainer"></div>
+                    </div>
+
+                    <!-- Events List -->
+                    <div id="groupEventsList" class="hidden">
+                        <h3>Group Events</h3>
+                        <div id="eventsContainer"></div>
+                    </div>
+
+                    <!-- Pending Requests (Creator only) -->
+                    <div id="pendingRequestsList" class="hidden">
+                        <h3>Pending Join Requests</h3>
+                        <div id="requestsContainer"></div>
+                    </div>
+                </div>
+
+                <div class="response-box" id="groupsResponse"></div>
+            </div>
         </div>
 
         <div id="globalStatus"></div>
     </div>
 
-    <script src="app.js"></script>
+    <!-- Load JavaScript modules in order -->
+    <script src="js/config.js"></script>
+    <script src="js/utils.js"></script>
+    <script src="js/auth.js"></script>
+    <script src="js/users.js"></script>
+    <script src="js/posts.js"></script>
+    <script src="js/groups.js"></script>
+    <script src="js/events.js"></script>
+    <script src="js/app.js"></script>
 </body>
 </html>
     
