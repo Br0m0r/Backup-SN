@@ -276,13 +276,11 @@ func (h *PostHandlers) GetComments(w http.ResponseWriter, r *http.Request) {
 
 // HealthHandler handles GET /health requests
 func HealthHandler(w http.ResponseWriter, r *http.Request) {
-	if r.Method != "GET" {
-		utils.ErrorResponse(w, "Method not allowed", http.StatusMethodNotAllowed)
-		return
-	}
-
-	utils.SuccessResponse(w, map[string]interface{}{
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(http.StatusOK)
+	json.NewEncoder(w).Encode(map[string]interface{}{
 		"status":  "healthy",
-		"service": "post-service",
+		"service": "post",
+		"message": "Post service is running",
 	})
 }
