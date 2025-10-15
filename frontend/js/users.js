@@ -23,14 +23,13 @@ const Users = {
     async updateProfile() {
         const nickname = document.getElementById('updateNickname').value.trim();
         const aboutMe = document.getElementById('updateAboutMe').value.trim();
-        const isPublic = parseInt(document.getElementById('updateIsPublic').value);
+        const isPublic = document.getElementById('updateIsPublic').checked;
 
         // Build payload with only non-empty values
         const payload = {};
         if (nickname) payload.nickname = nickname;
         if (aboutMe) payload.about_me = aboutMe;
-        // Convert number to boolean (1 -> true, 0 -> false)
-        payload.is_public_profile = isPublic === 1;
+        payload.is_public_profile = isPublic;
 
         console.log('Updating profile with payload:', payload);
 
@@ -40,10 +39,166 @@ const Users = {
             window.Utils.showResponse(result.data.data, 'profileResponse');
             window.Utils.showStatus('Profile updated!', 'success');
             Users.hideUpdateProfile();
+            // Refresh profile display
+            const currentUser = window.AppState.getCurrentUser();
+            if (currentUser) {
+                Users.showOwnProfile();
+            }
         } else {
             window.Utils.showStatus(result.data?.error || 'Failed to update profile', 'error');
             console.error('Update profile error:', result);
         }
+    },
+
+    async showOwnProfile() {
+        const currentUser = window.AppState.getCurrentUser();
+        if (!currentUser) {
+            window.Utils.showStatus('Not logged in', 'error');
+            return;
+        }
+        await Users.getUserProfile(currentUser.id);
+    },
+
+    async getUserProfile(userId) {
+        const result = await window.Utils.apiCall(`${window.AppConfig.USER_URL}/users/${userId}/profile`, 'GET', null, true);
+        
+        if (result.ok && result.data.success) {
+            console.log('Profile data received:', result.data.data);
+            // Backend returns {profile: {...}}, so we need to extract it
+            const profileData = result.data.data.profile || result.data.data;
+            Users.displayUserProfile(profileData);
+            window.Utils.showResponse(result.data.data, 'profileResponse');
+        } else {
+            window.Utils.showStatus(result.data?.error || 'Failed to load profile', 'error');
+            console.error('Profile fetch error:', result);
+        }
+    },
+
+    displayUserProfile(profile) {
+        const container = document.getElementById('profileDisplay');
+        
+        // Validate profile data
+        if (!profile) {
+            container.innerHTML = '<div class="profile-no-access"><h3>Error</h3><p>No profile data received</p></div>';
+            console.error('Profile is null or undefined');
+            return;
+        }
+
+        if (!profile.user) {
+            container.innerHTML = '<div class="profile-no-access"><h3>Error</h3><p>User data is missing from profile</p></div>';
+            console.error('profile.user is missing:', profile);
+            return;
+        }
+
+        const currentUser = window.AppState.getCurrentUser();
+        const isOwnProfile = currentUser && currentUser.id === profile.user.id;
+
+        if (!profile.can_view) {
+            container.innerHTML = `
+                <div class="profile-no-access">
+                    <h3>🔒 Private Profile</h3>
+                    <p>This profile is private. You need to follow this user to view their profile.</p>
+                </div>
+            `;
+            return;
+        }
+
+        const user = profile.user;
+        const privacyBadge = user.is_public_profile 
+            ? '<span class="profile-privacy-badge">🌐 Public</span>' 
+            : '<span class="profile-privacy-badge">🔒 Private</span>';
+
+        container.innerHTML = `
+            <div class="profile-header">
+                <h3>
+                    ${user.first_name || ''} ${user.last_name || ''} 
+                    ${user.nickname ? `(${user.nickname})` : ''}
+                    ${privacyBadge}
+                </h3>
+                <p><strong>@${user.username}</strong></p>
+                ${user.about_me ? `<p style="margin-top: 10px;">${user.about_me}</p>` : ''}
+                
+                <div class="profile-stats">
+                    <div class="stat">
+                        <span class="stat-value">${profile.post_count}</span>
+                        <span class="stat-label">Posts</span>
+                    </div>
+                    <div class="stat">
+                        <span class="stat-value">${profile.follower_count}</span>
+                        <span class="stat-label">Followers</span>
+                    </div>
+                    <div class="stat">
+                        <span class="stat-value">${profile.following_count}</span>
+                        <span class="stat-label">Following</span>
+                    </div>
+                </div>
+            </div>
+
+            ${isOwnProfile ? '' : `
+                <div style="margin-bottom: 20px;">
+                    <button onclick="Users.viewUserProfile(${user.id})" style="width: auto;">
+                        View Full Profile
+                    </button>
+                </div>
+            `}
+
+            <div class="profile-section">
+                <h4>📝 Posts (${profile.post_count})</h4>
+                <div class="profile-posts-grid">
+                    ${profile.posts && profile.posts.length > 0 
+                        ? profile.posts.map(post => `
+                            <div class="post-card">
+                                <h5>${post.title || 'Untitled Post'}</h5>
+                                <p>${post.content}</p>
+                                <small>
+                                    <span class="privacy-badge">${post.privacy_level}</span>
+                                    • ${new Date(post.created_at).toLocaleString()}
+                                </small>
+                            </div>
+                        `).join('')
+                        : '<p style="color: #999;">No posts yet</p>'
+                    }
+                </div>
+            </div>
+
+            <div class="profile-section">
+                <h4>👥 Followers (${profile.follower_count})</h4>
+                <div class="profile-users-grid">
+                    ${profile.followers && profile.followers.length > 0
+                        ? profile.followers.map(follower => `
+                            <div class="user-card">
+                                <h5>${follower.first_name || ''} ${follower.last_name || ''}</h5>
+                                <p><strong>@${follower.username}</strong></p>
+                                ${follower.nickname ? `<p>${follower.nickname}</p>` : ''}
+                                <button onclick="Users.getUserProfile(${follower.id})" style="margin-top: 10px;">
+                                    View Profile
+                                </button>
+                            </div>
+                        `).join('')
+                        : '<p style="color: #999;">No followers yet</p>'
+                    }
+                </div>
+            </div>
+
+            <div class="profile-section">
+                <h4>👤 Following (${profile.following_count})</h4>
+                <div class="profile-users-grid">
+                    ${profile.following && profile.following.length > 0
+                        ? profile.following.map(following => `
+                            <div class="user-card">
+                                <h5>${following.first_name || ''} ${following.last_name || ''}</h5>
+                                <p><strong>@${following.username}</strong></p>
+                                ${following.nickname ? `<p>${following.nickname}</p>` : ''}
+                                <button onclick="Users.getUserProfile(${following.id})" style="margin-top: 10px;">
+                                    View Profile
+                                </button>
+                            </div>
+                        `).join('')
+                        : '<p style="color: #999;">Not following anyone yet</p>'
+                    }
+                </div>
+            </div>
+        `;
     },
 
     async searchUsers() {
@@ -162,10 +317,11 @@ const Users = {
                 <p><strong>Username:</strong> ${user.username || 'N/A'}</p>
                 <p><strong>Nickname:</strong> ${user.nickname || 'N/A'}</p>
                 <p><strong>About:</strong> ${user.about_me || 'No bio'}</p>
-                <div style="margin-top: 10px;">
-                    ${user.followStatus === 'none' ? `<button onclick="followUser(${user.id})">Follow</button>` : ''}
+                <div style="margin-top: 10px; display: flex; gap: 10px;">
+                    <button onclick="Users.getUserProfile(${user.id})">View Profile</button>
+                    ${user.followStatus === 'none' ? `<button onclick="Users.followUser(${user.id})">Follow</button>` : ''}
                     ${user.followStatus === 'pending' ? `<button disabled style="opacity: 0.6; cursor: not-allowed; background: #ffc107;">Request Pending</button>` : ''}
-                    ${user.followStatus === 'accepted' ? `<button onclick="unfollowUser(${user.id})" style="background: #28a745;">Following</button>` : ''}
+                    ${user.followStatus === 'accepted' ? `<button onclick="Users.unfollowUser(${user.id})" style="background: #28a745;">Following</button>` : ''}
                 </div>
             </div>
         `).join('');
@@ -184,7 +340,10 @@ const Users = {
                 <p><strong>Username:</strong> ${user.username || 'N/A'}</p>
                 <p><strong>Nickname:</strong> ${user.nickname || 'N/A'}</p>
                 <p><strong>About:</strong> ${user.about_me || 'No bio'}</p>
-                ${showUnfollow ? `<button onclick="unfollowUser(${user.id})" style="background: #dc3545;">Unfollow</button>` : ''}
+                <div style="margin-top: 10px; display: flex; gap: 10px;">
+                    <button onclick="Users.getUserProfile(${user.id})">View Profile</button>
+                    ${showUnfollow ? `<button onclick="Users.unfollowUser(${user.id})" style="background: #dc3545;">Unfollow</button>` : ''}
+                </div>
             </div>
         `).join('');
     },
@@ -226,3 +385,5 @@ window.getFollowers = Users.getFollowers;
 window.getFollowing = Users.getFollowing;
 window.getFollowRequests = Users.getFollowRequests;
 window.respondToFollowRequest = Users.respondToFollowRequest;
+window.getUserProfile = Users.getUserProfile;
+window.showOwnProfile = Users.showOwnProfile;

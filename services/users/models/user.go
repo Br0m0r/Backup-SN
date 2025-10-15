@@ -57,3 +57,26 @@ type Follow struct {
 type FollowRequest struct {
 	UserID int `json:"user_id"`
 }
+
+// UserPost represents a simplified post for user profile display
+type UserPost struct {
+	ID           int       `json:"id"`
+	UserID       int       `json:"user_id"`
+	Title        *string   `json:"title,omitempty"`
+	Content      string    `json:"content"`
+	ImagePath    *string   `json:"image_path,omitempty"`
+	PrivacyLevel string    `json:"privacy_level"`
+	CreatedAt    time.Time `json:"created_at"`
+}
+
+// ProfileResponse represents a comprehensive user profile with activity
+type ProfileResponse struct {
+	User           *User      `json:"user"`
+	Posts          []UserPost `json:"posts"`
+	Followers      []User     `json:"followers"`
+	Following      []User     `json:"following"`
+	FollowerCount  int        `json:"follower_count"`
+	FollowingCount int        `json:"following_count"`
+	PostCount      int        `json:"post_count"`
+	CanView        bool       `json:"can_view"` // Whether viewer has access to this profile
+}

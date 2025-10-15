@@ -91,6 +91,10 @@ func main() {
 	// Search route (auth required)
 	mux.Handle("/search", authMiddleware(http.HandlerFunc(userHandlers.SearchUsers)))
 
+	// User profile by ID route (auth required)
+	// Pattern: /users/:id/profile
+	mux.Handle("/users/", authMiddleware(http.HandlerFunc(userHandlers.GetUserProfileByID)))
+
 	// Apply common middleware (CORS and Logging)
 	handler := middleware.CORS(
 		middleware.Logging(mux),

@@ -452,3 +452,225 @@ func RespondToFollowRequest(db *sql.DB, followerID, followingID int, accept bool
 		return nil
 	}
 }
+
+// GetUserPosts retrieves all posts by a user from the posts database
+func GetUserPosts(db *sql.DB, userID int) ([]models.UserPost, error) {
+	query := `
+		SELECT id, user_id, title, content, image_path, privacy_level, created_at
+		FROM posts
+		WHERE user_id = ?
+		ORDER BY created_at DESC
+	`
+
+	rows, err := db.Query(query, userID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+
+	var posts []models.UserPost
+	for rows.Next() {
+		var post models.UserPost
+		var title, imagePath sql.NullString
+
+		err := rows.Scan(
+			&post.ID,
+			&post.UserID,
+			&title,
+			&post.Content,
+			&imagePath,
+			&post.PrivacyLevel,
+			&post.CreatedAt,
+		)
+		if err != nil {
+			log.Printf("Error scanning post: %v", err)
+			continue
+		}
+
+		if title.Valid {
+			post.Title = &title.String
+		}
+		if imagePath.Valid {
+			post.ImagePath = &imagePath.String
+		}
+
+		posts = append(posts, post)
+	}
+
+	if posts == nil {
+		posts = []models.UserPost{}
+	}
+
+	return posts, nil
+}
+
+// GetUserFollowersList retrieves followers with accepted status
+func GetUserFollowersList(db *sql.DB, userID int) ([]models.User, error) {
+	query := `
+		SELECT u.id, u.username, u.email, u.first_name, u.last_name, 
+		       u.date_of_birth, u.avatar_path, u.nickname, u.about_me, 
+		       u.is_public_profile, u.created_at
+		FROM users u
+		INNER JOIN follows f ON u.id = f.follower_id
+		WHERE f.following_id = ? AND f.status = 'accepted'
+		ORDER BY f.created_at DESC
+	`
+
+	rows, err := db.Query(query, userID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+
+	var users []models.User
+	for rows.Next() {
+		var user models.User
+		var firstName, lastName, dateOfBirth, avatarPath, nickname, aboutMe sql.NullString
+
+		err := rows.Scan(
+			&user.ID,
+			&user.Username,
+			&user.Email,
+			&firstName,
+			&lastName,
+			&dateOfBirth,
+			&avatarPath,
+			&nickname,
+			&aboutMe,
+			&user.IsPublicProfile,
+			&user.CreatedAt,
+		)
+		if err != nil {
+			log.Printf("Error scanning follower: %v", err)
+			continue
+		}
+
+		if firstName.Valid {
+			user.FirstName = &firstName.String
+		}
+		if lastName.Valid {
+			user.LastName = &lastName.String
+		}
+		if dateOfBirth.Valid {
+			user.DateOfBirth = &dateOfBirth.String
+		}
+		if avatarPath.Valid {
+			user.AvatarPath = &avatarPath.String
+		}
+		if nickname.Valid {
+			user.Nickname = &nickname.String
+		}
+		if aboutMe.Valid {
+			user.AboutMe = &aboutMe.String
+		}
+
+		users = append(users, user)
+	}
+
+	if users == nil {
+		users = []models.User{}
+	}
+
+	return users, nil
+}
+
+// GetUserFollowingList retrieves users that the given user is following (accepted status)
+func GetUserFollowingList(db *sql.DB, userID int) ([]models.User, error) {
+	query := `
+		SELECT u.id, u.username, u.email, u.first_name, u.last_name, 
+		       u.date_of_birth, u.avatar_path, u.nickname, u.about_me, 
+		       u.is_public_profile, u.created_at
+		FROM users u
+		INNER JOIN follows f ON u.id = f.following_id
+		WHERE f.follower_id = ? AND f.status = 'accepted'
+		ORDER BY f.created_at DESC
+	`
+
+	rows, err := db.Query(query, userID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+
+	var users []models.User
+	for rows.Next() {
+		var user models.User
+		var firstName, lastName, dateOfBirth, avatarPath, nickname, aboutMe sql.NullString
+
+		err := rows.Scan(
+			&user.ID,
+			&user.Username,
+			&user.Email,
+			&firstName,
+			&lastName,
+			&dateOfBirth,
+			&avatarPath,
+			&nickname,
+			&aboutMe,
+			&user.IsPublicProfile,
+			&user.CreatedAt,
+		)
+		if err != nil {
+			log.Printf("Error scanning following: %v", err)
+			continue
+		}
+
+		if firstName.Valid {
+			user.FirstName = &firstName.String
+		}
+		if lastName.Valid {
+			user.LastName = &lastName.String
+		}
+		if dateOfBirth.Valid {
+			user.DateOfBirth = &dateOfBirth.String
+		}
+		if avatarPath.Valid {
+			user.AvatarPath = &avatarPath.String
+		}
+		if nickname.Valid {
+			user.Nickname = &nickname.String
+		}
+		if aboutMe.Valid {
+			user.AboutMe = &aboutMe.String
+		}
+
+		users = append(users, user)
+	}
+
+	if users == nil {
+		users = []models.User{}
+	}
+
+	return users, nil
+}
+
+// CheckProfileAccess checks if viewerID can access userID's profile
+// Returns true if: viewer is owner, profile is public, or viewer follows user (for private profiles)
+func CheckProfileAccess(db *sql.DB, userID, viewerID int) (bool, error) {
+	// Owner can always see their own profile
+	if userID == viewerID {
+		return true, nil
+	}
+
+	// Check if profile is public
+	var isPublic bool
+	err := db.QueryRow(`SELECT is_public_profile FROM users WHERE id = ?`, userID).Scan(&isPublic)
+	if err != nil {
+		return false, err
+	}
+
+	// If public, everyone can see
+	if isPublic {
+		return true, nil
+	}
+
+	// If private, only followers (accepted status) can see
+	var count int
+	query := `SELECT COUNT(*) FROM follows WHERE follower_id = ? AND following_id = ? AND status = 'accepted'`
+	err = db.QueryRow(query, viewerID, userID).Scan(&count)
+	if err != nil {
+		return false, err
+	}
+
+	return count > 0, nil
+}

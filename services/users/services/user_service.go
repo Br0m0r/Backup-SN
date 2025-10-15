@@ -106,3 +106,88 @@ func (s *UserService) GetPendingFollowRequests(userID int) ([]*models.User, erro
 func (s *UserService) RespondToFollowRequest(followerID, followingID int, accept bool) error {
 	return db.RespondToFollowRequest(s.database, followerID, followingID, accept)
 }
+
+// GetUserProfile retrieves a comprehensive user profile with posts, followers, and following
+// Respects privacy settings: only returns full data if viewer has access
+func (s *UserService) GetUserProfile(userID, viewerID int) (*models.ProfileResponse, error) {
+	// Check if viewer can access this profile
+	canView, err := db.CheckProfileAccess(s.database, userID, viewerID)
+	if err != nil {
+		return nil, err
+	}
+
+	// Get basic user info
+	user, err := db.GetUserByID(s.database, userID)
+	if err != nil {
+		return nil, err
+	}
+
+	// If viewer cannot access profile, return limited info
+	if !canView {
+		return &models.ProfileResponse{
+			User:           user.PublicProfile(),
+			Posts:          []models.UserPost{},
+			Followers:      []models.User{},
+			Following:      []models.User{},
+			FollowerCount:  0,
+			FollowingCount: 0,
+			PostCount:      0,
+			CanView:        false,
+		}, nil
+	}
+
+	// Get user's posts
+	posts, err := db.GetUserPosts(s.database, userID)
+	if err != nil {
+		posts = []models.UserPost{} // If error, return empty slice
+	}
+
+	// Get followers
+	followers, err := db.GetUserFollowersList(s.database, userID)
+	if err != nil {
+		followers = []models.User{}
+	}
+
+	// Get following
+	following, err := db.GetUserFollowingList(s.database, userID)
+	if err != nil {
+		following = []models.User{}
+	}
+
+	// If viewer is not the owner, show public profiles only for followers/following
+	var publicFollowers []models.User
+	var publicFollowing []models.User
+
+	if userID != viewerID {
+		// Return public profiles for privacy
+		for _, follower := range followers {
+			publicFollowers = append(publicFollowers, *follower.PublicProfile())
+		}
+		for _, follow := range following {
+			publicFollowing = append(publicFollowing, *follow.PublicProfile())
+		}
+	} else {
+		// Owner sees everything
+		publicFollowers = followers
+		publicFollowing = following
+	}
+
+	// Build and return comprehensive profile
+	profile := &models.ProfileResponse{
+		User:           user,
+		Posts:          posts,
+		Followers:      publicFollowers,
+		Following:      publicFollowing,
+		FollowerCount:  len(followers),
+		FollowingCount: len(following),
+		PostCount:      len(posts),
+		CanView:        true,
+	}
+
+	// If viewer is not owner, hide sensitive user info
+	if userID != viewerID {
+		profile.User = user.PublicProfile()
+	}
+
+	return profile, nil
+}

@@ -398,6 +398,59 @@ func (h *UserHandlers) SearchUsers(w http.ResponseWriter, r *http.Request) {
 	})
 }
 
+// GetUserProfileByID handles GET /users/:id/profile
+// Returns comprehensive profile with posts, followers, following
+// Respects privacy settings (public vs private profiles)
+func (h *UserHandlers) GetUserProfileByID(w http.ResponseWriter, r *http.Request) {
+	// Get authenticated viewer ID from context
+	viewerID, ok := middleware.GetUserIDFromContext(r)
+	if !ok {
+		utils.ErrorResponse(w, "Unauthorized", http.StatusUnauthorized)
+		return
+	}
+
+	// Extract user ID from URL path
+	// Path format: /users/:id/profile
+	pathParts := strings.Split(strings.Trim(r.URL.Path, "/"), "/")
+	if len(pathParts) < 2 {
+		utils.ErrorResponse(w, "Invalid user ID", http.StatusBadRequest)
+		return
+	}
+
+	userID, err := strconv.Atoi(pathParts[1])
+	if err != nil {
+		utils.ErrorResponse(w, "Invalid user ID", http.StatusBadRequest)
+		return
+	}
+
+	log.Printf("GetUserProfileByID: viewer=%d requesting profile of user=%d", viewerID, userID)
+
+	// Get comprehensive profile with privacy enforcement
+	profile, err := h.userService.GetUserProfile(userID, viewerID)
+	if err != nil {
+		log.Printf("GetUserProfileByID: Error getting profile: %v", err)
+		utils.ErrorResponse(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
+
+	// If viewer cannot access profile, return limited info with can_view=false
+	if !profile.CanView {
+		log.Printf("GetUserProfileByID: Access denied for viewer=%d to user=%d profile (private)", viewerID, userID)
+		utils.SuccessResponse(w, map[string]interface{}{
+			"profile": profile,
+			"message": "This profile is private. Follow this user to see their content.",
+		})
+		return
+	}
+
+	log.Printf("GetUserProfileByID: Returning profile for user=%d with %d posts, %d followers, %d following",
+		userID, profile.PostCount, profile.FollowerCount, profile.FollowingCount)
+
+	utils.SuccessResponse(w, map[string]interface{}{
+		"profile": profile,
+	})
+}
+
 // HealthHandler handles health check requests
 func HealthHandler(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Content-Type", "application/json")

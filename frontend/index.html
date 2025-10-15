@@ -75,11 +75,16 @@
 
             <!-- Profile Tab -->
             <div id="profileTab" class="tab-content active">
-                <h2>👤 Profile Management</h2>
-                <button onclick="getProfile()">Get My Profile</button>
-                <button onclick="showUpdateProfile()">Update Profile</button>
+                <h2>👤 Profile</h2>
                 
+                <div class="profile-actions">
+                    <button onclick="Users.showOwnProfile()">My Profile</button>
+                    <button onclick="Users.showUpdateProfile()">Update Profile</button>
+                </div>
+                
+                <!-- Update Profile Form -->
                 <div id="updateProfileForm" class="hidden" style="margin-top: 20px;">
+                    <h3>Edit Profile</h3>
                     <div class="form-group">
                         <label>Nickname:</label>
                         <input type="text" id="updateNickname" placeholder="Cool Nickname">
@@ -89,15 +94,17 @@
                         <textarea id="updateAboutMe" placeholder="Tell us about yourself..."></textarea>
                     </div>
                     <div class="form-group">
-                        <label>Profile Visibility:</label>
-                        <select id="updateIsPublic">
-                            <option value="1">Public</option>
-                            <option value="0">Private</option>
-                        </select>
+                        <label>
+                            <input type="checkbox" id="updateIsPublic">
+                            Public Profile (allow everyone to see my posts and activity)
+                        </label>
                     </div>
-                    <button onclick="updateProfile()">Save Changes</button>
-                    <button onclick="hideUpdateProfile()">Cancel</button>
+                    <button onclick="Users.updateProfile()">Save Changes</button>
+                    <button onclick="Users.hideUpdateProfile()">Cancel</button>
                 </div>
+
+                <!-- Profile Display -->
+                <div id="profileDisplay" class="profile-container"></div>
 
                 <div class="response-box" id="profileResponse"></div>
             </div>

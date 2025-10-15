@@ -64,14 +64,25 @@ const Auth = {
         window.AppState.setCurrentGroupId(null);
         
         // Clear all UI displays
-        document.getElementById('profileResponse').innerHTML = '';
-        document.getElementById('postsResponse').innerHTML = '';
-        document.getElementById('usersResponse').innerHTML = '';
-        document.getElementById('groupsResponse').innerHTML = '';
-        document.getElementById('feedContainer').innerHTML = '';
-        document.getElementById('usersContainer').innerHTML = '';
-        document.getElementById('groupsListContainer').innerHTML = '';
-        document.getElementById('groupDetailView').classList.add('hidden');
+        const profileResponse = document.getElementById('profileResponse');
+        const postsResponse = document.getElementById('postsResponse');
+        const usersResponse = document.getElementById('usersResponse');
+        const groupsResponse = document.getElementById('groupsResponse');
+        const feedContainer = document.getElementById('feedContainer');
+        const searchUsersContainer = document.getElementById('searchUsersContainer');
+        const groupsListContainer = document.getElementById('groupsListContainer');
+        const groupDetailView = document.getElementById('groupDetailView');
+        const profileDisplay = document.getElementById('profileDisplay');
+        
+        if (profileResponse) profileResponse.innerHTML = '';
+        if (postsResponse) postsResponse.innerHTML = '';
+        if (usersResponse) usersResponse.innerHTML = '';
+        if (groupsResponse) groupsResponse.innerHTML = '';
+        if (feedContainer) feedContainer.innerHTML = '';
+        if (searchUsersContainer) searchUsersContainer.innerHTML = '';
+        if (groupsListContainer) groupsListContainer.innerHTML = '';
+        if (profileDisplay) profileDisplay.innerHTML = '';
+        if (groupDetailView) groupDetailView.classList.add('hidden');
         
         document.getElementById('authSection').classList.remove('hidden');
         document.getElementById('mainSection').classList.add('hidden');

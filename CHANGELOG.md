@@ -102,6 +102,9 @@
 ### Orphan Container Cleanup
 **Removed orphaned social-db container from previous docker-compose configurations.** Ran docker compose up with --remove-orphans flag to clean up legacy container, eliminating persistent warnings during builds.
 
+### Comprehensive Profile System Implementation
+**Built full profile system with activity, followers/following, and privacy enforcement per exercise requirements.** Added GET /users/:id/profile endpoint with ProfileResponse model containing user info, posts array, followers/following lists with counts, CheckProfileAccess() function enforcing public/private profile visibility (private profiles only visible to owner and followers), GetUserPosts() querying post-service database, PublicProfile() method sanitizing sensitive fields (email, DOB) for non-owners, and renamed Post to UserPost model for clarity.
+
 
 
 ---
