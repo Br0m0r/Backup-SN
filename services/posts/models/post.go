@@ -6,6 +6,7 @@ import "time"
 type Post struct {
 	ID           int       `json:"id"`
 	UserID       int       `json:"user_id"`
+	Title        *string   `json:"title,omitempty"`
 	Content      string    `json:"content"`
 	ImagePath    *string   `json:"image_path,omitempty"`
 	PrivacyLevel string    `json:"privacy_level"` // "public", "private", "almost_private"
@@ -32,6 +33,7 @@ type PostViewer struct {
 
 // CreatePostRequest represents the request to create a post
 type CreatePostRequest struct {
+	Title        *string `json:"title,omitempty"`
 	Content      string  `json:"content"`
 	ImagePath    *string `json:"image_path,omitempty"`
 	PrivacyLevel string  `json:"privacy_level"`     // "public", "private", "almost_private"
@@ -40,6 +42,7 @@ type CreatePostRequest struct {
 
 // UpdatePostRequest represents the request to update a post
 type UpdatePostRequest struct {
+	Title        *string `json:"title,omitempty"`
 	Content      string  `json:"content"`
 	ImagePath    *string `json:"image_path,omitempty"`
 	PrivacyLevel string  `json:"privacy_level"`

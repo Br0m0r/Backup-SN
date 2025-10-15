@@ -21,8 +21,8 @@ RUN CGO_ENABLED=1 go build -o group-service ./services/groups
 # Run stage
 FROM alpine:latest
 
-# Install SQLite runtime library
-RUN apk add --no-cache sqlite-libs
+# Install SQLite runtime library and sqlite CLI
+RUN apk add --no-cache sqlite-libs sqlite
 
 WORKDIR /app
 

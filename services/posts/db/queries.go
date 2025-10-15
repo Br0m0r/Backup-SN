@@ -8,10 +8,10 @@ import (
 // CreatePost inserts a new post into the database
 func CreatePost(db *sql.DB, post *models.Post) error {
 	query := `
-		INSERT INTO posts (user_id, content, image_path, privacy_level, created_at)
-		VALUES (?, ?, ?, ?, ?)
+		INSERT INTO posts (user_id, title, content, image_path, privacy_level, created_at)
+		VALUES (?, ?, ?, ?, ?, ?)
 	`
-	result, err := db.Exec(query, post.UserID, post.Content, post.ImagePath, post.PrivacyLevel, post.CreatedAt)
+	result, err := db.Exec(query, post.UserID, post.Title, post.Content, post.ImagePath, post.PrivacyLevel, post.CreatedAt)
 	if err != nil {
 		return err
 	}
@@ -27,7 +27,7 @@ func CreatePost(db *sql.DB, post *models.Post) error {
 // GetPostByID retrieves a post by ID
 func GetPostByID(db *sql.DB, postID int) (*models.Post, error) {
 	query := `
-		SELECT id, user_id, content, image_path, privacy_level, created_at
+		SELECT id, user_id, title, content, image_path, privacy_level, created_at
 		FROM posts
 		WHERE id = ?
 	`
@@ -35,6 +35,7 @@ func GetPostByID(db *sql.DB, postID int) (*models.Post, error) {
 	err := db.QueryRow(query, postID).Scan(
 		&post.ID,
 		&post.UserID,
+		&post.Title,
 		&post.Content,
 		&post.ImagePath,
 		&post.PrivacyLevel,
@@ -67,7 +68,7 @@ func DeletePost(db *sql.DB, postID int) error {
 // GetPostsByUserID retrieves all posts by a specific user (for user's own profile)
 func GetPostsByUserID(db *sql.DB, userID int) ([]*models.Post, error) {
 	query := `
-		SELECT id, user_id, content, image_path, privacy_level, created_at
+		SELECT id, user_id, title, content, image_path, privacy_level, created_at
 		FROM posts
 		WHERE user_id = ?
 		ORDER BY created_at DESC
@@ -84,6 +85,7 @@ func GetPostsByUserID(db *sql.DB, userID int) ([]*models.Post, error) {
 		err := rows.Scan(
 			&post.ID,
 			&post.UserID,
+			&post.Title,
 			&post.Content,
 			&post.ImagePath,
 			&post.PrivacyLevel,
@@ -100,7 +102,7 @@ func GetPostsByUserID(db *sql.DB, userID int) ([]*models.Post, error) {
 // GetFeedPosts retrieves posts for a user's feed (public + following + own posts)
 func GetFeedPosts(db *sql.DB, userID int) ([]*models.Post, error) {
 	query := `
-		SELECT DISTINCT p.id, p.user_id, p.content, p.image_path, p.privacy_level, p.created_at
+		SELECT DISTINCT p.id, p.user_id, p.title, p.content, p.image_path, p.privacy_level, p.created_at
 		FROM posts p
 		LEFT JOIN follows f ON p.user_id = f.following_id AND f.follower_id = ? AND f.status = 'accepted'
 		LEFT JOIN post_viewers pv ON p.id = pv.post_id AND pv.user_id = ?
@@ -123,6 +125,7 @@ func GetFeedPosts(db *sql.DB, userID int) ([]*models.Post, error) {
 		err := rows.Scan(
 			&post.ID,
 			&post.UserID,
+			&post.Title,
 			&post.Content,
 			&post.ImagePath,
 			&post.PrivacyLevel,

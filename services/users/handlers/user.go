@@ -269,7 +269,109 @@ func (h *UserHandlers) GetFollowing(w http.ResponseWriter, r *http.Request) {
 	})
 }
 
-// SearchUsers handles GET /search?q=searchTerm requests
+// GetFollowStatus handles GET /follow/status/:id requests
+func (h *UserHandlers) GetFollowStatus(w http.ResponseWriter, r *http.Request) {
+	if r.Method != "GET" {
+		utils.ErrorResponse(w, "Method not allowed", http.StatusMethodNotAllowed)
+		return
+	}
+
+	// Get authenticated user ID from context
+	followerID, ok := middleware.GetUserIDFromContext(r)
+	if !ok {
+		utils.ErrorResponse(w, "Unauthorized", http.StatusUnauthorized)
+		return
+	}
+
+	// Extract user ID from URL path
+	path := strings.TrimPrefix(r.URL.Path, "/follow/status/")
+	followingID, err := strconv.Atoi(path)
+	if err != nil {
+		utils.ErrorResponse(w, "Invalid user ID", http.StatusBadRequest)
+		return
+	}
+
+	// Get follow status
+	status, err := h.userService.GetFollowStatus(followerID, followingID)
+	if err != nil {
+		utils.ErrorResponse(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
+
+	utils.SuccessResponse(w, map[string]interface{}{
+		"status": status, // "none", "pending", or "accepted"
+	})
+}
+
+// GetPendingFollowRequests handles GET /follow/requests
+func (h *UserHandlers) GetPendingFollowRequests(w http.ResponseWriter, r *http.Request) {
+	if r.Method != "GET" {
+		utils.ErrorResponse(w, "Method not allowed", http.StatusMethodNotAllowed)
+		return
+	}
+
+	// Get authenticated user ID from context
+	userID, ok := middleware.GetUserIDFromContext(r)
+	if !ok {
+		utils.ErrorResponse(w, "Unauthorized", http.StatusUnauthorized)
+		return
+	}
+
+	// Get pending follow requests
+	requests, err := h.userService.GetPendingFollowRequests(userID)
+	if err != nil {
+		utils.ErrorResponse(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
+
+	utils.SuccessResponse(w, map[string]interface{}{
+		"requests": requests,
+		"count":    len(requests),
+	})
+}
+
+// RespondToFollowRequest handles POST /follow/respond
+func (h *UserHandlers) RespondToFollowRequest(w http.ResponseWriter, r *http.Request) {
+	if r.Method != "POST" {
+		utils.ErrorResponse(w, "Method not allowed", http.StatusMethodNotAllowed)
+		return
+	}
+
+	// Get authenticated user ID from context (this is the user receiving the request)
+	followingID, ok := middleware.GetUserIDFromContext(r)
+	if !ok {
+		utils.ErrorResponse(w, "Unauthorized", http.StatusUnauthorized)
+		return
+	}
+
+	// Parse request body
+	var req struct {
+		FollowerID int  `json:"follower_id"`
+		Accept     bool `json:"accept"`
+	}
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		utils.ErrorResponse(w, "Invalid request body", http.StatusBadRequest)
+		return
+	}
+
+	// Respond to follow request
+	err := h.userService.RespondToFollowRequest(req.FollowerID, followingID, req.Accept)
+	if err != nil {
+		utils.ErrorResponse(w, err.Error(), http.StatusBadRequest)
+		return
+	}
+
+	message := "Follow request rejected"
+	if req.Accept {
+		message = "Follow request accepted"
+	}
+
+	utils.SuccessResponse(w, map[string]interface{}{
+		"message": message,
+	})
+}
+
+// SearchUsers handles GET /search requests
 func (h *UserHandlers) SearchUsers(w http.ResponseWriter, r *http.Request) {
 	if r.Method != "GET" {
 		utils.ErrorResponse(w, "Method not allowed", http.StatusMethodNotAllowed)

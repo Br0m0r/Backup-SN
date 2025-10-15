@@ -81,6 +81,13 @@ func main() {
 	mux.Handle("/followers", authMiddleware(http.HandlerFunc(userHandlers.GetFollowers)))
 	mux.Handle("/following", authMiddleware(http.HandlerFunc(userHandlers.GetFollowing)))
 
+	// Follow status route (auth required)
+	mux.Handle("/follow/status/", authMiddleware(http.HandlerFunc(userHandlers.GetFollowStatus)))
+
+	// Follow requests routes (auth required)
+	mux.Handle("/follow/requests", authMiddleware(http.HandlerFunc(userHandlers.GetPendingFollowRequests)))
+	mux.Handle("/follow/respond", authMiddleware(http.HandlerFunc(userHandlers.RespondToFollowRequest)))
+
 	// Search route (auth required)
 	mux.Handle("/search", authMiddleware(http.HandlerFunc(userHandlers.SearchUsers)))
 

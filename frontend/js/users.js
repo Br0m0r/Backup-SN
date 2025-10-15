@@ -69,16 +69,39 @@ const Users = {
         
         if (result.ok && result.data.success) {
             window.Utils.showStatus('Follow request sent!', 'success');
+            // Refresh the user list to update button states
+            Users.searchUsers();
         } else {
             window.Utils.showStatus(result.data?.error || 'Follow failed', 'error');
         }
+    },
+
+    async unfollowUser(userId) {
+        const result = await window.Utils.apiCall(`${window.AppConfig.USER_URL}/follow`, 'DELETE', { user_id: userId }, true);
+        
+        if (result.ok && result.data.success) {
+            window.Utils.showStatus('Unfollowed successfully', 'success');
+            // Refresh the user list to update button states
+            Users.searchUsers();
+        } else {
+            window.Utils.showStatus(result.data?.error || 'Unfollow failed', 'error');
+        }
+    },
+
+    async getFollowStatus(userId) {
+        const result = await window.Utils.apiCall(`${window.AppConfig.USER_URL}/follow/status/${userId}`, 'GET', null, true);
+        
+        if (result.ok && result.data.success) {
+            return result.data.data.status; // "none", "pending", or "accepted"
+        }
+        return "none";
     },
 
     async getFollowers() {
         const result = await window.Utils.apiCall(`${window.AppConfig.USER_URL}/followers`, 'GET', null, true);
         
         if (result.ok && result.data.success) {
-            Users.displayUsers(result.data.data.followers || []);
+            Users.displayUsersInContainer(result.data.data.followers || [], 'followersContainer', false);
             window.Utils.showResponse(result.data.data, 'usersResponse');
         } else {
             window.Utils.showStatus(result.data?.error || 'Failed to load followers', 'error');
@@ -89,15 +112,67 @@ const Users = {
         const result = await window.Utils.apiCall(`${window.AppConfig.USER_URL}/following`, 'GET', null, true);
         
         if (result.ok && result.data.success) {
-            Users.displayUsers(result.data.data.following || []);
+            Users.displayUsersInContainer(result.data.data.following || [], 'followingContainer', true);
             window.Utils.showResponse(result.data.data, 'usersResponse');
         } else {
             window.Utils.showStatus(result.data?.error || 'Failed to load following', 'error');
         }
     },
 
-    displayUsers(users) {
-        const container = document.getElementById('usersContainer');
+    async getFollowRequests() {
+        const result = await window.Utils.apiCall(`${window.AppConfig.USER_URL}/follow/requests`, 'GET', null, true);
+        
+        if (result.ok && result.data.success) {
+            Users.displayFollowRequests(result.data.data.requests || []);
+            window.Utils.showResponse(result.data.data, 'usersResponse');
+            window.Utils.showStatus(`${result.data.data.count} pending requests`, 'info');
+        } else {
+            window.Utils.showStatus(result.data?.error || 'Failed to load requests', 'error');
+        }
+    },
+
+    async respondToFollowRequest(followerId, accept) {
+        const result = await window.Utils.apiCall(`${window.AppConfig.USER_URL}/follow/respond`, 'POST', 
+            { follower_id: followerId, accept: accept }, true);
+        
+        if (result.ok && result.data.success) {
+            window.Utils.showStatus(accept ? 'Request accepted!' : 'Request rejected', 'success');
+            Users.getFollowRequests(); // Refresh the list
+        } else {
+            window.Utils.showStatus(result.data?.error || 'Failed to respond', 'error');
+        }
+    },
+
+    async displayUsers(users) {
+        const container = document.getElementById('searchUsersContainer');
+        if (!users || users.length === 0) {
+            container.innerHTML = '<p style="color: #999; padding: 20px;">No users found</p>';
+            return;
+        }
+
+        // Get follow status for all users
+        const usersWithStatus = await Promise.all(users.map(async (user) => {
+            const status = await Users.getFollowStatus(user.id);
+            return { ...user, followStatus: status };
+        }));
+
+        container.innerHTML = usersWithStatus.map(user => `
+            <div class="user-card">
+                <h4>${user.first_name} ${user.last_name}</h4>
+                <p><strong>Username:</strong> ${user.username || 'N/A'}</p>
+                <p><strong>Nickname:</strong> ${user.nickname || 'N/A'}</p>
+                <p><strong>About:</strong> ${user.about_me || 'No bio'}</p>
+                <div style="margin-top: 10px;">
+                    ${user.followStatus === 'none' ? `<button onclick="followUser(${user.id})">Follow</button>` : ''}
+                    ${user.followStatus === 'pending' ? `<button disabled style="opacity: 0.6; cursor: not-allowed; background: #ffc107;">Request Pending</button>` : ''}
+                    ${user.followStatus === 'accepted' ? `<button onclick="unfollowUser(${user.id})" style="background: #28a745;">Following</button>` : ''}
+                </div>
+            </div>
+        `).join('');
+    },
+
+    displayUsersInContainer(users, containerId, showUnfollow) {
+        const container = document.getElementById(containerId);
         if (!users || users.length === 0) {
             container.innerHTML = '<p style="color: #999; padding: 20px;">No users found</p>';
             return;
@@ -109,7 +184,28 @@ const Users = {
                 <p><strong>Username:</strong> ${user.username || 'N/A'}</p>
                 <p><strong>Nickname:</strong> ${user.nickname || 'N/A'}</p>
                 <p><strong>About:</strong> ${user.about_me || 'No bio'}</p>
-                <button onclick="followUser(${user.id})">Follow</button>
+                ${showUnfollow ? `<button onclick="unfollowUser(${user.id})" style="background: #dc3545;">Unfollow</button>` : ''}
+            </div>
+        `).join('');
+    },
+
+    displayFollowRequests(requests) {
+        const container = document.getElementById('followRequestsContainer');
+        if (!requests || requests.length === 0) {
+            container.innerHTML = '<p style="color: #999; padding: 20px;">No pending follow requests</p>';
+            return;
+        }
+
+        container.innerHTML = requests.map(user => `
+            <div class="user-card">
+                <h4>${user.first_name} ${user.last_name}</h4>
+                <p><strong>Username:</strong> ${user.username || 'N/A'}</p>
+                <p><strong>Nickname:</strong> ${user.nickname || 'N/A'}</p>
+                <p><strong>About:</strong> ${user.about_me || 'No bio'}</p>
+                <div style="margin-top: 10px; display: flex; gap: 10px;">
+                    <button onclick="respondToFollowRequest(${user.id}, true)" style="background: #28a745;">Accept</button>
+                    <button onclick="respondToFollowRequest(${user.id}, false)" style="background: #dc3545;">Reject</button>
+                </div>
             </div>
         `).join('');
     }
@@ -125,5 +221,8 @@ window.hideUpdateProfile = Users.hideUpdateProfile;
 window.updateProfile = Users.updateProfile;
 window.searchUsers = Users.searchUsers;
 window.followUser = Users.followUser;
+window.unfollowUser = Users.unfollowUser;
 window.getFollowers = Users.getFollowers;
 window.getFollowing = Users.getFollowing;
+window.getFollowRequests = Users.getFollowRequests;
+window.respondToFollowRequest = Users.respondToFollowRequest;

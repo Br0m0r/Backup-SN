@@ -36,6 +36,7 @@ func (s *PostService) CreatePost(req *models.CreatePostRequest, userID int) (*mo
 	// Create post
 	post := &models.Post{
 		UserID:       userID,
+		Title:        req.Title,
 		Content:      req.Content,
 		ImagePath:    req.ImagePath,
 		PrivacyLevel: req.PrivacyLevel,

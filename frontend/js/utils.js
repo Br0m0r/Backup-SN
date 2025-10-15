@@ -65,6 +65,36 @@ function switchMainTab(tab) {
     if (tab === 'groups' && window.Groups && window.Groups.browseGroups) {
         window.Groups.browseGroups();
     }
+    
+    // Auto-load user search when switching to users tab
+    if (tab === 'users') {
+        switchUserSubTab('search');
+    }
+}
+
+// Sub-tab switching for Users section
+function switchUserSubTab(subTab) {
+    document.querySelectorAll('.sub-tab').forEach(t => t.classList.remove('active'));
+    document.querySelectorAll('.sub-tab-content').forEach(c => c.classList.remove('active'));
+    
+    const subTabs = ['search', 'followers', 'following', 'requests'];
+    const index = subTabs.indexOf(subTab);
+    
+    // Activate the clicked sub-tab button
+    document.querySelectorAll('.sub-tab')[index].classList.add('active');
+    
+    // Activate the corresponding sub-tab content
+    const contentIds = {
+        'search': 'searchUsersSubTab',
+        'followers': 'followersSubTab',
+        'following': 'followingSubTab',
+        'requests': 'requestsSubTab'
+    };
+    
+    const contentElement = document.getElementById(contentIds[subTab]);
+    if (contentElement) {
+        contentElement.classList.add('active');
+    }
 }
 
 // Export to global scope
@@ -75,3 +105,6 @@ window.Utils = {
     switchAuthTab,
     switchMainTab
 };
+
+// Make tab switching available globally
+window.switchUserSubTab = switchUserSubTab;

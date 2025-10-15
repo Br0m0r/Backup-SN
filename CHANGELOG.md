@@ -80,6 +80,28 @@
 ### DOM API Naming Conflict Resolution
 **Fixed createEvent() function conflict with native Document.createEvent() method.** Renamed function to createGroupEvent() to prevent browser from calling native DOM API instead of custom event creation function, resolving "At least 1 argument required" TypeError.
 
+---
+
+## 2025-10-15
+
+### Follow Request Management System
+**Implemented complete follow request management with backend endpoints and frontend UI.** Added GET /follow/status/:id, GET /follow/requests, POST /follow/respond endpoints to user service, created sub-tab navigation system in Users tab with search/followers/following/requests sections, and added smart button states (Follow/Request Pending/Following) matching the groups UX pattern.
+
+### Post Title Field Implementation
+**Added optional title field to posts table and updated all related code.** Created migration 000014_AddTitleToPosts with title TEXT column, updated Post models (CreatePostRequest, UpdatePostRequest) with Title *string field, modified all queries (CreatePost, GetPostByID, GetPostsByUserID, GetFeedPosts) to include title, and added title input to frontend post creation form.
+
+### Inline Comment System
+**Implemented complete inline comment creation and viewing within posts.** Added collapsible comment sections with 💬 Comments button on each post, inline comment form with textarea, createComment() and loadCommentsForPost() functions, toggleComments() for show/hide functionality, and proper comment display with user ID and timestamps.
+
+### GetFeedPosts Title Bug Fix
+**Fixed missing title field in GetFeedPosts query causing "Untitled Post" display issue.** Added p.title to SELECT statement and &post.Title to Scan parameters in GetFeedPosts function, ensuring newly created posts with titles display correctly in feed.
+
+### Docker SQLite CLI Integration
+**Added sqlite3 command-line tool to all service containers for debugging.** Updated post-service and group-service Dockerfiles to install sqlite package in runtime stage, enabling direct database queries from any container with docker exec commands.
+
+### Orphan Container Cleanup
+**Removed orphaned social-db container from previous docker-compose configurations.** Ran docker compose up with --remove-orphans flag to clean up legacy container, eliminating persistent warnings during builds.
+
 
 
 ---

@@ -346,3 +346,109 @@ func CheckFollowStatus(db *sql.DB, followerID, followingID int) (string, error) 
 
 	return status, nil
 }
+
+// GetPendingFollowRequests retrieves all pending follow requests for a user
+func GetPendingFollowRequests(db *sql.DB, userID int) ([]*models.User, error) {
+	query := `
+		SELECT u.id, u.username, u.email, u.first_name, u.last_name, u.date_of_birth, 
+		       u.avatar_path, u.nickname, u.about_me, u.is_public_profile, u.created_at
+		FROM users u
+		INNER JOIN follows f ON u.id = f.follower_id
+		WHERE f.following_id = ? AND f.status = 'pending'
+		ORDER BY f.created_at DESC
+	`
+
+	rows, err := db.Query(query, userID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+
+	var users []*models.User
+	for rows.Next() {
+		var user models.User
+		var firstName, lastName, dateOfBirth, avatarPath, nickname, aboutMe sql.NullString
+
+		err := rows.Scan(
+			&user.ID,
+			&user.Username,
+			&user.Email,
+			&firstName,
+			&lastName,
+			&dateOfBirth,
+			&avatarPath,
+			&nickname,
+			&aboutMe,
+			&user.IsPublicProfile,
+			&user.CreatedAt,
+		)
+		if err != nil {
+			return nil, err
+		}
+
+		// Handle nullable fields
+		if firstName.Valid {
+			user.FirstName = &firstName.String
+		}
+		if lastName.Valid {
+			user.LastName = &lastName.String
+		}
+		if dateOfBirth.Valid {
+			user.DateOfBirth = &dateOfBirth.String
+		}
+		if avatarPath.Valid {
+			user.AvatarPath = &avatarPath.String
+		}
+		if nickname.Valid {
+			user.Nickname = &nickname.String
+		}
+		if aboutMe.Valid {
+			user.AboutMe = &aboutMe.String
+		}
+
+		users = append(users, &user)
+	}
+
+	return users, rows.Err()
+}
+
+// RespondToFollowRequest accepts or rejects a follow request
+func RespondToFollowRequest(db *sql.DB, followerID, followingID int, accept bool) error {
+	if accept {
+		// Update status to accepted
+		query := `UPDATE follows SET status = 'accepted' WHERE follower_id = ? AND following_id = ? AND status = 'pending'`
+		result, err := db.Exec(query, followerID, followingID)
+		if err != nil {
+			return err
+		}
+
+		rowsAffected, err := result.RowsAffected()
+		if err != nil {
+			return err
+		}
+
+		if rowsAffected == 0 {
+			return errors.New("follow request not found or already processed")
+		}
+
+		return nil
+	} else {
+		// Delete the pending request
+		query := `DELETE FROM follows WHERE follower_id = ? AND following_id = ? AND status = 'pending'`
+		result, err := db.Exec(query, followerID, followingID)
+		if err != nil {
+			return err
+		}
+
+		rowsAffected, err := result.RowsAffected()
+		if err != nil {
+			return err
+		}
+
+		if rowsAffected == 0 {
+			return errors.New("follow request not found")
+		}
+
+		return nil
+	}
+}

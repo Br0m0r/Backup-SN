@@ -110,6 +110,10 @@
 
                 <div id="createPostForm" class="hidden" style="margin-top: 20px;">
                     <div class="form-group">
+                        <label>Title (optional):</label>
+                        <input type="text" id="postTitle" placeholder="Post title...">
+                    </div>
+                    <div class="form-group">
                         <label>Content:</label>
                         <textarea id="postContent" placeholder="What's on your mind?"></textarea>
                     </div>
@@ -132,16 +136,48 @@
             <!-- Users Tab -->
             <div id="usersTab" class="tab-content">
                 <h2>👥 Users & Social</h2>
-                <div class="form-group">
-                    <label>Search Users:</label>
-                    <input type="text" id="searchQuery" placeholder="Search by name...">
-                    <button onclick="searchUsers()" style="margin-top: 10px;">Search</button>
+                
+                <!-- Sub-tabs for better organization -->
+                <div class="sub-tabs">
+                    <button class="sub-tab active" onclick="switchUserSubTab('search')">🔍 Search Users</button>
+                    <button class="sub-tab" onclick="switchUserSubTab('followers')">👥 Followers</button>
+                    <button class="sub-tab" onclick="switchUserSubTab('following')">➡️ Following</button>
+                    <button class="sub-tab" onclick="switchUserSubTab('requests')">📥 Follow Requests</button>
                 </div>
 
-                <button onclick="getFollowers()">My Followers</button>
-                <button onclick="getFollowing()">My Following</button>
+                <!-- Search Users Sub-tab -->
+                <div id="searchUsersSubTab" class="sub-tab-content active">
+                    <h3>Search Users</h3>
+                    <div class="form-group">
+                        <label>Search by name:</label>
+                        <input type="text" id="searchQuery" placeholder="Search by name...">
+                        <button onclick="searchUsers()" style="margin-top: 10px;">Search</button>
+                    </div>
+                    <div id="searchUsersContainer"></div>
+                </div>
 
-                <div id="usersContainer"></div>
+                <!-- Followers Sub-tab -->
+                <div id="followersSubTab" class="sub-tab-content">
+                    <h3>My Followers</h3>
+                    <button onclick="getFollowers()">Refresh Followers</button>
+                    <div id="followersContainer"></div>
+                </div>
+
+                <!-- Following Sub-tab -->
+                <div id="followingSubTab" class="sub-tab-content">
+                    <h3>People I Follow</h3>
+                    <button onclick="getFollowing()">Refresh Following</button>
+                    <div id="followingContainer"></div>
+                </div>
+
+                <!-- Follow Requests Sub-tab -->
+                <div id="requestsSubTab" class="sub-tab-content">
+                    <h3>Pending Follow Requests</h3>
+                    <p style="color: #666; margin-bottom: 15px;">People who want to follow you (private profile only)</p>
+                    <button onclick="getFollowRequests()">Refresh Requests</button>
+                    <div id="followRequestsContainer"></div>
+                </div>
+
                 <div class="response-box" id="usersResponse"></div>
             </div>
 

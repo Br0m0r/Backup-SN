@@ -91,3 +91,18 @@ func (s *UserService) SearchUsers(searchTerm string) ([]*models.User, error) {
 
 	return db.SearchUsers(s.database, searchTerm)
 }
+
+// GetFollowStatus checks the follow relationship status between two users
+func (s *UserService) GetFollowStatus(followerID, followingID int) (string, error) {
+	return db.CheckFollowStatus(s.database, followerID, followingID)
+}
+
+// GetPendingFollowRequests retrieves all pending follow requests for a user
+func (s *UserService) GetPendingFollowRequests(userID int) ([]*models.User, error) {
+	return db.GetPendingFollowRequests(s.database, userID)
+}
+
+// RespondToFollowRequest accepts or rejects a follow request
+func (s *UserService) RespondToFollowRequest(followerID, followingID int, accept bool) error {
+	return db.RespondToFollowRequest(s.database, followerID, followingID, accept)
+}

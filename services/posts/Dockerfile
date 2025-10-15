@@ -19,6 +19,7 @@ RUN go build -o post-service ./services/posts
 
 # Run stage
 FROM alpine:latest
+RUN apk --no-cache add sqlite
 
 WORKDIR /app
 
