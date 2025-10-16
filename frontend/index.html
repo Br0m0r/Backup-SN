@@ -71,6 +71,7 @@
                 <button class="tab" onclick="switchMainTab('posts')">Posts</button>
                 <button class="tab" onclick="switchMainTab('users')">Users</button>
                 <button class="tab" onclick="switchMainTab('groups')">Groups</button>
+                <button class="tab" onclick="switchMainTab('chat')">💬 Chat</button>
             </div>
 
             <!-- Profile Tab -->
@@ -291,6 +292,61 @@
 
                 <div class="response-box" id="groupsResponse"></div>
             </div>
+
+            <!-- Chat Tab -->
+            <div id="chatTab" class="tab-content">
+                <h2>💬 Real-time Chat</h2>
+                
+                <!-- Connection Status -->
+                <div id="chatConnectionStatus" class="connection-status disconnected">🔴 Disconnected</div>
+                
+                <!-- Error Display -->
+                <div id="chatError" class="error-message" style="display: none;"></div>
+                
+                <!-- Notifications -->
+                <div id="chatNotifications" class="chat-notifications"></div>
+
+                <!-- Chat Layout: Sidebar + Chat Window -->
+                <div class="chat-container">
+                    <!-- Sidebar: Conversations and Groups -->
+                    <div class="chat-sidebar" id="chatSidebar">
+                        <h3>💬 Private Chats</h3>
+                        <button onclick="Chat.showNewChatDialog()" class="btn-primary">+ New Chat</button>
+                        <button onclick="Chat.loadConversations()" class="btn-secondary">🔄 Refresh</button>
+                        <div id="conversationsList" class="conversations-list">
+                            <p style="color: #666;">Loading conversations...</p>
+                        </div>
+
+                        <h3 style="margin-top: 30px;">👥 Group Chats</h3>
+                        <button onclick="Chat.loadGroupsForChat()" class="btn-secondary">🔄 Refresh Groups</button>
+                        <div id="groupChatsList" class="conversations-list">
+                            <p style="color: #666;">Loading groups...</p>
+                        </div>
+                    </div>
+
+                    <!-- Chat Window -->
+                    <div class="chat-window hidden" id="chatWindow">
+                        <div class="chat-header" id="chatHeader">
+                            <button onclick="Chat.closeChat()">← Back</button>
+                            <span>Select a conversation</span>
+                        </div>
+
+                        <div class="chat-messages" id="chatMessages">
+                            <p style="color: #666; text-align: center;">Select a conversation to start chatting</p>
+                        </div>
+
+                        <div class="chat-input-container">
+                            <textarea 
+                                id="chatMessageInput" 
+                                placeholder="Type your message... (Press Enter to send)" 
+                                rows="2"
+                                onkeypress="Chat.handleChatKeyPress(event)"
+                            ></textarea>
+                            <button onclick="Chat.sendMessage()" class="btn-send">Send</button>
+                        </div>
+                    </div>
+                </div>
+            </div>
         </div>
 
         <div id="globalStatus"></div>
@@ -304,6 +360,7 @@
     <script src="js/posts.js"></script>
     <script src="js/groups.js"></script>
     <script src="js/events.js"></script>
+    <script src="js/chat.js"></script>
     <script src="js/app.js"></script>
 </body>
 </html>

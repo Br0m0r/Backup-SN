@@ -1,5 +1,12 @@
 // Utility Functions
 
+// Escape HTML to prevent XSS attacks
+function escapeHtml(text) {
+    const div = document.createElement('div');
+    div.textContent = text;
+    return div.innerHTML;
+}
+
 function showStatus(message, type, elementId = 'globalStatus') {
     const el = document.getElementById(elementId);
     if (!el) return;
@@ -56,7 +63,7 @@ function switchMainTab(tab) {
     document.querySelectorAll('#mainSection .tab').forEach(t => t.classList.remove('active'));
     document.querySelectorAll('#mainSection .tab-content').forEach(c => c.classList.remove('active'));
     
-    const tabs = ['profile', 'posts', 'users', 'groups'];
+    const tabs = ['profile', 'posts', 'users', 'groups', 'chat'];
     const index = tabs.indexOf(tab);
     document.querySelectorAll('#mainSection .tab')[index].classList.add('active');
     document.getElementById(tab + 'Tab').classList.add('active');
@@ -69,6 +76,12 @@ function switchMainTab(tab) {
     // Auto-load user search when switching to users tab
     if (tab === 'users') {
         switchUserSubTab('search');
+    }
+    
+    // Auto-load chat when switching to chat tab
+    if (tab === 'chat' && window.Chat) {
+        window.Chat.loadConversations();
+        window.Chat.loadGroupsForChat();
     }
 }
 
@@ -99,6 +112,7 @@ function switchUserSubTab(subTab) {
 
 // Export to global scope
 window.Utils = {
+    escapeHtml,
     showStatus,
     showResponse,
     apiCall,

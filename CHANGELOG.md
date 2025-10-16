@@ -105,7 +105,14 @@
 ### Comprehensive Profile System Implementation
 **Built full profile system with activity, followers/following, and privacy enforcement per exercise requirements.** Added GET /users/:id/profile endpoint with ProfileResponse model containing user info, posts array, followers/following lists with counts, CheckProfileAccess() function enforcing public/private profile visibility (private profiles only visible to owner and followers), GetUserPosts() querying post-service database, PublicProfile() method sanitizing sensitive fields (email, DOB) for non-owners, and renamed Post to UserPost model for clarity.
 
+---
 
+## 2025-10-16
+
+### Chat Service Group Chat Implementation
+**Added complete group chat functionality to chat service with real-time WebSocket broadcasting.** Implemented GroupMessage model with Type field for message routing, added SaveGroupMessage/GetGroupChatHistory/IsGroupMember/GetGroupMembers database queries, modified Hub.Run() broadcast logic to check message type and broadcast to all online group members, created handleGroupChatMessage WebSocket handler with membership verification, added REST endpoints GET /chat/groups/:groupId/history and POST /chat/groups/:groupId/messages, ensuring chat service handles both 1-on-1 and group chat per microservice single-responsibility principle.
+
+### Readme files for all microservices to study
 
 ---
 

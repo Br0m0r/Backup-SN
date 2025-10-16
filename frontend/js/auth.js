@@ -24,6 +24,8 @@ const Auth = {
                 document.getElementById('authSection').classList.add('hidden');
                 document.getElementById('mainSection').classList.remove('hidden');
                 Auth.getSession();
+                // Dispatch login event for chat WebSocket
+                document.dispatchEvent(new Event('userLoggedIn'));
             }, 1000);
         } else {
             window.Utils.showStatus(result.data?.error || 'Registration failed', 'error', 'authStatus');
@@ -50,6 +52,8 @@ const Auth = {
                 document.getElementById('authSection').classList.add('hidden');
                 document.getElementById('mainSection').classList.remove('hidden');
                 Auth.getSession();
+                // Dispatch login event for chat WebSocket
+                document.dispatchEvent(new Event('userLoggedIn'));
             }, 1000);
         } else {
             window.Utils.showStatus(result.data?.error || 'Login failed', 'error', 'authStatus');
@@ -58,6 +62,9 @@ const Auth = {
 
     async logout() {
         const result = await window.Utils.apiCall(`${window.AppConfig.AUTH_URL}/logout`, 'POST', null, true);
+        
+        // Dispatch logout event for chat WebSocket
+        document.dispatchEvent(new Event('userLoggedOut'));
         
         window.AppState.setToken('');
         window.AppState.setCurrentUser(null);
@@ -102,6 +109,8 @@ const Auth = {
             `;
             document.getElementById('authSection').classList.add('hidden');
             document.getElementById('mainSection').classList.remove('hidden');
+            // Dispatch login event for chat WebSocket (session restored)
+            document.dispatchEvent(new Event('userLoggedIn'));
         } else {
             Auth.logout();
         }
