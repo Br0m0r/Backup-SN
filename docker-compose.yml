@@ -92,6 +92,24 @@ services:
     volumes:
       - ./social_network.db:/app/social_network.db:rw
 
+  # Notification Service - services/notifications/main.go runs on port 8086
+  notification-service:
+    build:
+      context: .  # Build from root
+      dockerfile: ./services/notifications/Dockerfile
+    container_name: notification-service
+    ports:
+      - "8086:8086"
+    depends_on:
+      - auth-service  # Notification service needs auth service for token verification
+    networks:
+      - social-network
+    environment:
+      - DATABASE_PATH=/app/social_network.db
+      - AUTH_SERVICE_URL=http://auth-service:8081  # How notification service finds auth service
+    volumes:
+      - ./social_network.db:/app/social_network.db:rw
+
 # To run:
 # docker-compose up --build
 # 
@@ -101,6 +119,7 @@ services:
 # curl http://localhost:8083/health  (post service)
 # curl http://localhost:8084/health  (group service)
 # curl http://localhost:8085/health  (chat service)
+# curl http://localhost:8086/health  (notification service)
 #
 # Database: SQLite file shared via volume mount
 # Each service connects directly to ./social_network.db

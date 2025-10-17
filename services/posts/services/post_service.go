@@ -5,6 +5,7 @@ import (
 	"errors"
 	"time"
 
+	"social-network/services/common/notify"
 	"social-network/services/posts/db"
 	"social-network/services/posts/models"
 )
@@ -153,7 +154,7 @@ func (s *PostService) GetFeed(userID int) ([]*models.Post, error) {
 }
 
 // CreateComment creates a new comment on a post
-func (s *PostService) CreateComment(req *models.CreateCommentRequest, userID int) (*models.Comment, error) {
+func (s *PostService) CreateComment(req *models.CreateCommentRequest, userID int, commenterName string) (*models.Comment, error) {
 	// Check if user has access to the post
 	hasAccess, err := db.CheckPostAccess(s.database, req.PostID, userID)
 	if err != nil {
@@ -181,6 +182,17 @@ func (s *PostService) CreateComment(req *models.CreateCommentRequest, userID int
 	err = db.CreateComment(s.database, comment)
 	if err != nil {
 		return nil, err
+	}
+
+	// Get post author and send notification (don't notify if commenting on own post)
+	post, err := db.GetPostByID(s.database, req.PostID)
+	if err == nil && post.UserID != userID {
+		// Truncate content for preview
+		preview := req.Content
+		if len(preview) > 50 {
+			preview = preview[:50] + "..."
+		}
+		notify.NewComment(post.UserID, comment.ID, commenterName, preview)
 	}
 
 	return comment, nil

@@ -211,13 +211,19 @@ func (h *PostHandlers) CreateComment(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	username, ok := middleware.GetUsernameFromContext(r)
+	if !ok {
+		utils.ErrorResponse(w, "Unauthorized", http.StatusUnauthorized)
+		return
+	}
+
 	var req models.CreateCommentRequest
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
 		utils.ErrorResponse(w, "Invalid JSON payload", http.StatusBadRequest)
 		return
 	}
 
-	comment, err := h.postService.CreateComment(&req, userID)
+	comment, err := h.postService.CreateComment(&req, userID, username)
 	if err != nil {
 		if err.Error() == "access denied: cannot comment on this post" {
 			utils.ErrorResponse(w, err.Error(), http.StatusForbidden)

@@ -12,6 +12,9 @@ COPY go.mod go.sum ./
 # Download dependencies
 RUN go mod download
 
+# Copy the common package first
+COPY services/common/ ./services/common/
+
 # Copy the entire project
 COPY . .
 

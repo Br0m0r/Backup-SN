@@ -536,3 +536,14 @@ func GetGroupMessages(db *sql.DB, groupID int, limit int) ([]*models.GroupMessag
 
 	return messages, rows.Err()
 }
+
+// GetUsernameByID retrieves username from users table
+func GetUsernameByID(db *sql.DB, userID int) (string, error) {
+	var username string
+	query := `SELECT username FROM users WHERE id = ?`
+	err := db.QueryRow(query, userID).Scan(&username)
+	if err != nil {
+		return "", err
+	}
+	return username, nil
+}

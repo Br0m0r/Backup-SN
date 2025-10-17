@@ -8,6 +8,7 @@ import (
 	"social-network/services/chat/db"
 	"social-network/services/chat/middleware"
 	"social-network/services/chat/models"
+	"social-network/services/common/notify"
 	"sync"
 	"time"
 
@@ -293,6 +294,11 @@ func (c *Client) handleChatMessage(wsMsg *models.WebSocketMessage) {
 	// Broadcast to receiver if online
 	c.hub.broadcast <- wsMsg
 
+	// Send notification if receiver is offline
+	if !c.hub.IsUserOnline(wsMsg.ReceiverID) {
+		notify.NewMessage(wsMsg.ReceiverID, msg.ID, c.username)
+	}
+
 	// Send confirmation back to sender
 	confirmation := *wsMsg
 	data, err := json.Marshal(confirmation)
@@ -366,4 +372,20 @@ func (c *Client) handleGroupChatMessage(wsMsg *models.WebSocketMessage) {
 
 	// Broadcast to all group members (including sender)
 	c.hub.broadcast <- wsMsg
+
+	// Get offline members for notifications
+	groupMembers, err := db.GetGroupMembers(c.hub.database, wsMsg.GroupID)
+	if err == nil {
+		var offlineMemberIDs []int
+		for _, memberID := range groupMembers {
+			// Only notify offline members (excluding sender)
+			if memberID != c.userID && !c.hub.IsUserOnline(memberID) {
+				offlineMemberIDs = append(offlineMemberIDs, memberID)
+			}
+		}
+		if len(offlineMemberIDs) > 0 {
+			// Use generic group name since chat service doesn't have access to group details
+			notify.NewGroupMessage(offlineMemberIDs, msg.ID, c.userID, c.username, "group chat")
+		}
+	}
 }

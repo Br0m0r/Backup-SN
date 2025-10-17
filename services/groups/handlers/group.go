@@ -137,6 +137,12 @@ func (h *GroupHandlers) InviteMember(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	username, ok := middleware.GetUsernameFromContext(r)
+	if !ok {
+		utils.SendError(w, http.StatusUnauthorized, "User not authenticated")
+		return
+	}
+
 	// Extract group ID from path
 	path := strings.TrimPrefix(r.URL.Path, "/groups/")
 	path = strings.TrimSuffix(path, "/invite")
@@ -152,7 +158,7 @@ func (h *GroupHandlers) InviteMember(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	if err := h.service.InviteMember(groupID, userID, req.UserID); err != nil {
+	if err := h.service.InviteMember(groupID, userID, req.UserID, username); err != nil {
 		log.Printf("Error inviting member: %v", err)
 		utils.SendError(w, http.StatusForbidden, err.Error())
 		return
@@ -169,6 +175,12 @@ func (h *GroupHandlers) RequestToJoin(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	username, ok := middleware.GetUsernameFromContext(r)
+	if !ok {
+		utils.SendError(w, http.StatusUnauthorized, "User not authenticated")
+		return
+	}
+
 	// Extract group ID from path
 	path := strings.TrimPrefix(r.URL.Path, "/groups/")
 	path = strings.TrimSuffix(path, "/request")
@@ -178,7 +190,7 @@ func (h *GroupHandlers) RequestToJoin(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	if err := h.service.RequestToJoin(groupID, userID); err != nil {
+	if err := h.service.RequestToJoin(groupID, userID, username); err != nil {
 		log.Printf("Error requesting to join: %v", err)
 		utils.SendError(w, http.StatusInternalServerError, err.Error())
 		return

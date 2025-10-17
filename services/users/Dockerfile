@@ -10,6 +10,9 @@ WORKDIR /app
 COPY go.mod go.sum ./
 RUN go mod download
 
+# Copy shared packages (notification helpers)
+COPY services/common/ ./services/common/
+
 # Copy user service source code
 COPY services/users/ ./services/users/
 

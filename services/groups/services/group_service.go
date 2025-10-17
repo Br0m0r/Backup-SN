@@ -3,6 +3,7 @@ package services
 import (
 	"database/sql"
 	"errors"
+	"social-network/services/common/notify"
 	"social-network/services/groups/db"
 	"social-network/services/groups/models"
 	"time"
@@ -50,7 +51,7 @@ func (s *GroupService) UpdateGroup(groupID, userID int, req *models.UpdateGroupR
 }
 
 // InviteMember invites a user to join the group (members can invite)
-func (s *GroupService) InviteMember(groupID, inviterID, invitedUserID int) error {
+func (s *GroupService) InviteMember(groupID, inviterID, invitedUserID int, inviterName string) error {
 	// Check if inviter is a member
 	isMember, err := db.IsGroupMember(s.database, groupID, inviterID)
 	if err != nil {
@@ -60,12 +61,34 @@ func (s *GroupService) InviteMember(groupID, inviterID, invitedUserID int) error
 		return errors.New("only group members can invite others")
 	}
 
-	return db.InviteMember(s.database, groupID, invitedUserID)
+	err = db.InviteMember(s.database, groupID, invitedUserID)
+	if err != nil {
+		return err
+	}
+
+	// Get group info for notification
+	group, err := db.GetGroupWithDetails(s.database, groupID, inviterID)
+	if err == nil {
+		notify.GroupInvite(invitedUserID, groupID, inviterName, group.Name)
+	}
+
+	return nil
 }
 
 // RequestToJoin creates a join request (any user can request)
-func (s *GroupService) RequestToJoin(groupID, userID int) error {
-	return db.RequestToJoinGroup(s.database, groupID, userID)
+func (s *GroupService) RequestToJoin(groupID, userID int, requesterName string) error {
+	err := db.RequestToJoinGroup(s.database, groupID, userID)
+	if err != nil {
+		return err
+	}
+
+	// Get group info and notify creator
+	group, err := db.GetGroupByID(s.database, groupID)
+	if err == nil {
+		notify.GroupJoinRequest(group.CreatorID, groupID, requesterName, group.Name)
+	}
+
+	return nil
 }
 
 // GetPendingRequests retrieves pending join requests (creator only)
@@ -93,7 +116,41 @@ func (s *GroupService) RespondToRequest(groupID, memberID, userID int, accept bo
 		return errors.New("only group creator can respond to requests")
 	}
 
-	return db.RespondToJoinRequest(s.database, memberID, accept)
+	// Get member info before responding
+	members, err := db.GetPendingRequests(s.database, groupID)
+	if err != nil {
+		return err
+	}
+
+	var requesterID int
+	for _, m := range members {
+		if m.ID == memberID {
+			requesterID = m.UserID
+			break
+		}
+	}
+
+	err = db.RespondToJoinRequest(s.database, memberID, accept)
+	if err != nil {
+		return err
+	}
+
+	// Send notification
+	group, err := db.GetGroupByID(s.database, groupID)
+	if err == nil && requesterID > 0 {
+		if accept {
+			notify.GroupRequestAccepted(requesterID, groupID, group.Name)
+			// Notify creator about new member
+			requesterName, err := db.GetUsernameByID(s.database, requesterID)
+			if err == nil {
+				notify.NewGroupMember(group.CreatorID, groupID, requesterName, group.Name)
+			}
+		} else {
+			notify.GroupRequestRejected(requesterID, groupID, group.Name)
+		}
+	}
+
+	return nil
 }
 
 // GetGroupMembers retrieves all accepted members
@@ -111,7 +168,7 @@ func (s *GroupService) GetGroupMembers(groupID, userID int) ([]*models.GroupMemb
 }
 
 // CreateEvent creates a new event (members can create events)
-func (s *GroupService) CreateEvent(req *models.CreateEventRequest, creatorID int) (*models.Event, error) {
+func (s *GroupService) CreateEvent(req *models.CreateEventRequest, creatorID int, creatorName string) (*models.Event, error) {
 	// Check if creator is a member
 	isMember, err := db.IsGroupMember(s.database, req.GroupID, creatorID)
 	if err != nil {
@@ -135,7 +192,29 @@ func (s *GroupService) CreateEvent(req *models.CreateEventRequest, creatorID int
 		return nil, errors.New("invalid event time format (use ISO 8601/RFC3339)")
 	}
 
-	return db.CreateEvent(s.database, req.GroupID, creatorID, req.Title, req.Description, eventTime)
+	event, err := db.CreateEvent(s.database, req.GroupID, creatorID, req.Title, req.Description, eventTime)
+	if err != nil {
+		return nil, err
+	}
+
+	// Get group members and notify them
+	members, err := db.GetGroupMembers(s.database, req.GroupID)
+	if err == nil {
+		group, err := db.GetGroupByID(s.database, req.GroupID)
+		if err == nil {
+			var memberIDs []int
+			for _, member := range members {
+				if member.UserID != creatorID { // Don't notify creator
+					memberIDs = append(memberIDs, member.UserID)
+				}
+			}
+			if len(memberIDs) > 0 {
+				notify.EventCreated(memberIDs, event.ID, creatorName, req.Title, group.Name)
+			}
+		}
+	}
+
+	return event, nil
 }
 
 // GetEvent retrieves event with response counts
@@ -158,7 +237,7 @@ func (s *GroupService) GetGroupEvents(groupID, userID int) ([]*models.EventWithR
 }
 
 // RespondToEvent creates or updates a user's RSVP to an event
-func (s *GroupService) RespondToEvent(req *models.EventResponseRequest, userID int) error {
+func (s *GroupService) RespondToEvent(req *models.EventResponseRequest, userID int, userName string) error {
 	// Get event to check group membership
 	event, err := db.GetEventByID(s.database, req.EventID)
 	if err != nil {
@@ -179,7 +258,17 @@ func (s *GroupService) RespondToEvent(req *models.EventResponseRequest, userID i
 		return errors.New("response must be 'going', 'not_going', or 'interested'")
 	}
 
-	return db.RespondToEvent(s.database, req.EventID, userID, req.Response)
+	err = db.RespondToEvent(s.database, req.EventID, userID, req.Response)
+	if err != nil {
+		return err
+	}
+
+	// Notify event creator
+	if event.CreatorID != nil && *event.CreatorID != userID {
+		notify.EventResponse(*event.CreatorID, event.ID, userName, event.Title, req.Response)
+	}
+
+	return nil
 }
 
 // CreateGroupMessage creates a message in group chat (members only)

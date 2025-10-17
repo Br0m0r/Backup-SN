@@ -4,6 +4,7 @@ import (
 	"database/sql"
 	"errors"
 
+	"social-network/services/common/notify"
 	"social-network/services/users/db"
 	"social-network/services/users/models"
 )
@@ -65,7 +66,22 @@ func (s *UserService) FollowUser(followerID, followingID int) error {
 		followStatus = "pending"
 	}
 
-	return db.CreateFollow(s.database, followerID, followingID, followStatus)
+	err = db.CreateFollow(s.database, followerID, followingID, followStatus)
+	if err != nil {
+		return err
+	}
+
+	// Send notification
+	follower, _ := db.GetUserByID(s.database, followerID)
+	if followStatus == "pending" {
+		// Private profile - notify about follow request
+		notify.FollowRequest(followingID, followerID, follower.Username)
+	} else {
+		// Public profile - notify about new follower
+		notify.NewFollower(followingID, followerID, follower.Username)
+	}
+
+	return nil
 }
 
 // UnfollowUser removes a follow relationship
@@ -104,7 +120,18 @@ func (s *UserService) GetPendingFollowRequests(userID int) ([]*models.User, erro
 
 // RespondToFollowRequest accepts or rejects a follow request
 func (s *UserService) RespondToFollowRequest(followerID, followingID int, accept bool) error {
-	return db.RespondToFollowRequest(s.database, followerID, followingID, accept)
+	err := db.RespondToFollowRequest(s.database, followerID, followingID, accept)
+	if err != nil {
+		return err
+	}
+
+	// Send notification if accepted
+	if accept {
+		accepter, _ := db.GetUserByID(s.database, followingID)
+		notify.FollowAccepted(followerID, followingID, accepter.Username)
+	}
+
+	return nil
 }
 
 // GetUserProfile retrieves a comprehensive user profile with posts, followers, and following

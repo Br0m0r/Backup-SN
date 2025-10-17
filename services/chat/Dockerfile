@@ -10,6 +10,9 @@ WORKDIR /app
 COPY go.mod go.sum ./
 RUN go mod download
 
+# Copy the common package first
+COPY services/common ./services/common
+
 # Copy source code
 COPY services/chat ./services/chat
 

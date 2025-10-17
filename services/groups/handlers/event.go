@@ -19,13 +19,19 @@ func (h *GroupHandlers) CreateEvent(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	username, ok := middleware.GetUsernameFromContext(r)
+	if !ok {
+		utils.SendError(w, http.StatusUnauthorized, "User not authenticated")
+		return
+	}
+
 	var req models.CreateEventRequest
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
 		utils.SendError(w, http.StatusBadRequest, "Invalid request body")
 		return
 	}
 
-	event, err := h.service.CreateEvent(&req, userID)
+	event, err := h.service.CreateEvent(&req, userID, username)
 	if err != nil {
 		log.Printf("Error creating event: %v", err)
 		utils.SendError(w, http.StatusForbidden, err.Error())
@@ -96,13 +102,19 @@ func (h *GroupHandlers) RespondToEvent(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	username, ok := middleware.GetUsernameFromContext(r)
+	if !ok {
+		utils.SendError(w, http.StatusUnauthorized, "User not authenticated")
+		return
+	}
+
 	var req models.EventResponseRequest
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
 		utils.SendError(w, http.StatusBadRequest, "Invalid request body")
 		return
 	}
 
-	if err := h.service.RespondToEvent(&req, userID); err != nil {
+	if err := h.service.RespondToEvent(&req, userID, username); err != nil {
 		log.Printf("Error responding to event: %v", err)
 		utils.SendError(w, http.StatusForbidden, err.Error())
 		return
