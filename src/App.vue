@@ -1,37 +1,35 @@
 <template>
   <div class="neon-shell">
     <header class="neon-header">
-      <div class="brand">
+      <div class="brand" role="button" tabindex="0" @click="switchToFeed">
         <span class="pulse-dot"></span>
         <span>Neon Connex</span>
       </div>
       <div class="header-actions">
-        <div class="header-icon" @click="toggleNotifications" role="button" tabindex="0">
-          <span class="icon icon-bell" />
-          <span v-if="unreadCount" class="badge">{{ unreadCount }}</span>
-          <div v-if="notificationsOpen" class="dropdown notifications">
-            <p class="dropdown-title">Notifications</p>
-            <ul>
-              <li v-for="note in notifications" :key="note.id">
-                <span class="note-type">{{ note.type }}</span>
-                <p>{{ note.message }}</p>
-                <small>{{ note.time }}</small>
-              </li>
-            </ul>
-          </div>
-        </div>
         <div class="header-icon avatar" @click="toggleProfile" role="button" tabindex="0">
           <img src="https://placehold.co/64x64/11121f/fff?text=ME" alt="profile" />
+          <span v-if="unreadCount" class="badge">{{ unreadCount }}</span>
           <div v-if="profileOpen" class="dropdown profile-menu">
-            <button>View Profile</button>
-            <button>Switch to Private</button>
+            <button @click="viewProfile">View Profile</button>
+            <button @click="openNotifications">Notifications</button>
             <button class="ghost">Logout</button>
           </div>
+        </div>
+        <div v-if="notificationsOpen" class="dropdown notifications notifications-panel">
+          <p class="dropdown-title">Notifications</p>
+          <ul>
+            <li v-for="note in notifications" :key="note.id">
+              <span class="note-type">{{ note.type }}</span>
+              <p>{{ note.message }}</p>
+              <small>{{ note.time }}</small>
+            </li>
+          </ul>
+          <button class="ghost mini full-width" @click="notificationsOpen = false">Close</button>
         </div>
       </div>
     </header>
 
-    <main class="content">
+    <main class="content" v-if="currentScreen === 'feed'">
       <section class="main-panel">
         <div class="filters-row">
           <button
@@ -81,16 +79,23 @@
         </TransitionGroup>
       </section>
     </main>
+
+    <section v-else class="profile-wrapper">
+      <ProfileView @back="switchToFeed" />
+    </section>
   </div>
 </template>
 
 <script setup>
 import { computed, ref } from 'vue';
+import ProfileView from './components/ProfileView.vue';
 
 const activeView = ref('public');
 const notificationsOpen = ref(false);
 const profileOpen = ref(false);
 const searchQuery = ref('');
+const currentScreen = ref('feed');
+const isFeedPrivate = ref(false);
 
 const filterOptions = [
   { id: 'public', label: 'Public', icon: 'icon-globe' },
@@ -159,14 +164,33 @@ const filteredSuggestions = computed(() => {
   return suggestions.filter((user) => user.name.toLowerCase().includes(searchQuery.value.toLowerCase()));
 });
 
-function toggleNotifications() {
+function toggleProfile() {
+  profileOpen.value = !profileOpen.value;
+  if (profileOpen.value) {
+    notificationsOpen.value = false;
+  }
+}
+
+function openNotifications() {
   notificationsOpen.value = !notificationsOpen.value;
   profileOpen.value = false;
 }
 
-function toggleProfile() {
-  profileOpen.value = !profileOpen.value;
+function viewProfile() {
+  currentScreen.value = 'profile';
+  profileOpen.value = false;
   notificationsOpen.value = false;
+}
+
+function switchToFeed() {
+  currentScreen.value = 'feed';
+  profileOpen.value = false;
+  notificationsOpen.value = false;
+}
+
+function togglePrivacyContext() {
+  isFeedPrivate.value = !isFeedPrivate.value;
+  profileOpen.value = false;
 }
 </script>
 
@@ -187,10 +211,9 @@ function toggleProfile() {
   align-items: center;
   justify-content: space-between;
   padding: 1rem 1.25rem;
-  border: 1px solid var(--border-glow);
   background: linear-gradient(135deg, rgba(0, 247, 255, 0.08), rgba(255, 0, 230, 0.08));
   border-radius: 1.25rem;
-  box-shadow: var(--shadow);
+  box-shadow: 0 20px 50px rgba(2, 4, 12, 0.65);
   backdrop-filter: blur(16px);
 }
 
@@ -200,6 +223,7 @@ function toggleProfile() {
   gap: 0.75rem;
   font-weight: 600;
   letter-spacing: 0.05em;
+  cursor: pointer;
 }
 
 .pulse-dot {
@@ -214,6 +238,7 @@ function toggleProfile() {
 .header-actions {
   display: flex;
   gap: 0.75rem;
+  position: relative;
 }
 
 .header-icon {
@@ -298,6 +323,17 @@ function toggleProfile() {
   color: var(--text-muted);
 }
 
+.notifications-panel {
+  top: 120%;
+  right: 0;
+  width: clamp(16rem, 30vw, 20rem);
+}
+
+.ghost.mini.full-width {
+  width: 100%;
+  justify-content: center;
+}
+
 .profile-menu {
   display: flex;
   flex-direction: column;
@@ -312,6 +348,11 @@ function toggleProfile() {
   display: flex;
   justify-content: center;
   width: 100%;
+}
+
+.profile-wrapper {
+  width: min(1100px, 100%);
+  margin: 0 auto;
 }
 
 .filter-btn {
