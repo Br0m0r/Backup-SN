@@ -17,7 +17,7 @@ func main() {
 	// Get database path from environment or use default
 	dbPath := os.Getenv("DATABASE_PATH")
 	if dbPath == "" {
-		dbPath = "/app/social_network.db"
+		dbPath = "/app/database.db"
 	}
 
 	// Initialize database connection
@@ -48,6 +48,7 @@ func main() {
 	internalMux := http.NewServeMux()
 	internalMux.HandleFunc("/internal/verify-token", tokenHandlers.VerifyToken)
 	internalMux.HandleFunc("/internal/user/", tokenHandlers.GetUserByID)
+	internalMux.HandleFunc("/internal/users/batch", tokenHandlers.GetUsersBatch)
 	internalMux.HandleFunc("/health", handlers.HealthHandler)
 
 	// Main router

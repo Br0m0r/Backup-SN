@@ -55,3 +55,13 @@ CREATE TABLE event_responses (
 CREATE INDEX idx_event_responses_event_id ON event_responses(event_id);
 CREATE INDEX idx_event_responses_user_id ON event_responses(user_id);
 CREATE INDEX idx_event_responses_response ON event_responses(response);
+
+-- Cache table for user data (denormalized for performance)
+CREATE TABLE user_cache (
+    user_id INTEGER PRIMARY KEY,
+    username TEXT NOT NULL,
+    avatar_path TEXT,
+    updated_at DATETIME NOT NULL DEFAULT (datetime('now'))
+);
+
+CREATE INDEX idx_user_cache_username ON user_cache(username);

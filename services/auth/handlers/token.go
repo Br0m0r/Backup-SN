@@ -115,3 +115,39 @@ func (h *TokenHandlers) GetUserByID(w http.ResponseWriter, r *http.Request) {
 		"user": user,
 	})
 }
+
+// GetUsersBatch handles POST /internal/users/batch requests
+// Internal endpoint for other microservices to get multiple users at once
+func (h *TokenHandlers) GetUsersBatch(w http.ResponseWriter, r *http.Request) {
+	if r.Method != "POST" {
+		utils.ErrorResponse(w, "Method not allowed", http.StatusMethodNotAllowed)
+		return
+	}
+
+	var req struct {
+		UserIDs []int `json:"user_ids"`
+	}
+
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		utils.ErrorResponse(w, "Invalid JSON payload", http.StatusBadRequest)
+		return
+	}
+
+	if len(req.UserIDs) == 0 {
+		utils.SuccessResponse(w, map[string]interface{}{
+			"users": []interface{}{},
+		})
+		return
+	}
+
+	// Get users by IDs
+	users, err := h.authService.GetUsersByIDs(req.UserIDs)
+	if err != nil {
+		utils.ErrorResponse(w, "Failed to fetch users", http.StatusInternalServerError)
+		return
+	}
+
+	utils.SuccessResponse(w, map[string]interface{}{
+		"users": users,
+	})
+}

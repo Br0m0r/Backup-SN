@@ -176,3 +176,80 @@ func UserExistsByUsername(db *sql.DB, username string) (bool, error) {
 	}
 	return count > 0, nil
 }
+
+// GetUsersByIDs retrieves multiple users by their IDs
+func GetUsersByIDs(database *sql.DB, userIDs []int) ([]*models.User, error) {
+	if len(userIDs) == 0 {
+		return []*models.User{}, nil
+	}
+
+	// Build IN clause with placeholders
+	query := `
+		SELECT id, username, email, first_name, last_name, date_of_birth, avatar_path, 
+		       nickname, about_me, is_public_profile, created_at
+		FROM users 
+		WHERE id IN (`
+
+	args := make([]interface{}, len(userIDs))
+	for i, id := range userIDs {
+		if i > 0 {
+			query += ", "
+		}
+		query += "?"
+		args[i] = id
+	}
+	query += ")"
+
+	rows, err := database.Query(query, args...)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+
+	var users []*models.User
+	for rows.Next() {
+		var user models.User
+		var firstName, lastName, dateOfBirth, avatarPath, nickname, aboutMe sql.NullString
+
+		err := rows.Scan(
+			&user.ID,
+			&user.Username,
+			&user.Email,
+			&firstName,
+			&lastName,
+			&dateOfBirth,
+			&avatarPath,
+			&nickname,
+			&aboutMe,
+			&user.IsPublicProfile,
+			&user.CreatedAt,
+		)
+		if err != nil {
+			return nil, err
+		}
+
+		// Handle nullable fields
+		if firstName.Valid {
+			user.FirstName = &firstName.String
+		}
+		if lastName.Valid {
+			user.LastName = &lastName.String
+		}
+		if dateOfBirth.Valid {
+			user.DateOfBirth = &dateOfBirth.String
+		}
+		if avatarPath.Valid {
+			user.AvatarPath = &avatarPath.String
+		}
+		if nickname.Valid {
+			user.Nickname = &nickname.String
+		}
+		if aboutMe.Valid {
+			user.AboutMe = &aboutMe.String
+		}
+
+		users = append(users, &user)
+	}
+
+	return users, nil
+}

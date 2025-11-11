@@ -244,3 +244,73 @@ func GetCommentsByPostID(db *sql.DB, postID int) ([]*models.Comment, error) {
 	}
 	return comments, nil
 }
+
+// UpsertUserCache inserts or updates user data in the cache
+func UpsertUserCache(db *sql.DB, userID int, username string, avatarPath *string) error {
+	query := `
+		INSERT INTO user_cache (user_id, username, avatar_path, updated_at)
+		VALUES (?, ?, ?, datetime('now'))
+		ON CONFLICT(user_id) DO UPDATE SET
+			username = excluded.username,
+			avatar_path = excluded.avatar_path,
+			updated_at = datetime('now')
+	`
+	_, err := db.Exec(query, userID, username, avatarPath)
+	return err
+}
+
+// GetUserFromCache retrieves user data from cache
+func GetUserFromCache(db *sql.DB, userID int) (username string, avatarPath *string, found bool, err error) {
+	query := `SELECT username, avatar_path FROM user_cache WHERE user_id = ?`
+	var avatar sql.NullString
+	err = db.QueryRow(query, userID).Scan(&username, &avatar)
+	if err != nil {
+		if err == sql.ErrNoRows {
+			return "", nil, false, nil
+		}
+		return "", nil, false, err
+	}
+	if avatar.Valid {
+		avatarPath = &avatar.String
+	}
+	return username, avatarPath, true, nil
+}
+
+// BatchUpsertUserCache inserts or updates multiple users in cache
+func BatchUpsertUserCache(db *sql.DB, users []struct {
+	UserID     int
+	Username   string
+	AvatarPath *string
+}) error {
+	if len(users) == 0 {
+		return nil
+	}
+
+	tx, err := db.Begin()
+	if err != nil {
+		return err
+	}
+	defer tx.Rollback()
+
+	stmt, err := tx.Prepare(`
+		INSERT INTO user_cache (user_id, username, avatar_path, updated_at)
+		VALUES (?, ?, ?, datetime('now'))
+		ON CONFLICT(user_id) DO UPDATE SET
+			username = excluded.username,
+			avatar_path = excluded.avatar_path,
+			updated_at = datetime('now')
+	`)
+	if err != nil {
+		return err
+	}
+	defer stmt.Close()
+
+	for _, user := range users {
+		_, err := stmt.Exec(user.UserID, user.Username, user.AvatarPath)
+		if err != nil {
+			return err
+		}
+	}
+
+	return tx.Commit()
+}
