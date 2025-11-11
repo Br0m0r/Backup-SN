@@ -18,37 +18,46 @@
                                                 │
                                                 ▼
     ┌───────────────────────────────────────────────────────────────────────────────────────────────────────┐
-    │                                  FRONTEND CONTAINER                                                   │
-    │                                     (Next.js)                                                        │
+    │                                  STATIC FRONTEND                                                      │
+    │                            (HTML/CSS/JavaScript - Vanilla JS)                                        │
     │  ┌─────────────┐ ┌─────────────┐ ┌─────────────┐ ┌─────────────┐ ┌─────────────┐ ┌─────────────┐    │
-    │  │    Auth     │ │   Profile   │ │   Posts     │ │   Groups    │ │    Chat     │ │Notifications│    │
-    │  │   Pages     │ │    Page     │ │    Feed     │ │   Pages     │ │ Interface   │ │   Center    │    │
+    │  │   auth.js   │ │  users.js   │ │  posts.js   │ │  groups.js  │ │   chat.js   │ │  events.js  │    │
+    │  │   Login/    │ │  Profile    │ │    Feed     │ │   Groups    │ │    Chat     │ │   Events    │    │
+    │  │  Register   │ │   Follow    │ │  Comments   │ │   Members   │ │  Messages   │ │  Responses  │    │
     │  └─────────────┘ └─────────────┘ └─────────────┘ └─────────────┘ └─────────────┘ └─────────────┘    │
     └───────────────────────────────────────┬───────────────────────────────────────────────────────────────┘
                                             │ HTTP/HTTPS + WebSocket
                                             ▼
     ┌───────────────────────────────────────────────────────────────────────────────────────────────────────┐
-    │                                 LOAD BALANCER / GATEWAY                                               │
-    │                                      (Optional)                                                      │
+    │                              MICROSERVICES ARCHITECTURE                                               │
+    │                             (Docker Compose Network Bridge)                                          │
     └───────────────────────────────────────┬───────────────────────────────────────────────────────────────┘
                                             │
-                          ┌─────────────────┼─────────────────┐
-                          │                 │                 │
-                          ▼                 ▼                 ▼
-    ┌─────────────────────────┐ ┌─────────────────────────┐ ┌─────────────────────────┐
-    │   BACKEND CONTAINER     │ │   WEBSOCKET CONTAINER   │ │   DATABASE CONTAINER    │
-    │      (Go Server)        │ │      (Go WebSocket)     │ │       (SQLite)          │
-    │                         │ │                         │ │                         │
-    │ ┌─────────────────────┐ │ │ ┌─────────────────────┐ │ │ ┌─────────────────────┐ │
-    │ │   Microservices     │ │ │ │   Real-time Chat    │ │ │ │    Database         │ │
-    │ │                     │ │ │ │   Notifications     │ │ │ │    Migrations       │ │
-    │ │ • Auth Service      │ │ │ │   Live Updates      │ │ │ │    Data Storage     │ │
-    │ │ • User Service      │ │ │ │                     │ │ │ │                     │ │
-    │ │ • Post Service      │ │ │ └─────────────────────┘ │ │ └─────────────────────┘ │
-    │ │ • Group Service     │ │ │                         │ │                         │
-    │ │ • Notification Svc  │ │ └─────────────────────────┘ └─────────────────────────┘
-    │ └─────────────────────┘ │
-    └─────────────────────────┘
+           ┌────────────────┬───────────────┼──────────────┬────────────────┬──────────────┐
+           │                │               │              │                │              │
+           ▼                ▼               ▼              ▼                ▼              ▼
+    ┌──────────────┐ ┌──────────────┐ ┌──────────────┐ ┌──────────────┐ ┌──────────────┐ ┌──────────────┐
+    │Auth Service  │ │User Service  │ │Post Service  │ │Group Service │ │Chat Service  │ │Notification  │
+    │ Port: 8081   │ │ Port: 8082   │ │ Port: 8083   │ │ Port: 8084   │ │ Port: 8085   │ │Service       │
+    │              │ │              │ │              │ │              │ │              │ │Port: 8086    │
+    │ • Auth       │ │ • Profiles   │ │ • Posts      │ │ • Groups     │ │ • WebSocket  │ │ • WebSocket  │
+    │ • Sessions   │ │ • Following  │ │ • Comments   │ │ • Events     │ │ • Direct     │ │ • Real-time  │
+    │ • Token      │ │ • Followers  │ │ • Feed       │ │ • Members    │ │   Messages   │ │   Alerts     │
+    │   Verify     │ │ • Search     │ │ • Privacy    │ │ • Requests   │ │ • Group Chat │ │ • Push       │
+    └──────┬───────┘ └──────────────┘ └──────────────┘ └──────────────┘ └──────────────┘ └──────────────┘
+           │                │               │              │                │              │
+           └────────────────┴───────────────┴──────────────┴────────────────┴──────────────┘
+                                            │
+                                            ▼
+                              ┌──────────────────────────────┐
+                              │    SHARED SQLite DATABASE    │
+                              │   social_network.db          │
+                              │   (Volume Mount)             │
+                              │                              │
+                              │ • All services read/write    │
+                              │ • Foreign key constraints    │
+                              │ • PRAGMA journal_mode        │
+                              └──────────────────────────────┘
 ```
 
 ---
@@ -60,45 +69,46 @@
 │     USERS       │◄──┐│     FOLLOWS     │   ┌│     POSTS       │◄──┐│    COMMENTS     │    │     GROUPS      │
 ├─────────────────┤   │├─────────────────┤   │├─────────────────┤   │├─────────────────┤    ├─────────────────┤
 │ id (PK)         │   ││ id (PK)         │   ││ id (PK)         │   ││ id (PK)         │    │ id (PK)         │
-│ email           │   ││ follower_id (FK)│───┘│ user_id (FK)    │───┘│ post_id (FK)    │    │ name            │
-│ password_hash   │   ││ following_id(FK)│    │ content         │    │ user_id (FK)    │    │ description     │
-│ first_name      │   ││ status          │    │ image_path      │    │ content         │    │ creator_id (FK) │
-│ last_name       │   ││ created_at      │    │ privacy_level   │    │ image_path      │    │ created_at      │
-│ dob             │   │└─────────────────┘    │ created_at      │    │ created_at      │    │                 │
-│ avatar_path     │   │                       └─────────────────┘    └─────────────────┘    └─────────────────┘
-│ nickname        │   │                               │                       │                       │
-│ about_me        │   │       ┌─────────────────┐    │       ┌─────────────────┐               ┌─────────────────┐
-│ is_public       │   │       │  POST_VIEWERS   │◄───┘       │   MESSAGES      │               │ GROUP_MEMBERS   │
-│ created_at      │   │       ├─────────────────┤            ├─────────────────┤               ├─────────────────┤
-└─────────────────┘   │       │ id (PK)         │            │ id (PK)         │               │ id (PK)         │
-        │              │       │ post_id (FK)    │            │ sender_id (FK)  │───────────────│ group_id (FK)   │
-        │              │       │ user_id (FK)    │────────────│ recipient_id(FK)│               │ user_id (FK)    │
-        │              └───────│ created_at      │            │ content         │               │ role            │
-        │                      └─────────────────┘            │ created_at      │               │ status          │
-        │                                                     │ is_read         │               │ joined_at       │
-        │                                                     └─────────────────┘               └─────────────────┘
-        │                                                             │                                   │
-        │              ┌─────────────────┐            ┌─────────────────┐               ┌─────────────────┐
-        │              │    EVENTS       │            │ GROUP_MESSAGES  │               │ NOTIFICATIONS   │
-        │              ├─────────────────┤            ├─────────────────┤               ├─────────────────┤
-        │              │ id (PK)         │            │ id (PK)         │               │ id (PK)         │
-        │              │ group_id (FK)   │            │ group_id (FK)   │               │ user_id (FK)    │
-        │              │ title           │            │ sender_id (FK)  │               │ type            │
-        │              │ description     │            │ content         │               │ related_id      │
-        │              │ event_time      │            │ created_at      │               │ content         │
-        │              │ creator_id (FK) │            └─────────────────┘               │ created_at      │
-        │              │ created_at      │                    │                         │ is_read         │
-        │              └─────────────────┘                    │                         └─────────────────┘
-        │                      │                             │
-        │              ┌─────────────────┐                   │
-        └──────────────│ EVENT_RESPONSES │───────────────────┘
-                       ├─────────────────┤
-                       │ id (PK)         │
-                       │ event_id (FK)   │
-                       │ user_id (FK)    │
-                       │ response        │
-                       │ created_at      │
-                       └─────────────────┘
+│ username        │   ││ follower_id (FK)│───┘│ user_id (FK)    │───┘│ post_id (FK)    │    │ name            │
+│ email           │   ││ following_id(FK)│    │ title           │    │ user_id (FK)    │    │ description     │
+│ password_hash   │   ││ status          │    │ content         │    │ content         │    │ image_url       │
+│ first_name      │   ││ created_at      │    │ image_path      │    │ image_path      │    │ creator_id (FK) │
+│ last_name       │   │└─────────────────┘    │ privacy_level   │    │ created_at      │    │ created_at      │
+│ date_of_birth   │   │                       │ created_at      │    └─────────────────┘    └─────────────────┘
+│ avatar_path     │   │                       └─────────────────┘            │                       │
+│ nickname        │   │                               │                      │                       │
+│ about_me        │   │       ┌─────────────────┐    │      ┌──────────────────────┐         ┌─────────────────┐
+│ is_public_      │   │       │  POST_VIEWERS   │◄───┘      │   MESSAGES           │         │ GROUP_MEMBERS   │
+│   profile       │   │       ├─────────────────┤           ├──────────────────────┤         ├─────────────────┤
+│ created_at      │   │       │ id (PK)         │           │ id (PK)              │         │ id (PK)         │
+└─────────────────┘   │       │ post_id (FK)    │           │ sender_id (FK)       │─────────│ group_id (FK)   │
+        │              │       │ user_id (FK)    │───────────│ recipient_id (FK)    │         │ user_id (FK)    │
+        │              │       │ created_at      │           │ content              │         │ role            │
+        │              └───────│                 │           │ is_read              │         │ status          │
+        │                      └─────────────────┘           │ created_at           │         │ joined_at       │
+        │                                                    └──────────────────────┘         └─────────────────┘
+        │                                                            │                                 │
+        │              ┌─────────────────┐            ┌──────────────────────┐            ┌─────────────────┐
+        │              │    EVENTS       │            │  GROUP_MESSAGES      │            │ NOTIFICATIONS   │
+        │              ├─────────────────┤            ├──────────────────────┤            ├─────────────────┤
+        │              │ id (PK)         │            │ id (PK)              │            │ id (PK)         │
+        │              │ group_id (FK)   │            │ group_id (FK)        │            │ user_id (FK)    │
+        │              │ title           │            │ sender_id (FK)       │            │ type            │
+        │              │ description     │            │ content              │            │ related_id      │
+        │              │ event_time      │            │ created_at           │            │ content         │
+        │              │ creator_id (FK) │            └──────────────────────┘            │ is_read         │
+        │              │ created_at      │                    │                           │ created_at      │
+        │              └─────────────────┘                    │                           └─────────────────┘
+        │                      │                              │
+        │              ┌─────────────────┐                    │          ┌─────────────────┐
+        └──────────────│ EVENT_RESPONSES │────────────────────┘          │    SESSIONS     │
+                       ├─────────────────┤                               ├─────────────────┤
+                       │ id (PK)         │                               │ id (PK)         │
+                       │ event_id (FK)   │                               │ user_id (FK)    │
+                       │ user_id (FK)    │                               │ token           │
+                       │ response        │                               │ expires_at      │
+                       │ created_at      │                               │ created_at      │
+                       └─────────────────┘                               └─────────────────┘
 ```
 
 ---
@@ -108,175 +118,89 @@
 ### Core Services
 
 ```
-┌─────────────────┐    ┌─────────────────┐    ┌─────────────────┐    ┌─────────────────┐    ┌─────────────────┐
-│  AUTH SERVICE   │    │  USER SERVICE   │    │  POST SERVICE   │    │ GROUP SERVICE   │    │ NOTIFICATION    │
-│                 │    │                 │    │                 │    │                 │    │   SERVICE       │
-│ POST /register  │    │ GET /profile    │    │ POST /posts     │    │ POST /groups    │    │ GET /notifications│
-│ POST /login     │    │ PUT /profile    │    │ GET /posts      │    │ GET /groups     │    │ PUT /notifications│
-│ POST /logout    │    │ POST /follow    │    │ GET /posts/:id  │    │ GET /groups/:id │    │ POST /notify    │
-│ GET /session    │    │ DELETE /follow  │    │ PUT /posts/:id  │    │ PUT /groups/:id │    │ WebSocket       │
-│ Middleware:     │    │ GET /followers  │    │ DELETE /posts/:id│    │ POST /invite    │    │ /ws/notifications│
-│ - Session       │    │ GET /following  │    │ POST /comments  │    │ POST /request   │    │                 │
-│ - CORS          │    │ GET /search     │    │ GET /comments   │    │ POST /events    │    │                 │
-│ - Rate Limit    │    │                 │    │ File Upload     │    │ GET /events     │    │                 │
-└─────────────────┘    └─────────────────┘    └─────────────────┘    └─────────────────┘    └─────────────────┘
+┌──────────────────────────┐    ┌──────────────────────────┐    ┌──────────────────────────┐
+│    AUTH SERVICE :8081    │    │    USER SERVICE :8082    │    │    POST SERVICE :8083    │
+│                          │    │                          │    │                          │
+│ POST   /register         │    │ GET    /health           │    │ GET    /health           │
+│ POST   /login            │    │ GET    /profile          │    │                          │
+│ POST   /logout           │    │ PUT    /profile          │    │ POST   /posts            │
+│ GET    /session          │    │ GET    /profile/:id      │    │ GET    /posts            │
+│ GET    /health           │    │ POST   /follow           │    │ GET    /posts/:id        │
+│                          │    │ DELETE /follow           │    │ PUT    /posts/:id        │
+│ Internal Endpoints:      │    │ GET    /followers        │    │ DELETE /posts/:id        │
+│ GET /internal/verify-    │    │ GET    /following        │    │                          │
+│     token                │    │ GET    /follow/status/:id│    │ POST   /comments         │
+│ GET /internal/user/:id   │    │ GET    /follow/requests  │    │ GET    /comments         │
+│                          │    │ POST   /follow/respond   │    │                          │
+│ Middleware:              │    │ GET    /search           │    │ Middleware:              │
+│ - Session Management     │    │ GET    /users/:id        │    │ - Auth Verification      │
+│ - CORS                   │    │                          │    │ - CORS                   │
+│ - Rate Limiting          │    │ Middleware:              │    │ - Rate Limiting          │
+│ - Logging                │    │ - Auth Verification      │    │ - Logging                │
+│                          │    │ - CORS                   │    │                          │
+└──────────────────────────┘    │ - Rate Limiting          │    └──────────────────────────┘
+                                │ - Logging                │
+                                └──────────────────────────┘
+
+┌──────────────────────────┐    ┌──────────────────────────┐    ┌──────────────────────────┐
+│   GROUP SERVICE :8084    │    │    CHAT SERVICE :8085    │    │ NOTIFICATION SVC :8086   │
+│                          │    │                          │    │                          │
+│ GET    /health           │    │ GET    /health           │    │ GET    /health           │
+│                          │    │                          │    │                          │
+│ POST   /groups           │    │ WS     /ws               │    │ POST   /notifications    │
+│ GET    /groups           │    │ GET    /chat/            │    │ GET    /notifications/   │
+│ GET    /groups/:id       │    │        conversations     │    │        list              │
+│ PUT    /groups/:id       │    │ GET    /chat/history/:id │    │ GET    /notifications/   │
+│ POST   /groups/:id/      │    │ POST   /chat/send        │    │        unread-count      │
+│        invite            │    │ POST   /chat/read/:id    │    │ PUT    /notifications/   │
+│ POST   /groups/:id/      │    │ GET    /chat/unread      │    │        read/:id          │
+│        request           │    │                          │    │ POST   /notifications/   │
+│ GET    /groups/:id/      │    │ GET    /chat/groups/:id/ │    │        read-all          │
+│        requests          │    │        history           │    │ DELETE /notifications/   │
+│ POST   /groups/:id/      │    │ POST   /chat/groups/:id/ │    │        delete/:id        │
+│        requests/respond  │    │        messages          │    │                          │
+│ GET    /groups/:id/      │    │                          │    │ WS     /ws               │
+│        members           │    │ Features:                │    │                          │
+│ GET    /groups/:id/      │    │ - Direct messaging       │    │ Features:                │
+│        events            │    │ - Group chat             │    │ - Real-time push         │
+│ POST   /groups/:id/      │    │ - Message history        │    │ - Follow notifications   │
+│        messages          │    │ - Read status            │    │ - Group invites          │
+│ GET    /groups/:id/      │    │ - WebSocket connections  │    │ - Event notifications    │
+│        messages          │    │                          │    │ - Message alerts         │
+│                          │    │ Middleware:              │    │                          │
+│ POST   /events           │    │ - Auth Verification      │    │ Middleware:              │
+│ GET    /events/:id       │    │ - CORS                   │    │ - Auth Verification      │
+│ POST   /events/respond   │    │ - Logging                │    │ - CORS                   │
+│                          │    │                          │    │ - Logging                │
+│ Middleware:              │    └──────────────────────────┘    └──────────────────────────┘
+│ - Auth Verification      │
+│ - CORS                   │
+│ - Logging                │
+└──────────────────────────┘
 ```
 
-### Chat Service
+### Service Communication Pattern
 
 ```
-┌─────────────────────────────────────────────────────────────────────────────────────────────────────────────┐
-│                                      CHAT SERVICE                                                              │
-│                                                                                                                 │
-│  WebSocket Endpoints:                              │  HTTP Endpoints:                                          │
-│  • /ws/chat/:userId                               │  • GET /messages/:conversationId                          │
-│  • /ws/group-chat/:groupId                        │  • POST /messages                                         │
-│                                                   │  • GET /conversations                                     │
-│  Real-time Features:                              │  • PUT /messages/:id/read                                 │
-│  • Direct messaging                               │                                                            │
-│  • Group chat                                     │  Features:                                                │
-│  • Typing indicators                              │  • Message persistence                                   │
-│  • Online status                                  │  • Emoji support                                         │
-│  • Message delivery status                        │  • File sharing                                          │
-└─────────────────────────────────────────────────────────────────────────────────────────────────────────────┘
-```
+┌─────────────┐
+│   FRONTEND  │
+└──────┬──────┘
+       │
+       ├──────────────► Auth Service (Login/Register) ──► Returns Session Token
+       │
+       ├──────────────► User Service (with token) ──► Validates via Auth Service
+       │
+       ├──────────────► Post Service (with token) ──► Validates via Auth Service
+       │
+       ├──────────────► Group Service (with token) ──► Validates via Auth Service
+       │
+       ├──────────────► Chat Service (with token + WS) ──► Validates via Auth Service
+       │
+       └──────────────► Notification Service (with token + WS) ──► Validates via Auth Service
 
----
-
-## Development Workflow
-
-### Week 1: Project Setup
-
-```
-┌─────────────────┐    ┌─────────────────┐    ┌─────────────────┐    ┌─────────────────┐
-│ Day 1-2         │───▶│ Day 3-4         │───▶│ Day 5-6         │───▶│ Day 7           │
-│ • Team Meeting  │    │ • Docker Setup  │    │ • Database      │    │ • Review &      │
-│ • Requirements  │    │ • Repository    │    │   Design        │    │   Planning      │
-│ • Architecture  │    │ • Basic         │    │ • ER Diagram    │    │ • Next Week     │
-│ • Tool Selection│    │   Structure     │    │ • API Specs     │    │   Assignment    │
-└─────────────────┘    └─────────────────┘    └─────────────────┘    └─────────────────┘
-```
-
-### Week 2-3: Infrastructure
-
-```
-┌─────────────────┐    ┌─────────────────┐    ┌─────────────────┐
-│ Database Setup  │───▶│ Auth System     │───▶│ Basic API       │
-│ • Migrations    │    │ • Registration  │    │ • Routing       │
-│ • Schema        │    │ • Login         │    │ • Middleware    │
-│ • Connections   │    │ • Sessions      │    │ • Testing       │
-└─────────────────┘    └─────────────────┘    └─────────────────┘
-```
-
-### Week 4-8: Core Services (Parallel Development)
-
-```
-┌─────────────────┐    ┌─────────────────┐    ┌─────────────────┐    ┌─────────────────┐
-│ User Service    │    │ Post Service    │    │ Group Service   │    │ Chat Service    │
-│ Week 4          │    │ Week 5          │    │ Week 6          │    │ Week 7-8        │
-│ • Profile CRUD  │    │ • Post CRUD     │    │ • Group CRUD    │    │ • WebSocket     │
-│ • Follow System │    │ • Comments      │    │ • Members       │    │ • Messages      │
-│ • Privacy       │    │ • Media Upload  │    │ • Events        │    │ • Notifications │
-└─────────────────┘    └─────────────────┘    └─────────────────┘    └─────────────────┘
-```
-
-### Week 6-10: Frontend (Overlapping with Backend)
-
-```
-┌─────────────────┐    ┌─────────────────┐    ┌─────────────────┐    ┌─────────────────┐
-│ Component Lib   │───▶│ Auth Pages      │───▶│ Main Features   │───▶│ Real-time UI    │
-│ Week 6          │    │ Week 7          │    │ Week 8-9        │    │ Week 10         │
-│ • Design System │    │ • Login/Signup  │    │ • Feed          │    │ • Chat Interface│
-│ • Layout        │    │ • Profile       │    │ • Groups        │    │ • Notifications │
-│ • Navigation    │    │ • Basic UI      │    │ • Responsive    │    │ • Polish        │
-└─────────────────┘    └─────────────────┘    └─────────────────┘    └─────────────────┘
-```
-
-### Week 11-12: Integration & Testing
-
-```
-┌─────────────────┐    ┌─────────────────┐    ┌─────────────────┐
-│ Integration     │───▶│ Testing         │───▶│ Deployment      │
-│ • API Connect   │    │ • Unit Tests    │    │ • Production    │
-│ • WebSocket     │    │ • Integration   │    │ • Monitoring    │
-│ • Bug Fixes     │    │ • E2E Testing   │    │ • Documentation │
-└─────────────────┘    └─────────────────┘    └─────────────────┘
+Note: All services except Auth require token validation
+Auth Service provides /internal/verify-token endpoint for other services
 ```
 
 ---
 
-## Team Organization
-
-```
-┌─────────────────┐    ┌─────────────────┐    ┌─────────────────┐    ┌─────────────────┐
-│ FRONTEND TEAM   │    │ BACKEND TEAM    │    │ DATABASE TEAM   │    │ DEVOPS TEAM     │
-│ (2-3 people)    │    │ (2-3 people)    │    │ (1-2 people)    │    │ (1-2 people)    │
-├─────────────────┤    ├─────────────────┤    ├─────────────────┤    ├─────────────────┤
-│ • UI/UX Design  │    │ • API Development│    │ • Schema Design │    │ • Docker Setup  │
-│ • Component Dev │    │ • Business Logic│    │ • Migrations    │    │ • CI/CD Pipeline│
-│ • State Mgmt    │    │ • WebSocket     │    │ • Optimization  │    │ • Testing       │
-│ • Integration   │    │ • Authentication│    │ • Backup        │    │ • Deployment    │
-└─────────────────┘    └─────────────────┘    └─────────────────┘    └─────────────────┘
-```
-
----
-
-## Docker Structure
-
-```
-project-root/
-├── docker-compose.yml
-├── frontend/
-│   ├── Dockerfile
-│   ├── package.json
-│   ├── next.config.js
-│   └── src/
-├── backend/
-│   ├── Dockerfile
-│   ├── go.mod
-│   ├── main.go
-│   └── pkg/
-│       ├── auth/
-│       ├── users/
-│       ├── posts/
-│       ├── groups/
-│       ├── chat/
-│       └── db/
-│           └── migrations/
-│               └── sqlite/
-├── websocket/
-│   ├── Dockerfile
-│   └── main.go
-└── database/
-    └── init.sql
-```
-
----
-
-## Testing Strategy
-
-```
-┌─────────────────┐    ┌─────────────────┐    ┌─────────────────┐    ┌─────────────────┐
-│   UNIT TESTS    │    │INTEGRATION TESTS│    │   E2E TESTS     │    │PERFORMANCE TESTS│
-├─────────────────┤    ├─────────────────┤    ├─────────────────┤    ├─────────────────┤
-│ • Auth Functions│    │ • API Endpoints │    │ • User Flows    │    │ • Load Testing  │
-│ • Business Logic│    │ • Database Ops  │    │ • UI Interactions│    │ • Memory Usage  │
-│ • Utilities     │    │ • WebSocket     │    │ • Cross-browser │    │ • Database      │
-│ • Components    │    │ • File Upload   │    │ • Mobile        │    │ • Scalability   │
-└─────────────────┘    └─────────────────┘    └─────────────────┘    └─────────────────┘
-```
-
----
-
-## Deployment Pipeline
-
-```
-┌─────────────┐    ┌─────────────┐    ┌─────────────┐    ┌─────────────┐    ┌─────────────┐    ┌─────────────┐
-│   COMMIT    │───▶│    BUILD    │───▶│    TEST     │───▶│   DEPLOY    │───▶│   MONITOR   │───▶│  MAINTAIN   │
-├─────────────┤    ├─────────────┤    ├─────────────┤    ├─────────────┤    ├─────────────┤    ├─────────────┤
-│ • Git Push  │    │ • Docker    │    │ • Unit      │    │ • Staging   │    │ • Logs      │    │ • Updates   │
-│ • PR Review │    │   Build     │    │ • Integration│    │ • Production│    │ • Metrics   │    │ • Bug Fixes │
-│ • Code      │    │ • Dependencies│    │ • E2E       │    │ • Rollback  │    │ • Alerts    │    │ • Features  │
-│   Quality   │    │ • Compile   │    │ • Security  │    │   Ready     │    │ • Health    │    │ • Security  │
-└─────────────┘    └─────────────┘    └─────────────┘    └─────────────┘    └─────────────┘    └─────────────┘
-```
