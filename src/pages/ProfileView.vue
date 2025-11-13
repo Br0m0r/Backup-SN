@@ -10,7 +10,16 @@
             {{ aboutText }}
           </p>
           <div class="hero-stats">
-            <div v-for="stat in stats" :key="stat.label">
+            <div
+              v-for="stat in stats"
+              :key="stat.label"
+              :class="['stat-block', { clickable: isPanelStat(stat.label) }]"
+              @click="handleStatInteraction(stat.label)"
+              @keydown.enter.prevent="handleStatInteraction(stat.label)"
+              @keydown.space.prevent="handleStatInteraction(stat.label)"
+              :role="isPanelStat(stat.label) ? 'button' : undefined"
+              :tabindex="isPanelStat(stat.label) ? 0 : undefined"
+            >
               <span>{{ stat.value }}</span>
               <small>{{ stat.label }}</small>
             </div>
@@ -64,59 +73,14 @@
     </Transition>
 
     <section class="activity-panel">
-      <div class="activity-tabs">
-        <button
-          v-for="tab in activityTabs"
-          :key="tab.id"
-          :class="['tab-btn', { active: activeTab === tab.id }]"
-          @click="activeTab = tab.id"
-        >
-          <span :class="['icon', tab.icon]"></span>
-          {{ tab.label }}
-        </button>
-      </div>
-
       <div class="activity-body">
-        <div v-if="activeTab === 'posts'" class="post-stack">
+        <div class="post-stack">
           <article v-for="post in mockPosts" :key="post.id" class="post-card">
             <header>
               <strong>{{ post.title }}</strong>
               <small>{{ post.time }}</small>
             </header>
             <p>{{ post.body }}</p>
-          </article>
-        </div>
-
-        <div v-else-if="activeTab === 'followers'" class="card-grid">
-          <article v-for="user in mockFollowers" :key="user.handle" class="follow-card">
-            <img :src="user.avatar" alt="" />
-            <div>
-              <strong>{{ user.name }}</strong>
-              <small>{{ user.handle }}</small>
-            </div>
-            <button class="ghost mini">Remove</button>
-          </article>
-        </div>
-
-        <div v-else-if="activeTab === 'following'" class="card-grid">
-          <article v-for="user in mockFollowing" :key="user.handle" class="follow-card">
-            <img :src="user.avatar" alt="" />
-            <div>
-              <strong>{{ user.name }}</strong>
-              <small>{{ user.handle }}</small>
-            </div>
-            <button class="ghost mini">Message</button>
-          </article>
-        </div>
-
-        <div v-else class="card-grid groups">
-          <article v-for="group in mockGroups" :key="group.title">
-            <header>
-              <strong>{{ group.title }}</strong>
-              <small>{{ group.members }} members</small>
-            </header>
-            <p>{{ group.desc }}</p>
-            <button class="ghost mini">View group</button>
           </article>
         </div>
       </div>
@@ -148,6 +112,151 @@
         </div>
       </div>
     </div>
+
+    <Transition name="side-panel">
+      <aside v-if="followersPanelOpen" class="side-panel followers-panel">
+        <header>
+          <div>
+            <small>Followers</small>
+            <h3>{{ mockFollowers.length }} total</h3>
+          </div>
+          <button class="icon-btn close-btn" aria-label="Close followers list" @click="closeFollowersPanel">
+            ✕
+          </button>
+        </header>
+        <label class="panel-search">
+          <span class="sr-only">Search followers</span>
+          <input
+            v-model="followerSearch"
+            type="search"
+            placeholder="Search followers..."
+            autocomplete="off"
+          />
+        </label>
+        <div class="panel-list">
+          <article v-for="user in filteredFollowers" :key="user.handle" class="panel-row">
+            <img :src="user.avatar" :alt="`${user.name} avatar`" />
+            <div>
+              <strong>{{ user.name }}</strong>
+              <small>{{ user.handle }}</small>
+            </div>
+            <button class="ghost mini">View profile</button>
+          </article>
+          <p v-if="!filteredFollowers.length" class="empty-state">
+            No followers match your search.
+          </p>
+        </div>
+      </aside>
+    </Transition>
+
+    <Transition name="side-panel">
+      <aside v-if="followingPanelOpen" class="side-panel following-panel">
+        <header>
+          <div>
+            <small>Following</small>
+            <h3>{{ mockFollowing.length }} accounts</h3>
+          </div>
+          <button class="icon-btn close-btn" aria-label="Close following list" @click="closeFollowingPanel">
+            ✕
+          </button>
+        </header>
+        <label class="panel-search">
+          <span class="sr-only">Search following</span>
+          <input
+            v-model="followingSearch"
+            type="search"
+            placeholder="Search following..."
+            autocomplete="off"
+          />
+        </label>
+        <div class="panel-list">
+          <article v-for="user in filteredFollowing" :key="user.handle" class="panel-row">
+            <img :src="user.avatar" :alt="`${user.name} avatar`" />
+            <div>
+              <strong>{{ user.name }}</strong>
+              <small>{{ user.handle }}</small>
+            </div>
+            <button class="ghost mini">Message</button>
+          </article>
+          <p v-if="!filteredFollowing.length" class="empty-state">
+            No accounts match your search.
+          </p>
+        </div>
+      </aside>
+    </Transition>
+
+    <Transition name="side-panel">
+      <aside v-if="groupsPanelOpen" class="side-panel groups-panel">
+        <header>
+          <div>
+            <small>Groups</small>
+            <h3>{{ mockGroups.length }} joined</h3>
+          </div>
+          <button class="icon-btn close-btn" aria-label="Close groups list" @click="closeGroupsPanel">
+            ✕
+          </button>
+        </header>
+        <label class="panel-search">
+          <span class="sr-only">Search groups</span>
+          <input
+            v-model="groupSearch"
+            type="search"
+            placeholder="Search groups..."
+            autocomplete="off"
+          />
+        </label>
+        <div class="panel-list groups-list">
+          <article v-for="group in filteredGroups" :key="group.title" class="panel-row group-row">
+            <div class="group-row__body">
+              <strong>{{ group.title }}</strong>
+              <small>{{ group.members }} members</small>
+              <p>{{ group.desc }}</p>
+            </div>
+            <button class="ghost mini">Open</button>
+          </article>
+          <p v-if="!filteredGroups.length" class="empty-state">
+            No groups match your search.
+          </p>
+        </div>
+      </aside>
+    </Transition>
+
+    <Transition name="side-panel">
+      <aside v-if="eventsPanelOpen" class="side-panel events-panel">
+        <header>
+          <div>
+            <small>Events</small>
+            <h3>{{ mockEvents.length }} upcoming</h3>
+          </div>
+          <button class="icon-btn close-btn" aria-label="Close events list" @click="closeEventsPanel">
+            ✕
+          </button>
+        </header>
+        <label class="panel-search">
+          <span class="sr-only">Search events</span>
+          <input
+            v-model="eventSearch"
+            type="search"
+            placeholder="Search events..."
+            autocomplete="off"
+          />
+        </label>
+        <div class="panel-list events-list">
+          <article v-for="event in filteredEvents" :key="event.title" class="panel-row event-row">
+            <div class="event-row__meta">
+              <strong>{{ event.title }}</strong>
+              <small>{{ event.date }}</small>
+            </div>
+            <p>{{ event.desc }}</p>
+            <span class="event-location">{{ event.location }}</span>
+            <button class="ghost mini">Details</button>
+          </article>
+          <p v-if="!filteredEvents.length" class="empty-state">
+            No events match your search.
+          </p>
+        </div>
+      </aside>
+    </Transition>
   </div>
 </template>
 
@@ -160,6 +269,14 @@ const isPrivate = ref(false);
 const editingSection = ref('');
 const infoMode = ref(false);
 const draftValue = ref('');
+const followersPanelOpen = ref(false);
+const followingPanelOpen = ref(false);
+const groupsPanelOpen = ref(false);
+const eventsPanelOpen = ref(false);
+const followerSearch = ref('');
+const followingSearch = ref('');
+const groupSearch = ref('');
+const eventSearch = ref('');
 
 const stats = [
   { label: 'Followers', value: '1.3K' },
@@ -167,6 +284,8 @@ const stats = [
   { label: 'Groups', value: '8' },
   { label: 'Events', value: '3' },
 ];
+
+const panelStatLabels = ['Followers', 'Following', 'Groups', 'Events'];
 
 const infoSections = ref([
   { key: 'firstName', label: 'First Name', value: 'Marina', visible: true },
@@ -177,15 +296,6 @@ const infoSections = ref([
 ]);
 
 const aboutText = computed(() => infoSections.value.find((section) => section.key === 'about')?.value ?? '');
-
-const activityTabs = [
-  { id: 'posts', label: 'Posts', icon: 'icon-posts' },
-  { id: 'followers', label: 'Followers', icon: 'icon-followers' },
-  { id: 'following', label: 'Following', icon: 'icon-following' },
-  { id: 'groups', label: 'Groups', icon: 'icon-groups' },
-];
-
-const activeTab = ref('posts');
 
 const mockPosts = [
   { id: 'p1', title: 'Private BETA', time: '2h ago', body: 'Rolling out the “almost private” feed filter to my inner circle.' },
@@ -198,6 +308,38 @@ const mockFollowers = [
   { name: 'Lumen Rae', handle: '@lumen', avatar: 'https://placehold.co/64x64/181a33/fff?text=LR' },
 ];
 
+const filteredFollowers = computed(() => {
+  const term = followerSearch.value.trim().toLowerCase();
+  if (!term) return mockFollowers;
+  return mockFollowers.filter((user) => {
+    return [user.name, user.handle].some((field) => field.toLowerCase().includes(term));
+  });
+});
+
+const filteredFollowing = computed(() => {
+  const term = followingSearch.value.trim().toLowerCase();
+  if (!term) return mockFollowing;
+  return mockFollowing.filter((user) => {
+    return [user.name, user.handle].some((field) => field.toLowerCase().includes(term));
+  });
+});
+
+const filteredGroups = computed(() => {
+  const term = groupSearch.value.trim().toLowerCase();
+  if (!term) return mockGroups;
+  return mockGroups.filter((group) => {
+    return [group.title, group.desc].some((field) => field.toLowerCase().includes(term));
+  });
+});
+
+const filteredEvents = computed(() => {
+  const term = eventSearch.value.trim().toLowerCase();
+  if (!term) return mockEvents;
+  return mockEvents.filter((event) => {
+    return [event.title, event.desc, event.location].some((field) => field.toLowerCase().includes(term));
+  });
+});
+
 const mockFollowing = [
   { name: 'Glitch Bloom', handle: '@glitch', avatar: 'https://placehold.co/64x64/161832/fff?text=GB' },
   { name: 'Circuit Club', handle: '@circuit', avatar: 'https://placehold.co/64x64/101126/fff?text=CC' },
@@ -206,6 +348,27 @@ const mockFollowing = [
 const mockGroups = [
   { title: 'Synthwave Creators', members: 128, desc: 'Designers pushing neon themed UX.' },
   { title: 'Hyperlink Hub', members: 82, desc: 'Invite-only crew testing privacy tools.' },
+];
+
+const mockEvents = [
+  {
+    title: 'Neon Nights Meetup',
+    date: 'Fri, Mar 22',
+    location: 'Arcade District',
+    desc: 'Showcase your latest glow UI concepts and retro synth sets.',
+  },
+  {
+    title: 'Pulse Design Sprint',
+    date: 'Tue, Mar 26',
+    location: 'Virtual • Holo Conference',
+    desc: 'Collaborate on privacy-first social flows and prototypes.',
+  },
+  {
+    title: 'Synthwave Creator Jam',
+    date: 'Sun, Mar 31',
+    location: 'Downtown Studio 07',
+    desc: 'Live jam session with surprise guest VJs.',
+  },
 ];
 
 const currentEdit = computed(() => infoSections.value.find((section) => section.key === editingSection.value));
@@ -243,6 +406,70 @@ function toggleInfoMode() {
   if (!infoMode.value) {
     closeEditor();
   }
+}
+
+function isPanelStat(label) {
+  return panelStatLabels.includes(label);
+}
+
+function handleStatInteraction(label) {
+  if (!isPanelStat(label)) return;
+  if (label === 'Followers') {
+    followersPanelOpen.value ? closeFollowersPanel() : openFollowersPanel();
+  } else if (label === 'Following') {
+    followingPanelOpen.value ? closeFollowingPanel() : openFollowingPanel();
+  } else if (label === 'Groups') {
+    groupsPanelOpen.value ? closeGroupsPanel() : openGroupsPanel();
+  } else if (label === 'Events') {
+    eventsPanelOpen.value ? closeEventsPanel() : openEventsPanel();
+  }
+}
+
+function closeAllPanels() {
+  followersPanelOpen.value = false;
+  followingPanelOpen.value = false;
+  groupsPanelOpen.value = false;
+  eventsPanelOpen.value = false;
+}
+
+function openFollowersPanel() {
+  closeAllPanels();
+  followersPanelOpen.value = true;
+}
+
+function openFollowingPanel() {
+  closeAllPanels();
+  followingPanelOpen.value = true;
+}
+
+function openGroupsPanel() {
+  closeAllPanels();
+  groupsPanelOpen.value = true;
+}
+
+function openEventsPanel() {
+  closeAllPanels();
+  eventsPanelOpen.value = true;
+}
+
+function closeFollowersPanel() {
+  followersPanelOpen.value = false;
+  followerSearch.value = '';
+}
+
+function closeFollowingPanel() {
+  followingPanelOpen.value = false;
+  followingSearch.value = '';
+}
+
+function closeGroupsPanel() {
+  groupsPanelOpen.value = false;
+  groupSearch.value = '';
+}
+
+function closeEventsPanel() {
+  eventsPanelOpen.value = false;
+  eventSearch.value = '';
 }
 </script>
 
@@ -302,6 +529,22 @@ function toggleInfoMode() {
   display: flex;
   gap: 1.5rem;
   margin-top: 1rem;
+}
+
+.stat-block {
+  display: flex;
+  flex-direction: column;
+  gap: 0.1rem;
+  transition: color 0.2s ease;
+}
+
+.stat-block.clickable {
+  cursor: pointer;
+}
+
+.stat-block.clickable:hover span,
+.stat-block.clickable:focus-visible span {
+  color: var(--neon-cyan);
 }
 
 .hero-stats span {
@@ -456,69 +699,12 @@ function toggleInfoMode() {
   gap: 1.5rem;
 }
 
-.activity-tabs {
-  display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(140px, 1fr));
-  gap: 0.75rem;
-}
-
-.tab-btn {
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  gap: 0.45rem;
-  padding: 0.75rem 1rem;
-  border-radius: 1rem;
-  border: 1px solid rgba(255, 255, 255, 0.12);
-  background: rgba(8, 9, 20, 0.8);
-  cursor: pointer;
-  text-transform: uppercase;
-  letter-spacing: 0.08em;
-}
-
-.tab-btn.active {
-  border-color: var(--border-glow);
-  box-shadow: 0 0 18px rgba(0, 247, 255, 0.2);
-}
-
 .activity-body .post-card {
   padding: 1.25rem;
   border-radius: 1.25rem;
   border: 1px solid rgba(255, 255, 255, 0.07);
   background: rgba(10, 12, 22, 0.8);
   margin-bottom: 1rem;
-}
-
-.card-grid {
-  display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
-  gap: 1rem;
-}
-
-.follow-card {
-  display: flex;
-  align-items: center;
-  gap: 0.75rem;
-  padding: 1rem;
-  border-radius: 1rem;
-  border: 1px solid rgba(255, 255, 255, 0.08);
-  background: rgba(7, 9, 18, 0.75);
-}
-
-.follow-card img {
-  width: 48px;
-  height: 48px;
-  border-radius: 999px;
-}
-
-.groups article {
-  padding: 1.2rem;
-  border-radius: 1.25rem;
-  border: 1px solid rgba(255, 255, 255, 0.08);
-  background: rgba(9, 10, 20, 0.8);
-  display: flex;
-  flex-direction: column;
-  gap: 0.7rem;
 }
 
 .edit-drawer {
@@ -584,30 +770,159 @@ function toggleInfoMode() {
     center/contain no-repeat;
 }
 
-.icon-posts,
-.icon-followers,
-.icon-following,
-.icon-groups {
-  width: 1rem;
-  height: 1rem;
-  background: var(--neon-cyan);
-  mask: url('data:image/svg+xml,<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path fill="white" d="M4 6h16v2H4zm0 5h10v2H4zm0 5h16v2H4z"/></svg>')
-    center/contain no-repeat;
+.side-panel {
+  position: fixed;
+  top: 0;
+  bottom: 0;
+  left: 0;
+  width: min(360px, 85vw);
+  padding: 1.75rem 1.5rem;
+  background: rgba(5, 6, 13, 0.92);
+  border-right: 1px solid rgba(255, 255, 255, 0.08);
+  box-shadow: 10px 0 30px rgba(0, 0, 0, 0.35);
+  backdrop-filter: blur(18px);
+  display: flex;
+  flex-direction: column;
+  gap: 1rem;
+  z-index: 30;
 }
 
-.icon-followers {
-  mask: url('data:image/svg+xml,<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path fill="white" d="M16 11c1.657 0 3-1.343 3-3S17.657 5 16 5s-3 1.343-3 3 1.343 3 3 3zm-8 0c1.657 0 3-1.343 3-3S9.657 5 8 5 5 6.343 5 8s1.343 3 3 3zm0 2c-2.671 0-8 1.337-8 4v2h12v-2c0-2.663-5.329-4-8-4zm8 0c-.312 0-.663.019-1.031.052C16.964 13.827 19 15.041 19 17v2h5v-2c0-2.663-5.329-4-8-4z"/></svg>')
-    center/contain no-repeat;
+.side-panel header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 1rem;
 }
 
-.icon-following {
-  mask: url('data:image/svg+xml,<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path fill="white" d="M12 2a5 5 0 0 1 5 5 5 5 0 0 1-1.09 3.134A7 7 0 0 1 19 17v3h-2v-3a5 5 0 0 0-10 0v3H5v-3a7 7 0 0 1 3.09-6.866A5 5 0 0 1 12 2z"/></svg>')
-    center/contain no-repeat;
+.side-panel header small {
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  color: var(--text-muted);
 }
 
-.icon-groups {
-  mask: url('data:image/svg+xml,<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path fill="white" d="M12 5a4 4 0 0 1 4 4 4 4 0 0 1-1.11 2.767A6 6 0 0 1 19 17v3h-2v-3a4 4 0 0 0-8 0v3H7v-3a6 6 0 0 1 4.11-5.233A4 4 0 0 1 12 5zm-6-1a3 3 0 0 1 3 3 3 3 0 0 1-.274 1.26A5 5 0 0 1 11 13v2H1v-2a5 5 0 0 1 2.274-4.74A3 3 0 0 1 6 4zm12 0a3 3 0 0 1 3 3 3 3 0 0 1-.274 1.26A5 5 0 0 1 23 13v2h-8v-2a5 5 0 0 1 2.274-4.74A3 3 0 0 1 18 4z"/></svg>')
-    center/contain no-repeat;
+.close-btn {
+  border-radius: 999px;
+  width: 2.25rem;
+  height: 2.25rem;
+  border: 1px solid rgba(255, 255, 255, 0.06);
+  background: rgba(0, 0, 0, 0.35);
+  color: rgba(255, 255, 255, 0.85);
+  font-size: 1.1rem;
+  transition: border-color 0.2s ease, color 0.2s ease, background 0.2s ease;
+}
+
+.close-btn:hover,
+.close-btn:focus-visible {
+  border-color: rgba(0, 247, 255, 0.6);
+  color: var(--neon-cyan);
+  background: rgba(0, 0, 0, 0.55);
+}
+
+.panel-search {
+  width: 100%;
+}
+
+.panel-search input {
+  width: 100%;
+  padding: 0.65rem 0.85rem;
+  border-radius: 0.9rem;
+  border: 1px solid rgba(255, 255, 255, 0.2);
+  background: rgba(8, 9, 20, 0.8);
+  color: inherit;
+}
+
+.panel-list {
+  overflow-y: auto;
+  display: flex;
+  flex-direction: column;
+  gap: 0.75rem;
+}
+
+.panel-row {
+  display: flex;
+  align-items: center;
+  gap: 0.85rem;
+  padding: 0.9rem;
+  border-radius: 1rem;
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  background: rgba(7, 8, 18, 0.85);
+}
+
+.panel-row img {
+  width: 44px;
+  height: 44px;
+  border-radius: 50%;
+}
+
+.groups-list .panel-row {
+  align-items: flex-start;
+}
+
+.group-row__body {
+  display: flex;
+  flex-direction: column;
+  gap: 0.15rem;
+}
+
+.group-row__body p {
+  margin: 0.1rem 0 0;
+  color: var(--text-muted);
+  font-size: 0.85rem;
+}
+
+.events-list .panel-row {
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 0.4rem;
+}
+
+.event-row__meta {
+  display: flex;
+  justify-content: space-between;
+  width: 100%;
+  gap: 0.5rem;
+}
+
+.event-row__meta small {
+  color: var(--text-muted);
+}
+
+.event-row p {
+  margin: 0;
+  color: var(--text-muted);
+}
+
+.event-location {
+  font-size: 0.85rem;
+  color: var(--neon-cyan);
+}
+
+.empty-state {
+  text-align: center;
+  color: var(--text-muted);
+  padding: 1rem 0;
+}
+
+.side-panel-enter-active,
+.side-panel-leave-active {
+  transition: transform 0.35s ease, opacity 0.3s ease;
+}
+
+.side-panel-enter-from,
+.side-panel-leave-to {
+  transform: translateX(-100%);
+  opacity: 0;
+}
+
+.sr-only {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  margin: -1px;
+  overflow: hidden;
+  clip: rect(0, 0, 0, 0);
+  border: 0;
 }
 
 @media (max-width: 768px) {

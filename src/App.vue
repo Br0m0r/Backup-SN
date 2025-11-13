@@ -1,5 +1,5 @@
 <template>
-  <div class="neon-shell">
+  <div v-if="isAuthenticated" class="neon-shell">
     <header class="neon-header">
       <div class="brand" role="button" tabindex="0" @click="switchToFeed">
         <span class="pulse-dot"></span>
@@ -12,7 +12,7 @@
           <div v-if="profileOpen" class="dropdown profile-menu">
             <button @click="viewProfile">View Profile</button>
             <button @click="openNotifications">Notifications</button>
-            <button class="ghost">Logout</button>
+            <button class="ghost" @click="logout">Logout</button>
           </div>
         </div>
         <div v-if="notificationsOpen" class="dropdown notifications notifications-panel">
@@ -84,11 +84,16 @@
       <ProfileView @back="switchToFeed" />
     </section>
   </div>
+
+  <div v-else class="auth-gate">
+    <AuthView @authenticated="handleAuthSuccess" />
+  </div>
 </template>
 
 <script setup>
 import { computed, ref } from 'vue';
-import ProfileView from './components/ProfileView.vue';
+import ProfileView from './pages/ProfileView.vue';
+import AuthView from './pages/AuthView.vue';
 
 const activeView = ref('public');
 const notificationsOpen = ref(false);
@@ -96,6 +101,7 @@ const profileOpen = ref(false);
 const searchQuery = ref('');
 const currentScreen = ref('feed');
 const isFeedPrivate = ref(false);
+const isAuthenticated = ref(false);
 
 const filterOptions = [
   { id: 'public', label: 'Public', icon: 'icon-globe' },
@@ -191,6 +197,18 @@ function switchToFeed() {
 function togglePrivacyContext() {
   isFeedPrivate.value = !isFeedPrivate.value;
   profileOpen.value = false;
+}
+
+function handleAuthSuccess() {
+  isAuthenticated.value = true;
+  switchToFeed();
+}
+
+function logout() {
+  isAuthenticated.value = false;
+  currentScreen.value = 'feed';
+  profileOpen.value = false;
+  notificationsOpen.value = false;
 }
 </script>
 
@@ -353,6 +371,15 @@ function togglePrivacyContext() {
 .profile-wrapper {
   width: min(1100px, 100%);
   margin: 0 auto;
+}
+
+.auth-gate {
+  min-height: 100vh;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: clamp(1.5rem, 5vw, 4rem);
+  background: radial-gradient(circle at top, rgba(0, 247, 255, 0.08), rgba(5, 6, 13, 0.95));
 }
 
 .filter-btn {
