@@ -1,0 +1,125 @@
+# Network for service-to-service communication
+networks:
+  social-network:
+    driver: bridge
+
+services:
+  # Auth Service - services/auth/main.go runs on port 8081
+  auth-service:
+    build:
+      context: .  # Build from root, not ./services/auth
+      dockerfile: ./services/auth/Dockerfile
+    container_name: auth-service
+    ports:
+      - "8081:8081"
+    networks:
+      - social-network
+    environment:
+      - DATABASE_PATH=/app/social_network.db
+    volumes:
+      - ./social_network.db:/app/social_network.db:rw
+
+  # User Service - services/users/main.go runs on port 8082
+  user-service:
+    build:
+      context: .  # Build from root, not ./services/users
+      dockerfile: ./services/users/Dockerfile
+    container_name: user-service
+    ports:
+      - "8082:8082"
+    depends_on:
+      - auth-service  # User service needs auth service for token verification
+    networks:
+      - social-network
+    environment:
+      - DATABASE_PATH=/app/social_network.db
+      - AUTH_SERVICE_URL=http://auth-service:8081  # How user service finds auth service
+    volumes:
+      - ./social_network.db:/app/social_network.db:rw
+
+  # Post Service - services/posts/main.go runs on port 8083
+  post-service:
+    build:
+      context: .  # Build from root
+      dockerfile: ./services/posts/Dockerfile
+    container_name: post-service
+    ports:
+      - "8083:8083"
+    depends_on:
+      - auth-service  # Post service needs auth service for token verification
+    networks:
+      - social-network
+    environment:
+      - DATABASE_PATH=/app/social_network.db
+      - AUTH_SERVICE_URL=http://auth-service:8081  # How post service finds auth service
+      - PORT=8083
+    volumes:
+      - ./social_network.db:/app/social_network.db:rw
+
+  # Group Service - services/groups/main.go runs on port 8084
+  group-service:
+    build:
+      context: .  # Build from root
+      dockerfile: ./services/groups/Dockerfile
+    container_name: group-service
+    ports:
+      - "8084:8084"
+    depends_on:
+      - auth-service  # Group service needs auth service for token verification
+    networks:
+      - social-network
+    environment:
+      - DATABASE_PATH=/app/social_network.db
+      - AUTH_SERVICE_URL=http://auth-service:8081  # How group service finds auth service
+    volumes:
+      - ./social_network.db:/app/social_network.db:rw
+
+  # Chat Service - services/chat/main.go runs on port 8085
+  chat-service:
+    build:
+      context: .  # Build from root
+      dockerfile: ./services/chat/Dockerfile
+    container_name: chat-service
+    ports:
+      - "8085:8085"
+    depends_on:
+      - auth-service  # Chat service needs auth service for token verification
+    networks:
+      - social-network
+    environment:
+      - DATABASE_PATH=/app/social_network.db
+      - AUTH_SERVICE_URL=http://auth-service:8081  # How chat service finds auth service
+    volumes:
+      - ./social_network.db:/app/social_network.db:rw
+
+  # Notification Service - services/notifications/main.go runs on port 8086
+  notification-service:
+    build:
+      context: .  # Build from root
+      dockerfile: ./services/notifications/Dockerfile
+    container_name: notification-service
+    ports:
+      - "8086:8086"
+    depends_on:
+      - auth-service  # Notification service needs auth service for token verification
+    networks:
+      - social-network
+    environment:
+      - DATABASE_PATH=/app/social_network.db
+      - AUTH_SERVICE_URL=http://auth-service:8081  # How notification service finds auth service
+    volumes:
+      - ./social_network.db:/app/social_network.db:rw
+
+# To run:
+# docker-compose up --build
+# 
+# To test:
+# curl http://localhost:8081/health  (auth service)
+# curl http://localhost:8082/health  (user service)
+# curl http://localhost:8083/health  (post service)
+# curl http://localhost:8084/health  (group service)
+# curl http://localhost:8085/health  (chat service)
+# curl http://localhost:8086/health  (notification service)
+#
+# Database: SQLite file shared via volume mount
+# Each service connects directly to ./social_network.db
