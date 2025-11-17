@@ -19,12 +19,12 @@ func main() {
 		name       string
 		schemaFile string
 	}{
-		{"data/auth_service.db", "db/migrations/auth/001_create_users.sql"},
-		{"data/user_service.db", "db/migrations/users/001_create_user_profiles.sql"},
-		{"data/post_service.db", "db/migrations/posts/001_create_posts.sql"},
-		{"data/group_service.db", "db/migrations/groups/001_create_groups.sql"},
-		{"data/chat_service.db", "db/migrations/chat/001_create_messages.sql"},
-		{"data/notif_service.db", "db/migrations/notifications/001_create_notifications.sql"},
+		{"data/auth_service.db", "db/migrations_per_service/auth/001_create_users.sql"},
+		{"data/user_service.db", "db/migrations_per_service/users/001_create_user_profiles.sql"},
+		{"data/post_service.db", "db/migrations_per_service/posts/001_create_posts.sql"},
+		{"data/group_service.db", "db/migrations_per_service/groups/001_create_groups.sql"},
+		{"data/chat_service.db", "db/migrations_per_service/chat/001_create_messages.sql"},
+		{"data/notif_service.db", "db/migrations_per_service/notifications/001_create_notifications.sql"},
 	}
 
 	for _, dbInfo := range databases {

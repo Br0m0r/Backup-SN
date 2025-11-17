@@ -130,12 +130,3 @@ func (s *AuthService) GetUserByID(userID int) (*models.User, error) {
 	}
 	return user, nil
 }
-
-// GetUsersByIDs retrieves multiple users by their IDs (for internal service communication)
-func (s *AuthService) GetUsersByIDs(userIDs []int) ([]*models.User, error) {
-	users, err := db.GetUsersByIDs(s.database, userIDs)
-	if err != nil {
-		return nil, err
-	}
-	return users, nil
-}

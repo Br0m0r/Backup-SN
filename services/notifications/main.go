@@ -18,7 +18,7 @@ func main() {
 	// Get database path from environment
 	dbPath := os.Getenv("DATABASE_PATH")
 	if dbPath == "" {
-		dbPath = "/app/database.db"
+		dbPath = "./social_network.db"
 	}
 
 	// Open database connection

@@ -366,40 +366,26 @@ Data Flow Example: User Deletion
 - [x] Add user_cache tables where needed (Post, Group services)
 - [x] Update docker-compose.yml with separate volumes
 
-### Phase 2: Internal API Endpoints ✅ COMPLETED
-- [x] Auth Service: Add `/internal/users/batch` endpoint
-- [x] Auth Service: Keep `/internal/verify-token` endpoint
-- [x] Auth Service: Keep `/internal/user/:id` endpoint
+### Phase 2: Internal API Endpoints
+- [ ] Auth Service: Add `/internal/users/:id` endpoint
+- [ ] Auth Service: Add `/internal/users/batch` endpoint
+- [ ] Auth Service: Keep `/internal/verify-token` endpoint
+- [ ] Add `/internal/users/deleted` handlers in all services
+- [ ] User Service: Add internal profile endpoints
+- [ ] Test all internal APIs
 
-### Phase 3: Update Service Logic ✅ COMPLETED
-- [x] Auth Service: Update default database path
-- [x] User Service: Update default database path
-- [x] User Service: Update User model (removed email, first_name, last_name, dob, created_at)
-- [x] User Service: Update UpdateProfileRequest model (removed first_name, last_name, dob)
-- [x] User Service: Update GetUserByID to use user_profiles table
-- [x] User Service: Update UpdateUserProfile to use user_profiles table
-- [x] User Service: Update GetFollowers query to use user_profiles table
-- [x] User Service: Update GetFollowing query to use user_profiles table
-- [x] User Service: Update SearchUsers query to use user_profiles table
-- [x] User Service: Update GetPendingFollowRequests query to use user_profiles table
-- [x] User Service: Update GetUserFollowersList query to use user_profiles table
-- [x] User Service: Update GetUserFollowingList query to use user_profiles table
-- [x] User Service: Update CheckProfileAccess query to use user_profiles table
-- [x] Post Service: Update default database path, add user_cache helper functions
-- [x] Group Service: Update default database path, add user_cache to schema
-- [x] Chat Service: Update default database path, add user_cache to schema
-- [x] Notification Service: Update default database path, add user_cache to schema
-- [x] Regenerate all databases with updated schemas
+### Phase 3: Update Service Logic
+- [ ] Remove all cross-service SQL JOINs
+- [ ] Replace with HTTP API calls
+- [ ] Add caching for frequently accessed data
+- [ ] Add retry logic for failed API calls
+- [ ] Add timeout handling
 
-### Phase 4: Docker Configuration ✅ COMPLETED
-- [x] Verify docker-compose.yml has separate database volumes per service
-- [x] Verify environment variables are correctly set (DATABASE_PATH, AUTH_SERVICE_URL)
-- [x] Verify all services have depends_on auth-service
-- [x] Verify network configuration (social-network bridge network)
-- [x] All services compile successfully
-- [ ] Test container startup (requires Docker installation)
-- [ ] Verify network connectivity between services (requires Docker)
-- [ ] Test service-to-service API calls (requires Docker)
+### Phase 4: Docker Configuration
+- [ ] Update docker-compose.yml with separate volumes
+- [ ] Test container startup
+- [ ] Verify network connectivity between services
+- [ ] Test service-to-service API calls
 
 ### Phase 5: Testing
 - [ ] Integration tests for service communication

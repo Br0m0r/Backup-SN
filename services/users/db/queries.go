@@ -11,22 +11,27 @@ import (
 // GetUserByID retrieves a user profile by ID
 func GetUserByID(db *sql.DB, userID int) (*models.User, error) {
 	query := `
-		SELECT user_id, username, avatar_path, nickname, about_me, is_public_profile, updated_at
-		FROM user_profiles 
-		WHERE user_id = ?
+		SELECT id, username, email, first_name, last_name, date_of_birth, avatar_path, 
+		       nickname, about_me, is_public_profile, created_at
+		FROM users 
+		WHERE id = ?
 	`
 
 	var user models.User
-	var avatarPath, nickname, aboutMe sql.NullString
+	var firstName, lastName, dateOfBirth, avatarPath, nickname, aboutMe sql.NullString
 
 	err := db.QueryRow(query, userID).Scan(
 		&user.ID,
 		&user.Username,
+		&user.Email,
+		&firstName,
+		&lastName,
+		&dateOfBirth,
 		&avatarPath,
 		&nickname,
 		&aboutMe,
 		&user.IsPublicProfile,
-		&user.UpdatedAt,
+		&user.CreatedAt,
 	)
 	if err != nil {
 		if err == sql.ErrNoRows {
@@ -36,6 +41,15 @@ func GetUserByID(db *sql.DB, userID int) (*models.User, error) {
 	}
 
 	// Handle nullable fields
+	if firstName.Valid {
+		user.FirstName = &firstName.String
+	}
+	if lastName.Valid {
+		user.LastName = &lastName.String
+	}
+	if dateOfBirth.Valid {
+		user.DateOfBirth = &dateOfBirth.String
+	}
 	if avatarPath.Valid {
 		user.AvatarPath = &avatarPath.String
 	}
@@ -52,18 +66,23 @@ func GetUserByID(db *sql.DB, userID int) (*models.User, error) {
 // UpdateUserProfile updates user profile information
 func UpdateUserProfile(db *sql.DB, userID int, req *models.UpdateProfileRequest) error {
 	query := `
-		UPDATE user_profiles 
-		SET nickname = COALESCE(?, nickname),
+		UPDATE users 
+		SET first_name = COALESCE(?, first_name),
+		    last_name = COALESCE(?, last_name),
+		    date_of_birth = COALESCE(?, date_of_birth),
+		    nickname = COALESCE(?, nickname),
 		    about_me = COALESCE(?, about_me),
-		    is_public_profile = COALESCE(?, is_public_profile),
-		    updated_at = datetime('now')
-		WHERE user_id = ?
+		    is_public_profile = COALESCE(?, is_public_profile)
+		WHERE id = ?
 	`
 
-	log.Printf("UpdateUserProfile: Executing query for user %d with values: nickname=%v, about=%v, isPublic=%v",
-		userID, req.Nickname, req.AboutMe, req.IsPublicProfile)
+	log.Printf("UpdateUserProfile: Executing query for user %d with values: firstName=%v, lastName=%v, dob=%v, nickname=%v, about=%v, isPublic=%v",
+		userID, req.FirstName, req.LastName, req.DateOfBirth, req.Nickname, req.AboutMe, req.IsPublicProfile)
 
 	result, err := db.Exec(query,
+		req.FirstName,
+		req.LastName,
+		req.DateOfBirth,
 		req.Nickname,
 		req.AboutMe,
 		req.IsPublicProfile,
@@ -120,10 +139,10 @@ func DeleteFollow(db *sql.DB, followerID, followingID int) error {
 // GetFollowers retrieves all followers of a user
 func GetFollowers(db *sql.DB, userID int) ([]*models.User, error) {
 	query := `
-		SELECT up.user_id, up.username, up.avatar_path, up.nickname, 
-		       up.about_me, up.is_public_profile, up.updated_at
-		FROM user_profiles up
-		INNER JOIN follows f ON up.user_id = f.follower_id
+		SELECT u.id, u.username, u.email, u.first_name, u.last_name, u.date_of_birth, 
+		       u.avatar_path, u.nickname, u.about_me, u.is_public_profile, u.created_at
+		FROM users u
+		INNER JOIN follows f ON u.id = f.follower_id
 		WHERE f.following_id = ? AND f.status = 'accepted'
 		ORDER BY f.created_at DESC
 	`
@@ -137,22 +156,35 @@ func GetFollowers(db *sql.DB, userID int) ([]*models.User, error) {
 	var users []*models.User
 	for rows.Next() {
 		var user models.User
-		var avatarPath, nickname, aboutMe sql.NullString
+		var firstName, lastName, dateOfBirth, avatarPath, nickname, aboutMe sql.NullString
 
 		err := rows.Scan(
 			&user.ID,
 			&user.Username,
+			&user.Email,
+			&firstName,
+			&lastName,
+			&dateOfBirth,
 			&avatarPath,
 			&nickname,
 			&aboutMe,
 			&user.IsPublicProfile,
-			&user.UpdatedAt,
+			&user.CreatedAt,
 		)
 		if err != nil {
 			return nil, err
 		}
 
 		// Handle nullable fields
+		if firstName.Valid {
+			user.FirstName = &firstName.String
+		}
+		if lastName.Valid {
+			user.LastName = &lastName.String
+		}
+		if dateOfBirth.Valid {
+			user.DateOfBirth = &dateOfBirth.String
+		}
 		if avatarPath.Valid {
 			user.AvatarPath = &avatarPath.String
 		}
@@ -172,10 +204,10 @@ func GetFollowers(db *sql.DB, userID int) ([]*models.User, error) {
 // GetFollowing retrieves all users that a user is following
 func GetFollowing(db *sql.DB, userID int) ([]*models.User, error) {
 	query := `
-		SELECT up.user_id, up.username, up.avatar_path, up.nickname, 
-		       up.about_me, up.is_public_profile, up.updated_at
-		FROM user_profiles up
-		INNER JOIN follows f ON up.user_id = f.following_id
+		SELECT u.id, u.username, u.email, u.first_name, u.last_name, u.date_of_birth, 
+		       u.avatar_path, u.nickname, u.about_me, u.is_public_profile, u.created_at
+		FROM users u
+		INNER JOIN follows f ON u.id = f.following_id
 		WHERE f.follower_id = ? AND f.status = 'accepted'
 		ORDER BY f.created_at DESC
 	`
@@ -189,22 +221,35 @@ func GetFollowing(db *sql.DB, userID int) ([]*models.User, error) {
 	var users []*models.User
 	for rows.Next() {
 		var user models.User
-		var avatarPath, nickname, aboutMe sql.NullString
+		var firstName, lastName, dateOfBirth, avatarPath, nickname, aboutMe sql.NullString
 
 		err := rows.Scan(
 			&user.ID,
 			&user.Username,
+			&user.Email,
+			&firstName,
+			&lastName,
+			&dateOfBirth,
 			&avatarPath,
 			&nickname,
 			&aboutMe,
 			&user.IsPublicProfile,
-			&user.UpdatedAt,
+			&user.CreatedAt,
 		)
 		if err != nil {
 			return nil, err
 		}
 
 		// Handle nullable fields
+		if firstName.Valid {
+			user.FirstName = &firstName.String
+		}
+		if lastName.Valid {
+			user.LastName = &lastName.String
+		}
+		if dateOfBirth.Valid {
+			user.DateOfBirth = &dateOfBirth.String
+		}
 		if avatarPath.Valid {
 			user.AvatarPath = &avatarPath.String
 		}
@@ -221,17 +266,18 @@ func GetFollowing(db *sql.DB, userID int) ([]*models.User, error) {
 	return users, nil
 }
 
-// SearchUsers searches for users by username or nickname
+// SearchUsers searches for users by username or name
 func SearchUsers(db *sql.DB, searchTerm string) ([]*models.User, error) {
 	query := `
-		SELECT user_id, username, avatar_path, nickname, about_me, is_public_profile, updated_at
-		FROM user_profiles 
-		WHERE username LIKE ? OR nickname LIKE ?
+		SELECT id, username, email, first_name, last_name, date_of_birth, avatar_path, 
+		       nickname, about_me, is_public_profile, created_at
+		FROM users 
+		WHERE username LIKE ? OR first_name LIKE ? OR last_name LIKE ? OR nickname LIKE ?
 		LIMIT 50
 	`
 
 	searchPattern := "%" + searchTerm + "%"
-	rows, err := db.Query(query, searchPattern, searchPattern)
+	rows, err := db.Query(query, searchPattern, searchPattern, searchPattern, searchPattern)
 	if err != nil {
 		return nil, err
 	}
@@ -240,22 +286,35 @@ func SearchUsers(db *sql.DB, searchTerm string) ([]*models.User, error) {
 	var users []*models.User
 	for rows.Next() {
 		var user models.User
-		var avatarPath, nickname, aboutMe sql.NullString
+		var firstName, lastName, dateOfBirth, avatarPath, nickname, aboutMe sql.NullString
 
 		err := rows.Scan(
 			&user.ID,
 			&user.Username,
+			&user.Email,
+			&firstName,
+			&lastName,
+			&dateOfBirth,
 			&avatarPath,
 			&nickname,
 			&aboutMe,
 			&user.IsPublicProfile,
-			&user.UpdatedAt,
+			&user.CreatedAt,
 		)
 		if err != nil {
 			return nil, err
 		}
 
 		// Handle nullable fields
+		if firstName.Valid {
+			user.FirstName = &firstName.String
+		}
+		if lastName.Valid {
+			user.LastName = &lastName.String
+		}
+		if dateOfBirth.Valid {
+			user.DateOfBirth = &dateOfBirth.String
+		}
 		if avatarPath.Valid {
 			user.AvatarPath = &avatarPath.String
 		}
@@ -291,10 +350,10 @@ func CheckFollowStatus(db *sql.DB, followerID, followingID int) (string, error) 
 // GetPendingFollowRequests retrieves all pending follow requests for a user
 func GetPendingFollowRequests(db *sql.DB, userID int) ([]*models.User, error) {
 	query := `
-		SELECT up.user_id, up.username, up.avatar_path, up.nickname, 
-		       up.about_me, up.is_public_profile, up.updated_at
-		FROM user_profiles up
-		INNER JOIN follows f ON up.user_id = f.follower_id
+		SELECT u.id, u.username, u.email, u.first_name, u.last_name, u.date_of_birth, 
+		       u.avatar_path, u.nickname, u.about_me, u.is_public_profile, u.created_at
+		FROM users u
+		INNER JOIN follows f ON u.id = f.follower_id
 		WHERE f.following_id = ? AND f.status = 'pending'
 		ORDER BY f.created_at DESC
 	`
@@ -308,22 +367,35 @@ func GetPendingFollowRequests(db *sql.DB, userID int) ([]*models.User, error) {
 	var users []*models.User
 	for rows.Next() {
 		var user models.User
-		var avatarPath, nickname, aboutMe sql.NullString
+		var firstName, lastName, dateOfBirth, avatarPath, nickname, aboutMe sql.NullString
 
 		err := rows.Scan(
 			&user.ID,
 			&user.Username,
+			&user.Email,
+			&firstName,
+			&lastName,
+			&dateOfBirth,
 			&avatarPath,
 			&nickname,
 			&aboutMe,
 			&user.IsPublicProfile,
-			&user.UpdatedAt,
+			&user.CreatedAt,
 		)
 		if err != nil {
 			return nil, err
 		}
 
 		// Handle nullable fields
+		if firstName.Valid {
+			user.FirstName = &firstName.String
+		}
+		if lastName.Valid {
+			user.LastName = &lastName.String
+		}
+		if dateOfBirth.Valid {
+			user.DateOfBirth = &dateOfBirth.String
+		}
 		if avatarPath.Valid {
 			user.AvatarPath = &avatarPath.String
 		}
@@ -435,10 +507,11 @@ func GetUserPosts(db *sql.DB, userID int) ([]models.UserPost, error) {
 // GetUserFollowersList retrieves followers with accepted status
 func GetUserFollowersList(db *sql.DB, userID int) ([]models.User, error) {
 	query := `
-		SELECT up.user_id, up.username, up.avatar_path, up.nickname, 
-		       up.about_me, up.is_public_profile, up.updated_at
-		FROM user_profiles up
-		INNER JOIN follows f ON up.user_id = f.follower_id
+		SELECT u.id, u.username, u.email, u.first_name, u.last_name, 
+		       u.date_of_birth, u.avatar_path, u.nickname, u.about_me, 
+		       u.is_public_profile, u.created_at
+		FROM users u
+		INNER JOIN follows f ON u.id = f.follower_id
 		WHERE f.following_id = ? AND f.status = 'accepted'
 		ORDER BY f.created_at DESC
 	`
@@ -452,22 +525,35 @@ func GetUserFollowersList(db *sql.DB, userID int) ([]models.User, error) {
 	var users []models.User
 	for rows.Next() {
 		var user models.User
-		var avatarPath, nickname, aboutMe sql.NullString
+		var firstName, lastName, dateOfBirth, avatarPath, nickname, aboutMe sql.NullString
 
 		err := rows.Scan(
 			&user.ID,
 			&user.Username,
+			&user.Email,
+			&firstName,
+			&lastName,
+			&dateOfBirth,
 			&avatarPath,
 			&nickname,
 			&aboutMe,
 			&user.IsPublicProfile,
-			&user.UpdatedAt,
+			&user.CreatedAt,
 		)
 		if err != nil {
 			log.Printf("Error scanning follower: %v", err)
 			continue
 		}
 
+		if firstName.Valid {
+			user.FirstName = &firstName.String
+		}
+		if lastName.Valid {
+			user.LastName = &lastName.String
+		}
+		if dateOfBirth.Valid {
+			user.DateOfBirth = &dateOfBirth.String
+		}
 		if avatarPath.Valid {
 			user.AvatarPath = &avatarPath.String
 		}
@@ -491,10 +577,11 @@ func GetUserFollowersList(db *sql.DB, userID int) ([]models.User, error) {
 // GetUserFollowingList retrieves users that the given user is following (accepted status)
 func GetUserFollowingList(db *sql.DB, userID int) ([]models.User, error) {
 	query := `
-		SELECT up.user_id, up.username, up.avatar_path, up.nickname, 
-		       up.about_me, up.is_public_profile, up.updated_at
-		FROM user_profiles up
-		INNER JOIN follows f ON up.user_id = f.following_id
+		SELECT u.id, u.username, u.email, u.first_name, u.last_name, 
+		       u.date_of_birth, u.avatar_path, u.nickname, u.about_me, 
+		       u.is_public_profile, u.created_at
+		FROM users u
+		INNER JOIN follows f ON u.id = f.following_id
 		WHERE f.follower_id = ? AND f.status = 'accepted'
 		ORDER BY f.created_at DESC
 	`
@@ -508,22 +595,35 @@ func GetUserFollowingList(db *sql.DB, userID int) ([]models.User, error) {
 	var users []models.User
 	for rows.Next() {
 		var user models.User
-		var avatarPath, nickname, aboutMe sql.NullString
+		var firstName, lastName, dateOfBirth, avatarPath, nickname, aboutMe sql.NullString
 
 		err := rows.Scan(
 			&user.ID,
 			&user.Username,
+			&user.Email,
+			&firstName,
+			&lastName,
+			&dateOfBirth,
 			&avatarPath,
 			&nickname,
 			&aboutMe,
 			&user.IsPublicProfile,
-			&user.UpdatedAt,
+			&user.CreatedAt,
 		)
 		if err != nil {
 			log.Printf("Error scanning following: %v", err)
 			continue
 		}
 
+		if firstName.Valid {
+			user.FirstName = &firstName.String
+		}
+		if lastName.Valid {
+			user.LastName = &lastName.String
+		}
+		if dateOfBirth.Valid {
+			user.DateOfBirth = &dateOfBirth.String
+		}
 		if avatarPath.Valid {
 			user.AvatarPath = &avatarPath.String
 		}
@@ -554,7 +654,7 @@ func CheckProfileAccess(db *sql.DB, userID, viewerID int) (bool, error) {
 
 	// Check if profile is public
 	var isPublic bool
-	err := db.QueryRow(`SELECT is_public_profile FROM user_profiles WHERE user_id = ?`, userID).Scan(&isPublic)
+	err := db.QueryRow(`SELECT is_public_profile FROM users WHERE id = ?`, userID).Scan(&isPublic)
 	if err != nil {
 		return false, err
 	}
