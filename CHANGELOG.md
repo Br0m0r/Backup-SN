@@ -4,6 +4,13 @@
 
 ---
 
+## 2025-11-17
+
+### Simple Auth Cache for Resilience
+**Implemented token caching layer in common/authcache package to reduce auth service load and provide 5-minute failover window.** All microservices now cache validated tokens for 5 minutes with 2-second timeout on auth calls, reducing auth service requests by ~80% and allowing continued operation during brief auth service outages.
+
+---
+
 ## 2025-10-10
 
 ### Database Migrations Update

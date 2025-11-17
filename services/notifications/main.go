@@ -6,6 +6,7 @@ import (
 	"net/http"
 	"os"
 
+	"social-network/services/common/authcache"
 	"social-network/services/notifications/handlers"
 	"social-network/services/notifications/middleware"
 
@@ -42,7 +43,8 @@ func main() {
 	notifHandlers := handlers.NewNotificationHandlers(database, hub)
 
 	// Create auth middleware
-	authMiddleware := middleware.AuthMiddleware(authServiceURL)
+	authMiddleware := authcache.AuthMiddleware(authServiceURL)
+	log.Printf("Using simple auth cache with 5-minute TTL")
 
 	// Setup routes
 	mux := http.NewServeMux()
