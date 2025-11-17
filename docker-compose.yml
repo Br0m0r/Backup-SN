@@ -15,9 +15,9 @@ services:
     networks:
       - social-network
     environment:
-      - DATABASE_PATH=/app/database.db
+      - DATABASE_PATH=/app/social_network.db
     volumes:
-      - ./data/auth_service.db:/app/database.db:rw
+      - ./social_network.db:/app/social_network.db:rw
 
   # User Service - services/users/main.go runs on port 8082
   user-service:
@@ -32,10 +32,10 @@ services:
     networks:
       - social-network
     environment:
-      - DATABASE_PATH=/app/database.db
+      - DATABASE_PATH=/app/social_network.db
       - AUTH_SERVICE_URL=http://auth-service:8081  # How user service finds auth service
     volumes:
-      - ./data/user_service.db:/app/database.db:rw
+      - ./social_network.db:/app/social_network.db:rw
 
   # Post Service - services/posts/main.go runs on port 8083
   post-service:
@@ -50,11 +50,11 @@ services:
     networks:
       - social-network
     environment:
-      - DATABASE_PATH=/app/database.db
+      - DATABASE_PATH=/app/social_network.db
       - AUTH_SERVICE_URL=http://auth-service:8081  # How post service finds auth service
       - PORT=8083
     volumes:
-      - ./data/post_service.db:/app/database.db:rw
+      - ./social_network.db:/app/social_network.db:rw
 
   # Group Service - services/groups/main.go runs on port 8084
   group-service:
@@ -69,10 +69,10 @@ services:
     networks:
       - social-network
     environment:
-      - DATABASE_PATH=/app/database.db
+      - DATABASE_PATH=/app/social_network.db
       - AUTH_SERVICE_URL=http://auth-service:8081  # How group service finds auth service
     volumes:
-      - ./data/group_service.db:/app/database.db:rw
+      - ./social_network.db:/app/social_network.db:rw
 
   # Chat Service - services/chat/main.go runs on port 8085
   chat-service:
@@ -87,10 +87,10 @@ services:
     networks:
       - social-network
     environment:
-      - DATABASE_PATH=/app/database.db
+      - DATABASE_PATH=/app/social_network.db
       - AUTH_SERVICE_URL=http://auth-service:8081  # How chat service finds auth service
     volumes:
-      - ./data/chat_service.db:/app/database.db:rw
+      - ./social_network.db:/app/social_network.db:rw
 
   # Notification Service - services/notifications/main.go runs on port 8086
   notification-service:
@@ -105,10 +105,10 @@ services:
     networks:
       - social-network
     environment:
-      - DATABASE_PATH=/app/database.db
+      - DATABASE_PATH=/app/social_network.db
       - AUTH_SERVICE_URL=http://auth-service:8081  # How notification service finds auth service
     volumes:
-      - ./data/notif_service.db:/app/database.db:rw
+      - ./social_network.db:/app/social_network.db:rw
 
 # To run:
 # docker-compose up --build
@@ -121,10 +121,5 @@ services:
 # curl http://localhost:8085/health  (chat service)
 # curl http://localhost:8086/health  (notification service)
 #
-# Database Architecture: Separate database per service (True Microservices)
-# - auth_service.db: Users and sessions
-# - user_service.db: User profiles and follows
-# - post_service.db: Posts, comments, and user cache
-# - group_service.db: Groups, members, events
-# - chat_service.db: Direct and group messages
-# - notif_service.db: All notifications
+# Database: SQLite file shared via volume mount
+# Each service connects directly to ./social_network.db
