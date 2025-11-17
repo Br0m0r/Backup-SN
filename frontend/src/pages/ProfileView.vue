@@ -262,6 +262,8 @@
 
 <script setup>
 import { computed, ref } from 'vue';
+import { getToken } from '../stores/auth';
+import { updatePrivacy } from '../services/usersService';
 
 const emit = defineEmits(['back']);
 
@@ -373,8 +375,26 @@ const mockEvents = [
 
 const currentEdit = computed(() => infoSections.value.find((section) => section.key === editingSection.value));
 
-function togglePrivacy() {
-  isPrivate.value = !isPrivate.value;
+async function togglePrivacy() {
+  const newPrivacy = !isPrivate.value;
+  
+  try {
+    const token = getToken();
+    if (!token) {
+      console.error('No auth token available');
+      return;
+    }
+
+    // Call backend API to update privacy
+    await updatePrivacy(!newPrivacy, token); // Backend expects is_public (opposite of isPrivate)
+    
+    // Update local state on success
+    isPrivate.value = newPrivacy;
+    console.log(`Privacy updated: ${newPrivacy ? 'Private' : 'Public'}`);
+  } catch (error) {
+    console.error('Failed to update privacy:', error);
+    alert('Failed to update privacy settings. Please try again.');
+  }
 }
 
 function toggleVisibility(key) {

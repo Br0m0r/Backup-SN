@@ -101,21 +101,23 @@
               Loading messages...
             </div>
 
-            <div
-              v-for="msg in chat.messages"
-              :key="msg.id || msg.timestamp"
-              class="message"
-              :class="{ 'message-sent': msg.sender_id === currentUserId, 'message-received': msg.sender_id !== currentUserId }"
-            >
-              <div class="message-bubble">
-                <p>{{ msg.content }}</p>
-                <span class="message-time">{{ formatMessageTime(msg.created_at || msg.timestamp) }}</span>
+            <template v-else>
+              <div
+                v-for="msg in chat.messages"
+                :key="msg.id || msg.timestamp"
+                class="message"
+                :class="{ 'message-sent': msg.sender_id === currentUserId, 'message-received': msg.sender_id !== currentUserId }"
+              >
+                <div class="message-bubble">
+                  <p>{{ msg.content }}</p>
+                  <span class="message-time">{{ formatMessageTime(msg.created_at || msg.timestamp) }}</span>
+                </div>
               </div>
-            </div>
 
-            <div v-if="chat.messages.length === 0 && !chat.loadingHistory" class="no-messages">
-              <p>No messages yet. Say hi! 👋</p>
-            </div>
+              <div v-if="chat.messages.length === 0" class="no-messages">
+                <p>No messages yet. Say hi! 👋</p>
+              </div>
+            </template>
           </div>
         </div>
 
@@ -139,14 +141,14 @@
 </template>
 
 <script setup>
-import { ref, computed, onMounted, watch, nextTick } from 'vue'
+import { ref, reactive, computed, onMounted, watch, nextTick } from 'vue'
 import { useWebSocket } from '../composables/useWebSocket'
-import { getUser } from '../stores/auth'
+import { getUser, getToken } from '../stores/auth'
 import axios from 'axios'
 
 const CHAT_API_URL = import.meta.env.VITE_CHAT_API_URL || 'http://localhost:8085'
 
-const { connected, sendMessage: wsSendMessage, on, wsState } = useWebSocket()
+const { connected, sendMessage: wsSendMessage, on, wsState, connect, disconnect } = useWebSocket()
 
 const showSidebar = ref(true)
 const contacts = ref([])
@@ -155,6 +157,17 @@ const searchQuery = ref('')
 const loading = ref(false)
 const currentUserId = computed(() => getUser()?.id)
 const chatBodies = ref([])
+
+// Helper to create authenticated axios instance
+const createAuthClient = () => {
+  const token = getToken()
+  return axios.create({
+    baseURL: CHAT_API_URL,
+    headers: {
+      Authorization: `Bearer ${token}`
+    }
+  })
+}
 
 // Computed
 const filteredContacts = computed(() => {
@@ -170,14 +183,23 @@ const filteredContacts = computed(() => {
 
 // Methods
 async function loadContacts() {
+  const token = getToken()
+  if (!token) {
+    console.warn('No auth token available, skipping contact load')
+    return
+  }
+
   loading.value = true
   try {
-    const response = await axios.get(`${CHAT_API_URL}/chat/contacts`)
+    const client = createAuthClient()
+    const response = await client.get('/chat/contacts')
     if (response.data.success) {
       contacts.value = response.data.data.contacts || []
     }
   } catch (error) {
     console.error('Error loading contacts:', error)
+    // Silently fail - chat feature is optional
+    contacts.value = []
   } finally {
     loading.value = false
   }
@@ -206,7 +228,7 @@ async function openChat(contact) {
     openChats.value.shift()
   }
 
-  const newChat = {
+  const newChat = reactive({
     user_id: contact.user_id,
     username: contact.username,
     first_name: contact.first_name,
@@ -218,7 +240,7 @@ async function openChat(contact) {
     messageInput: '',
     minimized: false,
     loadingHistory: true
-  }
+  })
 
   openChats.value.push(newChat)
 
@@ -234,16 +256,23 @@ async function openChat(contact) {
 }
 
 async function loadChatHistory(chat) {
+  chat.loadingHistory = true
   try {
-    const response = await axios.get(`${CHAT_API_URL}/chat/history/${chat.user_id}?limit=50`)
+    const client = createAuthClient()
+    const response = await client.get(`/chat/history/${chat.user_id}?limit=50`)
     if (response.data.success) {
       chat.messages = response.data.data.messages || []
+      console.log(`Loaded ${chat.messages.length} messages for user ${chat.user_id}`)
     }
   } catch (error) {
     console.error('Error loading chat history:', error)
-  } finally {
-    chat.loadingHistory = false
+    chat.messages = []
   }
+  
+  // Ensure reactivity by using nextTick
+  await nextTick()
+  chat.loadingHistory = false
+  console.log(`Loading complete for user ${chat.user_id}, loadingHistory: ${chat.loadingHistory}`)
 }
 
 function closeChat(userId) {
@@ -294,7 +323,8 @@ function handleTyping(chat) {
 
 async function markAsRead(userId) {
   try {
-    await axios.post(`${CHAT_API_URL}/chat/read/${userId}`)
+    const client = createAuthClient()
+    await client.post(`/chat/read/${userId}`)
   } catch (error) {
     console.error('Error marking as read:', error)
   }
@@ -352,6 +382,10 @@ function formatMessageTime(timestamp) {
 
 // Listen for incoming messages
 onMounted(() => {
+  // Connect to WebSocket for real-time chat
+  connect()
+  
+  // Load available contacts
   loadContacts()
 
   // Listen for new messages
@@ -385,6 +419,12 @@ onMounted(() => {
   on('connected', () => {
     loadContacts() // Refresh to get updated online status
   })
+
+  // Listen for follow acceptances to refresh contacts
+  window.addEventListener('follow-accepted', () => {
+    console.log('Follow accepted, refreshing chat contacts')
+    loadContacts()
+  })
 })
 
 // Watch for online status updates
@@ -407,6 +447,7 @@ watch(() => wsState.onlineUsers, () => {
   right: 20px;
   z-index: 9999;
   display: flex;
+  flex-direction: row-reverse;
   gap: 10px;
   align-items: flex-end;
 }

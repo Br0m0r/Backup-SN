@@ -6,25 +6,22 @@
         <span>Neon Connex</span>
       </div>
       <div class="header-actions">
+        <!-- Search Users Dropdown -->
+        <div class="header-icon search-dropdown" @click="toggleSearch" role="button" tabindex="0">
+          <span class="icon icon-search"></span>
+          <SuggestedUsers v-if="searchOpen" @close="closeSearch" />
+        </div>
+
+        <!-- Notifications Widget -->
+        <Notifications />
+
+        <!-- Profile Menu -->
         <div class="header-icon avatar" @click="toggleProfile" role="button" tabindex="0">
           <img src="https://placehold.co/64x64/11121f/fff?text=ME" alt="profile" />
-          <span v-if="unreadCount" class="badge">{{ unreadCount }}</span>
           <div v-if="profileOpen" class="dropdown profile-menu">
             <button @click="viewProfile">View Profile</button>
-            <button @click="openNotifications">Notifications</button>
             <button class="ghost" @click="logout">Logout</button>
           </div>
-        </div>
-        <div v-if="notificationsOpen" class="dropdown notifications notifications-panel">
-          <p class="dropdown-title">Notifications</p>
-          <ul>
-            <li v-for="note in notifications" :key="note.id">
-              <span class="note-type">{{ note.type }}</span>
-              <p>{{ note.message }}</p>
-              <small>{{ note.time }}</small>
-            </li>
-          </ul>
-          <button class="ghost mini full-width" @click="notificationsOpen = false">Close</button>
         </div>
       </div>
     </header>
@@ -98,12 +95,14 @@ import { computed, onMounted, ref } from 'vue';
 import ProfileView from './pages/ProfileView.vue';
 import AuthView from './pages/AuthView.vue';
 import Chat from './components/Chat.vue';
+import SuggestedUsers from './components/SuggestedUsers.vue';
+import Notifications from './components/Notifications.vue';
 import { clearUser, getToken, isAuthenticated as hasSession, restoreSession } from './stores/auth';
 import { logoutUser } from './services/authService';
 
 const activeView = ref('public');
-const notificationsOpen = ref(false);
 const profileOpen = ref(false);
+const searchOpen = ref(false);
 const searchQuery = ref('');
 const currentScreen = ref('feed');
 const isFeedPrivate = ref(false);
@@ -113,12 +112,6 @@ const filterOptions = [
   { id: 'public', label: 'Public', icon: 'icon-globe' },
   { id: 'private', label: 'Private', icon: 'icon-home' },
   { id: 'search', label: 'Search', icon: 'icon-search' },
-];
-
-const notifications = [
-  { id: 1, type: 'Follow', message: 'Nova Flux requested to follow you.', time: '2m ago', unread: true },
-  { id: 2, type: 'Group', message: 'Hyperlink Hub invited you to Tech Noir.', time: '12m ago', unread: true },
-  { id: 3, type: 'Event', message: 'New event in Synthwave Creators.', time: '1h ago', unread: false },
 ];
 
 const publicFeed = [
@@ -170,7 +163,6 @@ const suggestions = [
 ];
 
 const currentFeed = computed(() => (activeView.value === 'private' ? privateFeed : publicFeed));
-const unreadCount = computed(() => notifications.filter((note) => note.unread).length);
 const filteredSuggestions = computed(() => {
   if (!searchQuery.value) return suggestions;
   return suggestions.filter((user) => user.name.toLowerCase().includes(searchQuery.value.toLowerCase()));
@@ -182,20 +174,21 @@ onMounted(() => {
 
 function toggleProfile() {
   profileOpen.value = !profileOpen.value;
-  if (profileOpen.value) {
-    notificationsOpen.value = false;
-  }
+  searchOpen.value = false; // Close search when opening profile
 }
 
-function openNotifications() {
-  notificationsOpen.value = !notificationsOpen.value;
-  profileOpen.value = false;
+function toggleSearch() {
+  searchOpen.value = !searchOpen.value;
+  profileOpen.value = false; // Close profile when opening search
+}
+
+function closeSearch() {
+  searchOpen.value = false;
 }
 
 function viewProfile() {
   currentScreen.value = 'profile';
   profileOpen.value = false;
-  notificationsOpen.value = false;
 }
 
 function switchToFeed() {
@@ -237,6 +230,7 @@ async function logout() {
   display: flex;
   flex-direction: column;
   gap: 2rem;
+  position: relative;
 }
 
 .neon-header {
@@ -277,7 +271,73 @@ async function logout() {
   position: relative;
 }
 
+.header-actions {
+  display: flex;
+  gap: 0.75rem;
+  align-items: center;
+}
+
 .header-icon {
+  width: 2.5rem;
+  height: 2.5rem;
+  border-radius: 999px;
+  display: grid;
+  place-items: center;
+  background: rgba(255, 255, 255, 0.05);
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  cursor: pointer;
+  transition: border-color 0.2s ease, transform 0.2s ease;
+  position: relative;
+}
+
+.header-icon:hover {
+  border-color: var(--border-glow);
+  transform: scale(1.05);
+}
+
+.header-icon.search-dropdown {
+  position: relative;
+}
+
+.icon-search {
+  display: inline-block;
+  width: 1.2rem;
+  height: 1.2rem;
+  mask: url('data:image/svg+xml,<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path fill="white" d="M15.5 14h-.79l-.28-.27a6.5 6.5 0 0 0 1.48-5.34c-.47-2.78-2.79-5-5.59-5.34a6.505 6.505 0 0 0-7.27 7.27c.34 2.8 2.56 5.12 5.34 5.59a6.5 6.5 0 0 0 5.34-1.48l.27.28v.79l4.25 4.25c.41.41 1.08.41 1.49 0 .41-.41.41-1.08 0-1.49L15.5 14zm-6 0C7.01 14 5 11.99 5 9.5S7.01 5 9.5 5 14 7.01 14 9.5 11.99 14 9.5 14z"/></svg>') center/contain no-repeat;
+  background: var(--neon-cyan);
+}
+
+.header-icon.avatar {
+  width: 2.5rem;
+  height: 2.5rem;
+  border-radius: 999px;
+  display: grid;
+  place-items: center;
+  background: rgba(255, 255, 255, 0.05);
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  cursor: pointer;
+  transition: border-color 0.2s ease, transform 0.2s ease;
+  position: relative;
+}
+
+.header-icon:hover {
+  border-color: var(--border-glow);
+  transform: scale(1.05);
+}
+
+.header-icon.search-dropdown {
+  position: relative;
+}
+
+.icon-search {
+  display: inline-block;
+  width: 1.2rem;
+  height: 1.2rem;
+  mask: url('data:image/svg+xml,<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path fill="white" d="M15.5 14h-.79l-.28-.27a6.5 6.5 0 0 0 1.48-5.34c-.47-2.78-2.79-5-5.59-5.34a6.505 6.505 0 0 0-7.27 7.27c.34 2.8 2.56 5.12 5.34 5.59a6.5 6.5 0 0 0 5.34-1.48l.27.28v.79l4.25 4.25c.41.41 1.08.41 1.49 0 .41-.41.41-1.08 0-1.49L15.5 14zm-6 0C7.01 14 5 11.99 5 9.5S7.01 5 9.5 5 14 7.01 14 9.5 11.99 14 9.5 14z"/></svg>') center/contain no-repeat;
+  background: var(--neon-cyan);
+}
+
+.header-icon.avatar {
   position: relative;
   width: 3.25rem;
   height: 3.25rem;

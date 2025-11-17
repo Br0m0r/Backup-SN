@@ -45,6 +45,7 @@ const eventListeners = ref(new Map())
  */
 const config = {
   notificationsUrl: import.meta.env.VITE_NOTIFICATIONS_WS_URL || 'ws://localhost:8086/ws',
+  notificationsApiUrl: import.meta.env.VITE_NOTIFICATIONS_API_URL || 'http://localhost:8086',
   reconnectDelay: 3000,
   maxReconnectAttempts: 5,
   heartbeatInterval: 30000 // 30 seconds
@@ -115,7 +116,10 @@ export function useNotifications() {
         // Emit connected event to listeners
         emit('connected', { userId: user.id })
         
-        // Request initial notification count
+        // Load initial notifications from REST API
+        loadNotifications()
+        
+        // Request initial unread count from REST API
         requestUnreadCount()
       }
 
@@ -227,23 +231,13 @@ export function useNotifications() {
    * WHY HEARTBEAT:
    * - Detects stale connections
    * - Prevents timeout on idle connections
-   * - Backend expects ping/pong
+   * - Backend expects ping/pong at protocol level
    */
   function startHeartbeat() {
     stopHeartbeat() // Clear any existing timer
     
-    heartbeatTimer = setInterval(() => {
-      if (ws.value && connected.value) {
-        try {
-          // Send ping message
-          ws.value.send(JSON.stringify({ type: 'ping' }))
-        } catch (error) {
-          console.error('Heartbeat failed:', error)
-          disconnect()
-          connect()
-        }
-      }
-    }, config.heartbeatInterval)
+    // Backend handles ping/pong automatically at WebSocket protocol level
+    // No need to send manual ping messages
   }
 
   /**
@@ -260,48 +254,17 @@ export function useNotifications() {
    * Handle incoming notifications from server
    * 
    * WHY MESSAGE ROUTER:
-   * Your backend sends different notification types:
-   * - "notification" - new notification
-   * - "unread_count" - unread count update
-   * - "mark_read" - notification marked as read
-   * - "pong" - heartbeat response
-   * 
-   * From your backend models/notification.go:
-   * - follow_request
-   * - follow_accepted
-   * - new_follower
-   * - like
-   * - comment
-   * - group_invite
-   * - event_invite
-   * - new_message
+   * Your backend only sends notification events with this format:
+   * - {"type": "notification", "notification": {...}}
    */
   function handleIncomingNotification(data) {
     const { type } = data
 
-    switch (type) {
-      case 'notification':
-        // New notification arrived
-        handleNewNotification(data.notification)
-        break
-
-      case 'unread_count':
-        // Server sent unread count
-        unreadCount.value = data.count || 0
-        emit('unread_count', data.count)
-        break
-
-      case 'mark_read':
-        // Notification marked as read
-        handleMarkAsRead(data.notification_id)
-        break
-
-      case 'pong':
-        // Heartbeat response (ignore)
-        break
-
-      default:
-        console.warn('Unknown notification type:', type)
+    if (type === 'notification') {
+      // New notification arrived
+      handleNewNotification(data.notification)
+    } else {
+      console.warn('Unknown notification type:', type)
     }
   }
 
@@ -430,106 +393,165 @@ export function useNotifications() {
   }
 
   /**
-   * Mark notification as read
-   * 
-   * WHY SEND TO SERVER:
-   * - Persist read state
-   * - Sync across devices
-   * - Update database
+   * Mark notification as read (via REST API)
    * 
    * @param {number} notificationId - Notification ID to mark as read
    */
   function markAsRead(notificationId) {
-    if (!ws.value || !connected.value) {
-      console.error('Cannot mark as read: not connected')
-      return false
+    // Optimistically update local state
+    const notification = notifications.value.find(n => n.id === notificationId)
+    if (notification && !notification.is_read) {
+      notification.is_read = true
+      unreadCount.value = Math.max(0, unreadCount.value - 1)
     }
 
-    try {
-      ws.value.send(JSON.stringify({
-        type: 'mark_read',
-        notification_id: notificationId
-      }))
-      
-      // Optimistically update local state
-      handleMarkAsRead(notificationId)
-      
-      return true
-    } catch (error) {
+    // Make REST API call (don't send via WebSocket)
+    const token = getToken()
+    if (!token) return false
+
+    fetch(`${config.notificationsApiUrl}/notifications/read/${notificationId}`, {
+      method: 'PUT',
+      headers: {
+        'Authorization': `Bearer ${token}`
+      }
+    }).catch(error => {
       console.error('Failed to mark notification as read:', error)
-      return false
-    }
+      // Revert on error
+      if (notification) {
+        notification.is_read = false
+        unreadCount.value++
+      }
+    })
+
+    return true
   }
 
   /**
-   * Mark all notifications as read
-   * 
-   * WHY BULK OPERATION:
-   * - Convenient for users
-   * - Single network request
-   * - Better UX
+   * Mark all notifications as read (via REST API)
    */
   function markAllAsRead() {
-    if (!ws.value || !connected.value) {
-      console.error('Cannot mark all as read: not connected')
-      return false
-    }
+    // Optimistically update local state
+    notifications.value.forEach(n => {
+      n.is_read = true
+    })
+    unreadCount.value = 0
 
-    try {
-      ws.value.send(JSON.stringify({
-        type: 'mark_all_read'
-      }))
-      
-      // Optimistically update local state
-      notifications.value.forEach(n => {
-        n.is_read = true
-      })
-      unreadCount.value = 0
-      
-      emit('all_read')
-      
-      return true
-    } catch (error) {
+    // Make REST API call
+    const token = getToken()
+    if (!token) return false
+
+    fetch(`${config.notificationsApiUrl}/notifications/read-all`, {
+      method: 'POST',
+      headers: {
+        'Authorization': `Bearer ${token}`
+      }
+    }).catch(error => {
       console.error('Failed to mark all as read:', error)
-      return false
-    }
+    })
+
+    emit('all_read')
+    return true
   }
 
   /**
-   * Delete notification
+   * Delete notification (via REST API)
    * 
    * @param {number} notificationId - Notification ID to delete
    */
   function deleteNotification(notificationId) {
-    if (!ws.value || !connected.value) {
-      console.error('Cannot delete notification: not connected')
-      return false
+    // Optimistically remove from local state
+    const index = notifications.value.findIndex(n => n.id === notificationId)
+    let removedNotification = null
+    if (index !== -1) {
+      removedNotification = notifications.value[index]
+      notifications.value.splice(index, 1)
+      
+      // Decrement unread count if it was unread
+      if (!removedNotification.is_read) {
+        unreadCount.value = Math.max(0, unreadCount.value - 1)
+      }
     }
 
-    try {
-      ws.value.send(JSON.stringify({
-        type: 'delete',
-        notification_id: notificationId
-      }))
-      
-      // Optimistically remove from local state
-      const index = notifications.value.findIndex(n => n.id === notificationId)
-      if (index !== -1) {
-        const notification = notifications.value[index]
-        notifications.value.splice(index, 1)
-        
-        // Decrement unread count if it was unread
-        if (!notification.is_read) {
-          unreadCount.value = Math.max(0, unreadCount.value - 1)
+    // Make REST API call
+    const token = getToken()
+    if (!token) return false
+
+    fetch(`${config.notificationsApiUrl}/notifications/delete/${notificationId}`, {
+      method: 'DELETE',
+      headers: {
+        'Authorization': `Bearer ${token}`
+      }
+    }).catch(error => {
+      console.error('Failed to delete notification:', error)
+      // Revert on error
+      if (removedNotification && index !== -1) {
+        notifications.value.splice(index, 0, removedNotification)
+        if (!removedNotification.is_read) {
+          unreadCount.value++
         }
       }
-      
-      emit('notification_deleted', notificationId)
-      
-      return true
+    })
+
+    emit('notification_deleted', notificationId)
+    return true
+  }
+
+  /**
+   * Load notifications from REST API
+   */
+  async function loadNotifications(limit = 20, offset = 0) {
+    const token = getToken()
+    if (!token) return
+
+    try {
+      const response = await fetch(
+        `${config.notificationsApiUrl}/notifications/list?limit=${limit}&offset=${offset}`,
+        {
+          headers: {
+            'Authorization': `Bearer ${token}`
+          }
+        }
+      )
+
+      if (response.ok) {
+        const data = await response.json()
+        if (data.success && data.data.notifications) {
+          notifications.value = data.data.notifications
+          
+          // Calculate unread count
+          unreadCount.value = notifications.value.filter(n => !n.is_read).length
+        }
+      }
     } catch (error) {
-      console.error('Failed to delete notification:', error)
-      return false
+      console.error('Failed to load notifications:', error)
+    }
+  }
+
+  /**
+   * Request unread count from REST API
+   */
+  async function requestUnreadCount() {
+    const token = getToken()
+    if (!token) return
+
+    try {
+      const response = await fetch(
+        `${config.notificationsApiUrl}/notifications/unread-count`,
+        {
+          headers: {
+            'Authorization': `Bearer ${token}`
+          }
+        }
+      )
+
+      if (response.ok) {
+        const data = await response.json()
+        if (data.success && typeof data.data.unread_count === 'number') {
+          unreadCount.value = data.data.unread_count
+        }
+      }
+    } catch (error) {
+      console.error('Failed to get unread count:', error)
     }
   }
 
@@ -647,6 +669,7 @@ export function useNotifications() {
     markAsRead,
     markAllAsRead,
     deleteNotification,
+    loadNotifications,
     clearNotifications,
     on,
     off

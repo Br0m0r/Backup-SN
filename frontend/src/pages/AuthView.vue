@@ -50,6 +50,27 @@
       </form>
 
       <form v-else key="register" class="auth-form" @submit.prevent="handleRegister">
+        <label>
+          <span>Email</span>
+          <input type="email" v-model="registerForm.email" placeholder="you@neon.city" required autocomplete="email" />
+        </label>
+        <div class="split">
+          <label>
+            <span>Password</span>
+            <input type="password" v-model="registerForm.password" placeholder="Create a passphrase" minlength="6" required autocomplete="new-password" />
+          </label>
+          <label>
+            <span>Confirm</span>
+            <input
+              type="password"
+              v-model="registerForm.confirm"
+              placeholder="Repeat password"
+              minlength="6"
+              required
+              autocomplete="new-password"
+            />
+          </label>
+        </div>
         <div class="split">
           <label>
             <span>First name</span>
@@ -61,29 +82,21 @@
           </label>
         </div>
         <label>
-          <span>Handle</span>
-          <input type="text" v-model="registerForm.handle" placeholder="@neonpilot" required />
+          <span>Date of birth</span>
+          <input type="date" v-model="registerForm.dateOfBirth" required />
         </label>
         <label>
-          <span>Email</span>
-          <input type="email" v-model="registerForm.email" placeholder="you@neon.city" required autocomplete="email" />
+          <span>Avatar/Image <span class="optional">(Optional)</span></span>
+          <input type="file" @change="handleAvatarChange" accept="image/*" />
         </label>
-        <div class="split">
-          <label>
-            <span>Password</span>
-            <input type="password" v-model="registerForm.password" placeholder="Create a passphrase" minlength="6" required />
-          </label>
-          <label>
-            <span>Confirm</span>
-            <input
-              type="password"
-              v-model="registerForm.confirm"
-              placeholder="Repeat password"
-              minlength="6"
-              required
-            />
-          </label>
-        </div>
+        <label>
+          <span>Nickname <span class="optional">(Optional)</span></span>
+          <input type="text" v-model="registerForm.nickname" placeholder="CoolNickname" />
+        </label>
+        <label>
+          <span>About me <span class="optional">(Optional)</span></span>
+          <textarea v-model="registerForm.aboutMe" placeholder="Tell us about yourself..." rows="3"></textarea>
+        </label>
         <button class="cta full" type="submit" :disabled="registerLoading">
           {{ registerLoading ? 'Creating account...' : 'Create account' }}
         </button>
@@ -121,10 +134,13 @@ const loginForm = reactive({
 const registerForm = reactive({
   firstName: '',
   lastName: '',
-  handle: '',
   email: '',
   password: '',
-  confirm: ''
+  confirm: '',
+  dateOfBirth: '',
+  avatar: null,
+  nickname: '',
+  aboutMe: ''
 })
 
 function setFeedback(message = '', variant = 'info') {
@@ -134,6 +150,11 @@ function setFeedback(message = '', variant = 'info') {
 
 function sanitizeHandle(value) {
   return value.trim().replace(/^@+/, '').toLowerCase()
+}
+
+function handleAvatarChange(event) {
+  const file = event.target.files?.[0]
+  registerForm.avatar = file || null
 }
 
 watch(activeTab, () => setFeedback())
@@ -176,15 +197,21 @@ async function handleRegister() {
 
   const firstName = registerForm.firstName.trim()
   const lastName = registerForm.lastName.trim()
-  const username = sanitizeHandle(registerForm.handle)
+  const email = registerForm.email.trim().toLowerCase()
+  const dateOfBirth = registerForm.dateOfBirth
 
   if (!firstName || !lastName) {
     setFeedback('First and last name are required.', 'error')
     return
   }
 
-  if (!username) {
-    setFeedback('Handle is required.', 'error')
+  if (!email) {
+    setFeedback('Email is required.', 'error')
+    return
+  }
+
+  if (!dateOfBirth) {
+    setFeedback('Date of birth is required.', 'error')
     return
   }
 
@@ -192,17 +219,20 @@ async function handleRegister() {
 
   try {
     const payload = {
-      username,
-      email: registerForm.email.trim().toLowerCase(),
+      username: '', // Backend will generate from email if empty
+      email,
       password: registerForm.password,
       first_name: firstName,
-      last_name: lastName
+      last_name: lastName,
+      date_of_birth: dateOfBirth,
+      nickname: registerForm.nickname.trim() || undefined,
+      about_me: registerForm.aboutMe.trim() || undefined
     }
 
     const { user, token } = await registerUser(payload)
     setUser(user, token)
 
-    const welcomeName = user.first_name || user.username || username
+    const welcomeName = user.first_name || email
     setFeedback(`Welcome aboard, ${welcomeName}! Taking you to your feed...`, 'success')
     emit('authenticated', { mode: 'register', user })
   } catch (error) {
@@ -292,10 +322,28 @@ async function handleRegister() {
   color: inherit;
 }
 
-.auth-form input:focus {
+.auth-form textarea {
+  padding: 0.75rem 1rem;
+  border-radius: 0.9rem;
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  background: rgba(8, 10, 24, 0.85);
+  color: inherit;
+  font-family: inherit;
+  resize: vertical;
+  min-height: 80px;
+}
+
+.auth-form input:focus,
+.auth-form textarea:focus {
   outline: none;
   border-color: var(--neon-cyan);
   box-shadow: 0 0 14px rgba(0, 247, 255, 0.2);
+}
+
+.optional {
+  color: var(--text-muted);
+  font-size: 0.85em;
+  font-weight: normal;
 }
 
 .cta {
