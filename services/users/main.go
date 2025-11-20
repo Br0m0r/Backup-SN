@@ -100,6 +100,8 @@ func main() {
 
 	// User "me" routes (auth required) - alias for /profile
 	mux.Handle("/users/me/privacy", authMiddleware(http.HandlerFunc(userHandlers.UpdatePrivacy)))
+	mux.Handle("/users/me/followers", authMiddleware(http.HandlerFunc(userHandlers.GetFollowers)))
+	mux.Handle("/users/me/following", authMiddleware(http.HandlerFunc(userHandlers.GetFollowing)))
 	mux.Handle("/users/me", authMiddleware(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		switch r.Method {
 		case "GET":

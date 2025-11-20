@@ -38,6 +38,7 @@ func main() {
 
 	// Initialize handlers
 	postHandlers := handlers.NewPostHandlers(postService)
+	uploadHandlers := handlers.NewUploadHandlers()
 
 	// Initialize middleware
 	rateLimiter := middleware.NewRateLimiter()
@@ -48,6 +49,10 @@ func main() {
 
 	// Health check (no auth, no rate limiting)
 	mux.HandleFunc("/health", handlers.HealthHandler)
+
+	// Static file server for uploaded images
+	fs := http.FileServer(http.Dir("./uploads"))
+	mux.Handle("/uploads/", http.StripPrefix("/uploads/", fs))
 
 	// Post endpoints
 	mux.Handle("/posts", authMiddleware(rateLimiter.RateLimit(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
@@ -61,6 +66,9 @@ func main() {
 
 	// Feed endpoint
 	mux.Handle("/posts/feed", authMiddleware(http.HandlerFunc(postHandlers.GetFeed)))
+
+	// Search endpoint
+	mux.Handle("/posts/search", authMiddleware(http.HandlerFunc(postHandlers.SearchPosts)))
 
 	mux.Handle("/posts/", authMiddleware(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		switch r.Method {
@@ -82,6 +90,18 @@ func main() {
 			postHandlers.CreateComment(w, r)
 		case "GET":
 			postHandlers.GetComments(w, r)
+		default:
+			http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
+		}
+	}))))
+
+	// Upload endpoints
+	mux.Handle("/upload/image", authMiddleware(rateLimiter.RateLimit(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		switch r.Method {
+		case "POST":
+			uploadHandlers.UploadImage(w, r)
+		case "DELETE":
+			uploadHandlers.DeleteImage(w, r)
 		default:
 			http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
 		}

@@ -3,6 +3,7 @@ package services
 import (
 	"database/sql"
 	"errors"
+	"strings"
 
 	"social-network/services/auth/db"
 	"social-network/services/auth/models"
@@ -30,6 +31,13 @@ func (s *AuthService) Register(req *models.RegisterRequest) (*models.AuthRespons
 		return nil, err
 	}
 
+	// Generate username from email if not provided
+	if req.Username == "" {
+		// Use the part before @ in email as username
+		emailParts := strings.Split(req.Email, "@")
+		req.Username = emailParts[0]
+	}
+
 	// Check if username already exists
 	if exists, err := db.UserExistsByUsername(s.database, req.Username); err != nil {
 		return nil, errors.New("database error checking username existence")
@@ -51,7 +59,7 @@ func (s *AuthService) Register(req *models.RegisterRequest) (*models.AuthRespons
 	}
 
 	// Create user in database
-	user, err := db.CreateUser(s.database, req.Username, req.Email, hashedPassword, req.FirstName, req.LastName)
+	user, err := db.CreateUser(s.database, req.Username, req.Email, hashedPassword, req.FirstName, req.LastName, req.DateOfBirth, req.Nickname, req.AboutMe)
 	if err != nil {
 		return nil, err
 	}

@@ -109,7 +109,8 @@
                 :class="{ 'message-sent': msg.sender_id === currentUserId, 'message-received': msg.sender_id !== currentUserId }"
               >
                 <div class="message-bubble">
-                  <p>{{ msg.content }}</p>
+                  <img v-if="msg.image_path" :src="`http://localhost:8085${msg.image_path}`" alt="Shared image" class="message-image" />
+                  <p v-if="msg.content">{{ msg.content }}</p>
                   <span class="message-time">{{ formatMessageTime(msg.created_at || msg.timestamp) }}</span>
                 </div>
               </div>
@@ -123,17 +124,38 @@
 
         <!-- Chat Footer (Input) -->
         <div v-if="!chat.minimized" class="chat-footer">
-          <input
-            v-model="chat.messageInput"
-            type="text"
-            placeholder="Type a message..."
-            @keyup.enter="sendMessage(chat)"
-            @input="handleTyping(chat)"
-            class="message-input"
+          <!-- Image Preview -->
+          <div v-if="imagePreview[chat.user_id]" class="image-preview-container">
+            <img :src="imagePreview[chat.user_id]" alt="Preview" class="image-preview" />
+            <button @click="removeImage(chat.user_id)" class="remove-image-btn">✕</button>
+          </div>
+
+          <!-- Emoji Picker -->
+          <EmojiPicker
+            :isOpen="showEmojiPicker[chat.user_id]"
+            @select="(emoji) => selectEmoji(chat.user_id, emoji)"
+            @close="showEmojiPicker[chat.user_id] = false"
           />
-          <button @click="sendMessage(chat)" class="send-btn" :disabled="!chat.messageInput.trim()">
-            ➤
-          </button>
+
+          <div class="input-row">
+            <button @click="triggerImageUpload(chat.user_id)" class="action-btn" title="Upload image">
+              📷
+            </button>
+            <button @click="toggleEmojiPicker(chat.user_id)" class="action-btn" title="Add emoji">
+              😊
+            </button>
+            <input
+              v-model="chat.messageInput"
+              type="text"
+              placeholder="Type a message..."
+              @keyup.enter="sendMessage(chat)"
+              @input="handleTyping(chat)"
+              class="message-input"
+            />
+            <button @click="sendMessage(chat)" class="send-btn" :disabled="!chat.messageInput.trim() && !selectedImage[chat.user_id]">
+              ➤
+            </button>
+          </div>
         </div>
       </div>
     </div>
@@ -145,6 +167,7 @@ import { ref, reactive, computed, onMounted, watch, nextTick } from 'vue'
 import { useWebSocket } from '../composables/useWebSocket'
 import { getUser, getToken } from '../stores/auth'
 import axios from 'axios'
+import EmojiPicker from './EmojiPicker.vue'
 
 const CHAT_API_URL = import.meta.env.VITE_CHAT_API_URL || 'http://localhost:8085'
 
@@ -157,6 +180,9 @@ const searchQuery = ref('')
 const loading = ref(false)
 const currentUserId = computed(() => getUser()?.id)
 const chatBodies = ref([])
+const showEmojiPicker = ref({}) // Track emoji picker for each chat
+const selectedImage = ref({}) // Track selected images for each chat
+const imagePreview = ref({}) // Track image previews for each chat
 
 // Helper to create authenticated axios instance
 const createAuthClient = () => {
@@ -292,14 +318,106 @@ function toggleMinimize(userId) {
   }
 }
 
+function toggleEmojiPicker(userId) {
+  showEmojiPicker.value[userId] = !showEmojiPicker.value[userId]
+}
+
+function selectEmoji(userId, emoji) {
+  const chat = openChats.value.find(c => c.user_id === userId)
+  if (chat) {
+    chat.messageInput += emoji
+  }
+  showEmojiPicker.value[userId] = false
+}
+
+async function triggerImageUpload(userId) {
+  const input = document.createElement('input')
+  input.type = 'file'
+  input.accept = 'image/jpeg,image/jpg,image/png,image/gif'
+  input.onchange = (e) => handleImageSelect(userId, e)
+  input.click()
+}
+
+function handleImageSelect(userId, event) {
+  const file = event.target.files[0]
+  if (!file) return
+
+  // Validate file type
+  const validTypes = ['image/jpeg', 'image/jpg', 'image/png', 'image/gif']
+  if (!validTypes.includes(file.type)) {
+    alert('Invalid file type. Only JPG, PNG, and GIF allowed.')
+    return
+  }
+
+  // Validate file size (5MB)
+  if (file.size > 5 * 1024 * 1024) {
+    alert('File too large. Maximum size is 5MB.')
+    return
+  }
+
+  selectedImage.value[userId] = file
+  
+  // Create preview
+  const reader = new FileReader()
+  reader.onload = (e) => {
+    imagePreview.value[userId] = e.target.result
+  }
+  reader.readAsDataURL(file)
+}
+
+function removeImage(userId) {
+  selectedImage.value[userId] = null
+  imagePreview.value[userId] = null
+}
+
+async function uploadImage(userId) {
+  const file = selectedImage.value[userId]
+  if (!file) return null
+
+  const formData = new FormData()
+  formData.append('image', file)
+
+  try {
+    const client = createAuthClient()
+    const response = await client.post('/upload/image', formData, {
+      headers: {
+        'Content-Type': 'multipart/form-data'
+      }
+    })
+    
+    if (response.data.success) {
+      return response.data.data.image_path
+    }
+  } catch (error) {
+    console.error('Error uploading image:', error)
+    alert('Failed to upload image')
+  }
+  return null
+}
+
 async function sendMessage(chat) {
-  if (!chat.messageInput.trim()) return
+  const hasImage = selectedImage.value[chat.user_id]
+  const hasText = chat.messageInput.trim()
+  
+  if (!hasImage && !hasText) return
 
   const content = chat.messageInput.trim()
   chat.messageInput = ''
 
+  let imagePath = null
+  
+  // Upload image if selected
+  if (hasImage) {
+    imagePath = await uploadImage(chat.user_id)
+    if (!imagePath && !hasText) {
+      // If image upload failed and no text, abort
+      return
+    }
+    removeImage(chat.user_id)
+  }
+
   // Send via WebSocket
-  const success = wsSendMessage(chat.user_id, content)
+  const success = wsSendMessage(chat.user_id, content, imagePath)
   
   if (success) {
     // Optimistically add to UI (will be confirmed via WebSocket)
@@ -308,6 +426,7 @@ async function sendMessage(chat) {
       sender_id: currentUserId.value,
       receiver_id: chat.user_id,
       content: content,
+      image_path: imagePath,
       timestamp: new Date().toISOString(),
       is_read: false
     }
@@ -400,6 +519,7 @@ onMounted(() => {
           sender_id: data.sender_id,
           receiver_id: data.receiver_id,
           content: data.content,
+          image_path: data.image_path,
           created_at: data.timestamp,
           is_read: false
         })
@@ -835,10 +955,88 @@ watch(() => wsState.onlineUsers, () => {
 
 .chat-footer {
   display: flex;
+  flex-direction: column;
   padding: 8px 12px;
   border-top: 1px solid rgba(255, 255, 255, 0.08);
   background: rgba(5, 6, 13, 0.95);
   gap: 8px;
+  position: relative;
+}
+
+.input-row {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+}
+
+.action-btn {
+  background: rgba(255, 255, 255, 0.05);
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  font-size: 18px;
+  cursor: pointer;
+  width: 36px;
+  height: 36px;
+  border-radius: 0.75rem;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: all 0.2s ease;
+}
+
+.action-btn:hover {
+  background: rgba(0, 247, 255, 0.15);
+  border-color: var(--border-glow);
+  box-shadow: 0 0 12px rgba(0, 247, 255, 0.3);
+}
+
+.image-preview-container {
+  position: relative;
+  display: inline-block;
+  margin-bottom: 4px;
+}
+
+.image-preview {
+  max-width: 200px;
+  max-height: 150px;
+  border-radius: 0.75rem;
+  border: 1px solid rgba(255, 255, 255, 0.2);
+}
+
+.remove-image-btn {
+  position: absolute;
+  top: -8px;
+  right: -8px;
+  background: rgba(255, 0, 230, 0.9);
+  border: 2px solid rgba(5, 6, 13, 0.95);
+  color: #fff;
+  width: 24px;
+  height: 24px;
+  border-radius: 50%;
+  cursor: pointer;
+  font-size: 14px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: all 0.2s ease;
+  font-weight: 700;
+}
+
+.remove-image-btn:hover {
+  transform: scale(1.1);
+  box-shadow: 0 0 12px rgba(255, 0, 230, 0.5);
+}
+
+.message-image {
+  max-width: 100%;
+  max-height: 300px;
+  border-radius: 0.5rem;
+  margin-bottom: 4px;
+  display: block;
+  cursor: pointer;
+}
+
+.message-image:hover {
+  opacity: 0.9;
 }
 
 .message-input {

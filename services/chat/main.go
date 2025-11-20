@@ -41,6 +41,7 @@ func main() {
 
 	// Create handlers
 	chatHandlers := handlers.NewChatHandlers(database, hub)
+	uploadHandlers := handlers.NewUploadHandlers()
 
 	// Create auth middleware
 	authMiddleware := middleware.AuthMiddleware(authServiceURL)
@@ -61,6 +62,10 @@ func main() {
 	mux.Handle("/chat/read/", authMiddleware(http.HandlerFunc(chatHandlers.MarkAsRead)))
 	mux.Handle("/chat/unread", authMiddleware(http.HandlerFunc(chatHandlers.GetUnreadCount)))
 	mux.Handle("/chat/send", authMiddleware(http.HandlerFunc(chatHandlers.SendMessage)))
+
+	// Upload endpoints (auth required)
+	mux.Handle("/upload/image", authMiddleware(http.HandlerFunc(uploadHandlers.UploadImage)))
+	mux.Handle("/upload/delete", authMiddleware(http.HandlerFunc(uploadHandlers.DeleteImage)))
 
 	// Group chat endpoints (auth required)
 	mux.Handle("/chat/groups/", authMiddleware(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {

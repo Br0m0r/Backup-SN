@@ -82,6 +82,41 @@ func (h *PostHandlers) GetFeed(w http.ResponseWriter, r *http.Request) {
 	})
 }
 
+// SearchPosts handles GET /posts/search?q=query requests
+func (h *PostHandlers) SearchPosts(w http.ResponseWriter, r *http.Request) {
+	if r.Method != "GET" {
+		utils.ErrorResponse(w, "Method not allowed", http.StatusMethodNotAllowed)
+		return
+	}
+
+	// Get authenticated user ID from context
+	userID, ok := middleware.GetUserIDFromContext(r)
+	if !ok {
+		utils.ErrorResponse(w, "Unauthorized", http.StatusUnauthorized)
+		return
+	}
+
+	// Get search query from URL parameters
+	query := r.URL.Query().Get("q")
+	if query == "" {
+		utils.SuccessResponse(w, map[string]interface{}{
+			"posts": []*models.Post{},
+		})
+		return
+	}
+
+	posts, err := h.postService.SearchPosts(userID, query)
+	if err != nil {
+		log.Printf("SearchPosts error for user %d: %v", userID, err)
+		utils.ErrorResponse(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
+
+	utils.SuccessResponse(w, map[string]interface{}{
+		"posts": posts,
+	})
+}
+
 // GetPost handles GET /posts/:id requests
 func (h *PostHandlers) GetPost(w http.ResponseWriter, r *http.Request) {
 	if r.Method != "GET" {

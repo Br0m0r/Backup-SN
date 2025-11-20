@@ -182,6 +182,8 @@ async function toggleFollow(user) {
     } else {
       await followUser(user.id, token)
       user.isFollowing = true
+      // Notify other components (like Chat) that a follow happened
+      window.dispatchEvent(new CustomEvent('follow-accepted'))
     }
   } catch (err) {
     console.error('Follow action failed:', err)

@@ -9,10 +9,10 @@ import (
 // SaveMessage stores a new message in the database
 func SaveMessage(db *sql.DB, msg *models.Message) error {
 	query := `
-		INSERT INTO messages (sender_id, recipient_id, content, is_read, created_at)
-		VALUES (?, ?, ?, ?, ?)
+		INSERT INTO messages (sender_id, recipient_id, content, is_read, created_at, image_path)
+		VALUES (?, ?, ?, ?, ?, ?)
 	`
-	result, err := db.Exec(query, msg.SenderID, msg.ReceiverID, msg.Content, msg.IsRead, msg.CreatedAt)
+	result, err := db.Exec(query, msg.SenderID, msg.ReceiverID, msg.Content, msg.IsRead, msg.CreatedAt, msg.ImagePath)
 	if err != nil {
 		return err
 	}
@@ -28,7 +28,7 @@ func SaveMessage(db *sql.DB, msg *models.Message) error {
 // GetChatHistory retrieves all messages between two users
 func GetChatHistory(db *sql.DB, user1ID, user2ID int, limit int) ([]models.Message, error) {
 	query := `
-		SELECT id, sender_id, recipient_id, content, is_read, created_at
+		SELECT id, sender_id, recipient_id, content, is_read, created_at, image_path
 		FROM messages
 		WHERE (sender_id = ? AND recipient_id = ?) OR (sender_id = ? AND recipient_id = ?)
 		ORDER BY created_at DESC
@@ -44,7 +44,7 @@ func GetChatHistory(db *sql.DB, user1ID, user2ID int, limit int) ([]models.Messa
 	var messages []models.Message
 	for rows.Next() {
 		var msg models.Message
-		err := rows.Scan(&msg.ID, &msg.SenderID, &msg.ReceiverID, &msg.Content, &msg.IsRead, &msg.CreatedAt)
+		err := rows.Scan(&msg.ID, &msg.SenderID, &msg.ReceiverID, &msg.Content, &msg.IsRead, &msg.CreatedAt, &msg.ImagePath)
 		if err != nil {
 			log.Printf("Error scanning message: %v", err)
 			continue
@@ -150,29 +150,38 @@ func GetConversations(db *sql.DB, userID int) ([]models.Conversation, error) {
 }
 
 // CanChat checks if a user can chat with another user
-// Rules: Can chat if (you follow them) OR (they follow you) OR (they have public profile)
+// Rules:
+// - If receiver has public profile: sender must be following receiver (one-way)
+// - If receiver has private profile: BOTH must be following each other (mutual)
 func CanChat(db *sql.DB, senderID, receiverID int) (bool, error) {
 	query := `
 		SELECT 
 			CASE 
-				-- Check if receiver has public profile
-				WHEN (SELECT is_public_profile FROM users WHERE id = ?) = 1 THEN 1
-				-- Check if sender follows receiver
-				WHEN EXISTS (
-					SELECT 1 FROM follows 
-					WHERE follower_id = ? AND following_id = ? AND status = 'accepted'
-				) THEN 1
-				-- Check if receiver follows sender
-				WHEN EXISTS (
-					SELECT 1 FROM follows 
-					WHERE follower_id = ? AND following_id = ? AND status = 'accepted'
-				) THEN 1
+				-- If receiver has public profile, sender just needs to follow them
+				WHEN (SELECT is_public_profile FROM users WHERE id = ?) = 1 
+					AND EXISTS (
+						SELECT 1 FROM follows 
+						WHERE follower_id = ? AND following_id = ? AND status = 'accepted'
+					) THEN 1
+				-- If receiver has private profile, need mutual follows
+				WHEN (SELECT is_public_profile FROM users WHERE id = ?) = 0 
+					AND EXISTS (
+						SELECT 1 FROM follows 
+						WHERE follower_id = ? AND following_id = ? AND status = 'accepted'
+					)
+					AND EXISTS (
+						SELECT 1 FROM follows 
+						WHERE follower_id = ? AND following_id = ? AND status = 'accepted'
+					) THEN 1
 				ELSE 0
 			END as can_chat
 	`
 
 	var canChat int
-	err := db.QueryRow(query, receiverID, senderID, receiverID, receiverID, senderID).Scan(&canChat)
+	err := db.QueryRow(query,
+		receiverID, senderID, receiverID, // public profile check
+		receiverID, senderID, receiverID, receiverID, senderID). // private profile check
+		Scan(&canChat)
 	if err != nil {
 		return false, err
 	}
@@ -293,6 +302,9 @@ func GetGroupMembers(db *sql.DB, groupID int) ([]int, error) {
 
 // GetAvailableContacts retrieves all users the current user can chat with
 // Returns users ordered by: 1) Recent chat activity, 2) Alphabetically
+// Rules:
+// - Public profiles: Show if current user is following them
+// - Private profiles: Show only if BOTH users follow each other (mutual)
 func GetAvailableContacts(db *sql.DB, userID int) ([]models.ChatContact, error) {
 	query := `
         SELECT DISTINCT
@@ -301,7 +313,7 @@ func GetAvailableContacts(db *sql.DB, userID int) ([]models.ChatContact, error) 
             u.first_name,
             u.last_name,
             u.nickname,
-            u.avatar,
+            u.avatar_path,
             -- Get last chat time with this user
             (SELECT MAX(created_at) 
              FROM messages 
@@ -314,15 +326,21 @@ func GetAvailableContacts(db *sql.DB, userID int) ([]models.ChatContact, error) 
              WHERE sender_id = u.id AND recipient_id = ? AND is_read = 0
             ) as unread_count
         FROM users u
-        -- User follows this contact
+        -- Current user must be following this contact
         INNER JOIN follows f1 ON f1.following_id = u.id 
             AND f1.follower_id = ? 
             AND f1.status = 'accepted'
-        -- Contact follows user back (mutual)
-        INNER JOIN follows f2 ON f2.follower_id = u.id 
-            AND f2.following_id = ? 
-            AND f2.status = 'accepted'
         WHERE u.id != ?
+            -- Filter: if contact has private profile, they must also follow back
+            AND (
+                u.is_public_profile = 1
+                OR EXISTS (
+                    SELECT 1 FROM follows f2 
+                    WHERE f2.follower_id = u.id 
+                        AND f2.following_id = ? 
+                        AND f2.status = 'accepted'
+                )
+            )
         ORDER BY 
             -- Users with chat history first
             CASE WHEN last_chat_time IS NOT NULL THEN 0 ELSE 1 END,
@@ -336,8 +354,8 @@ func GetAvailableContacts(db *sql.DB, userID int) ([]models.ChatContact, error) 
 		userID, userID, // last_chat_time subquery
 		userID, // unread_count subquery
 		userID, // f1 join (user follows contact)
-		userID, // f2 join (contact follows user back)
-		userID) // WHERE clause (exclude self)
+		userID, // WHERE clause (exclude self)
+		userID) // WHERE EXISTS (mutual follow for private profiles)
 	if err != nil {
 		return nil, err
 	}

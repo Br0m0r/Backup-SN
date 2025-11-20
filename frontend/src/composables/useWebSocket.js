@@ -314,9 +314,10 @@ export function useWebSocket() {
    * 
    * @param {number} receiverId - User ID to send message to
    * @param {string} content - Message content
+   * @param {string|null} imagePath - Optional image path
    * @returns {boolean} - Success status
    */
-  function sendMessage(receiverId, content) {
+  function sendMessage(receiverId, content, imagePath = null) {
     if (!ws.value || !connected.value) {
       console.error('Cannot send message: not connected')
       return false
@@ -328,6 +329,10 @@ export function useWebSocket() {
         receiver_id: receiverId,
         content: content,
         timestamp: new Date().toISOString()
+      }
+
+      if (imagePath) {
+        message.image_path = imagePath
       }
 
       ws.value.send(JSON.stringify(message))

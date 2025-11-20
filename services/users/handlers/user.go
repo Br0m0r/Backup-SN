@@ -378,6 +378,13 @@ func (h *UserHandlers) SearchUsers(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	// Get authenticated user ID from context
+	currentUserID, ok := middleware.GetUserIDFromContext(r)
+	if !ok {
+		utils.ErrorResponse(w, "Unauthorized", http.StatusUnauthorized)
+		return
+	}
+
 	// Get search term from query params
 	searchTerm := r.URL.Query().Get("q")
 	if searchTerm == "" {
@@ -385,8 +392,8 @@ func (h *UserHandlers) SearchUsers(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// Search users
-	users, err := h.userService.SearchUsers(searchTerm)
+	// Search users (excluding current user and users they already follow)
+	users, err := h.userService.SearchUsers(searchTerm, currentUserID)
 	if err != nil {
 		utils.ErrorResponse(w, err.Error(), http.StatusInternalServerError)
 		return

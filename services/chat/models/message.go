@@ -8,6 +8,7 @@ type Message struct {
 	SenderID   int       `json:"sender_id"`
 	ReceiverID int       `json:"receiver_id"`
 	Content    string    `json:"content"`
+	ImagePath  *string   `json:"image_path,omitempty"`
 	IsRead     bool      `json:"is_read"`
 	CreatedAt  time.Time `json:"created_at"`
 }
@@ -23,8 +24,9 @@ type GroupMessage struct {
 
 // CreateMessageRequest represents the payload for creating a message
 type CreateMessageRequest struct {
-	ReceiverID int    `json:"receiver_id"`
-	Content    string `json:"content"`
+	ReceiverID int     `json:"receiver_id"`
+	Content    string  `json:"content"`
+	ImagePath  *string `json:"image_path,omitempty"`
 }
 
 // CreateGroupMessageRequest represents the payload for creating a group message
@@ -54,6 +56,7 @@ type WebSocketMessage struct {
 	ReceiverID int       `json:"receiver_id,omitempty"` // For 1-on-1 chat
 	GroupID    int       `json:"group_id,omitempty"`    // For group chat
 	Content    string    `json:"content,omitempty"`
+	ImagePath  *string   `json:"image_path,omitempty"`
 	Timestamp  time.Time `json:"timestamp"`
 	Error      string    `json:"error,omitempty"`
 }

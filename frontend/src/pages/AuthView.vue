@@ -37,13 +37,10 @@
             minlength="6"
           />
         </label>
-        <div class="form-actions">
-          <label class="remember">
-            <input type="checkbox" v-model="loginForm.remember" />
-            Keep me signed in
-          </label>
-          <button type="button" class="link-btn">Forgot?</button>
-        </div>
+        <label class="remember">
+          <input type="checkbox" v-model="loginForm.remember" />
+          Keep me signed in
+        </label>
         <button class="cta full" type="submit" :disabled="loginLoading">
           {{ loginLoading ? 'Entering...' : 'Enter feed' }}
         </button>
@@ -104,18 +101,16 @@
     </Transition>
 
     <p v-if="feedback.message" :class="['auth-message', feedback.variant]">{{ feedback.message }}</p>
-
-    <button class="ghost full support" type="button">Need help? Contact support</button>
   </section>
 </template>
 
 <script setup>
 import { reactive, ref, watch } from 'vue'
+import { useRouter } from 'vue-router'
 import { loginUser, registerUser } from '../services/authService'
 import { setUser } from '../stores/auth'
 
-const emit = defineEmits(['authenticated'])
-
+const router = useRouter()
 const activeTab = ref('login')
 const loginLoading = ref(false)
 const registerLoading = ref(false)
@@ -176,7 +171,11 @@ async function handleLogin() {
 
     const welcomeName = user.first_name || user.username || loginForm.email
     setFeedback(`Welcome back, ${welcomeName}! Redirecting to your feed...`, 'success')
-    emit('authenticated', { mode: 'login', user })
+    
+    // Navigate to feed after successful login
+    setTimeout(() => {
+      router.push({ name: 'Feed' })
+    }, 500)
   } catch (error) {
     const message = error.response?.data?.error || error.message || 'Failed to login. Please try again.'
     setFeedback(message, 'error')
@@ -234,7 +233,11 @@ async function handleRegister() {
 
     const welcomeName = user.first_name || email
     setFeedback(`Welcome aboard, ${welcomeName}! Taking you to your feed...`, 'success')
-    emit('authenticated', { mode: 'register', user })
+    
+    // Navigate to feed after successful registration
+    setTimeout(() => {
+      router.push({ name: 'Feed' })
+    }, 500)
   } catch (error) {
     const message = error.response?.data?.error || error.message || 'Unable to create your account right now.'
     setFeedback(message, 'error')

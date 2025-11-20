@@ -15,7 +15,9 @@ var notificationServiceURL string
 func init() {
 	notificationServiceURL = os.Getenv("NOTIFICATION_SERVICE_URL")
 	if notificationServiceURL == "" {
-		notificationServiceURL = "http://notification-service:8086"
+		// Default to localhost for local development
+		// Use http://notification-service:8086 when running in Docker
+		notificationServiceURL = "http://localhost:8086"
 	}
 }
 

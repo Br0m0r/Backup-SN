@@ -49,8 +49,8 @@ func (s *PostService) CreatePost(req *models.CreatePostRequest, userID int) (*mo
 		return nil, err
 	}
 
-	// Add viewers if almost_private
-	if req.PrivacyLevel == "almost_private" && len(req.Viewers) > 0 {
+	// Add viewers if private (specific chosen followers)
+	if req.PrivacyLevel == "private" && len(req.Viewers) > 0 {
 		err = db.AddPostViewers(s.database, post.ID, req.Viewers)
 		if err != nil {
 			return nil, err
@@ -114,8 +114,8 @@ func (s *PostService) UpdatePost(postID, userID int, req *models.UpdatePostReque
 		return nil, err
 	}
 
-	// Update viewers if almost_private
-	if req.PrivacyLevel == "almost_private" {
+	// Update viewers if private (specific chosen followers)
+	if req.PrivacyLevel == "private" {
 		err = db.AddPostViewers(s.database, post.ID, req.Viewers)
 		if err != nil {
 			return nil, err
@@ -151,6 +151,14 @@ func (s *PostService) DeletePost(postID, userID int) error {
 // GetFeed retrieves posts for a user's feed
 func (s *PostService) GetFeed(userID int) ([]*models.Post, error) {
 	return db.GetFeedPosts(s.database, userID)
+}
+
+// SearchPosts searches for posts based on query string
+func (s *PostService) SearchPosts(userID int, query string) ([]*models.Post, error) {
+	if query == "" {
+		return []*models.Post{}, nil
+	}
+	return db.SearchPosts(s.database, userID, query)
 }
 
 // CreateComment creates a new comment on a post

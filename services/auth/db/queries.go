@@ -11,14 +11,14 @@ import (
 )
 
 // CreateUser inserts a new user into the database
-func CreateUser(db *sql.DB, username, email, passwordHash, firstName, lastName string) (*models.User, error) {
+func CreateUser(db *sql.DB, username, email, passwordHash, firstName, lastName, dateOfBirth string, nickname, aboutMe *string) (*models.User, error) {
 	query := `
-		INSERT INTO users (username, email, password_hash, first_name, last_name, is_public_profile, created_at)
-		VALUES (?, ?, ?, ?, ?, ?, ?)
+		INSERT INTO users (username, email, password_hash, first_name, last_name, date_of_birth, nickname, about_me, is_public_profile, created_at)
+		VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
 	`
 
 	now := time.Now()
-	result, err := db.Exec(query, username, email, passwordHash, firstName, lastName, true, now)
+	result, err := db.Exec(query, username, email, passwordHash, firstName, lastName, dateOfBirth, nickname, aboutMe, true, now)
 	if err != nil {
 		// Check if it's a unique constraint violation (email or username already exists)
 		if sqliteErr, ok := err.(sqlite3.Error); ok && sqliteErr.Code == sqlite3.ErrConstraint {
@@ -38,6 +38,9 @@ func CreateUser(db *sql.DB, username, email, passwordHash, firstName, lastName s
 		Email:           email,
 		FirstName:       &firstName,
 		LastName:        &lastName,
+		DateOfBirth:     &dateOfBirth,
+		Nickname:        nickname,
+		AboutMe:         aboutMe,
 		IsPublicProfile: true,
 		CreatedAt:       now,
 	}

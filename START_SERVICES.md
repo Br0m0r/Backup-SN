@@ -4,8 +4,9 @@
 - Go installed
 - Node.js and npm installed
 - Database file exists at: `C:\Users\Morie\Desktop\Social\social-network\social_network.db`
+- All database migrations applied (migrations 000001-000015 include posts tables)
 
-## Terminal Setup (4 terminals needed)
+## Terminal Setup (5 terminals needed)
 
 ### Terminal 1: Auth Service (Port 8081)
 ```powershell
@@ -33,7 +34,20 @@ Chat Service starting on :8085
 WebSocket hub running
 ```
 
-### Terminal 3: Notification Service (Port 8086)
+### Terminal 3: Posts Service (Port 8083)
+```powershell
+cd C:\Users\Morie\Desktop\Social\social-network\services\posts
+$env:DATABASE_PATH="C:\Users\Morie\Desktop\Social\social-network\social_network.db"
+go run main.go
+```
+
+**Expected Output:**
+```
+Connected to database: C:\Users\Morie\Desktop\Social\social-network\social_network.db
+Post Service starting on port :8083
+```
+
+### Terminal 4: Notification Service (Port 8086)
 ```powershell
 cd C:\Users\Morie\Desktop\Social\social-network\services\notifications
 $env:DATABASE_PATH="C:\Users\Morie\Desktop\Social\social-network\social_network.db"
@@ -46,7 +60,7 @@ Notification Service starting on :8086
 WebSocket hub running
 ```
 
-### Terminal 4: Frontend Dev Server (Port 5173)
+### Terminal 5: Frontend Dev Server (Port 5173)
 ```bash
 cd C:\Users\Morie\Desktop\Social\social-network\frontend
 npm run dev
@@ -64,6 +78,7 @@ After starting all services, verify:
 
 - [ ] Auth Service running on `http://localhost:8081`
 - [ ] Chat Service running on `http://localhost:8085`
+- [ ] Posts Service running on `http://localhost:8083`
 - [ ] Notification Service running on `http://localhost:8086`
 - [ ] Frontend running on `http://localhost:5173`
 

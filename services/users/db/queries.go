@@ -267,17 +267,22 @@ func GetFollowing(db *sql.DB, userID int) ([]*models.User, error) {
 }
 
 // SearchUsers searches for users by username or name
-func SearchUsers(db *sql.DB, searchTerm string) ([]*models.User, error) {
+func SearchUsers(db *sql.DB, searchTerm string, currentUserID int) ([]*models.User, error) {
 	query := `
-		SELECT id, username, email, first_name, last_name, date_of_birth, avatar_path, 
-		       nickname, about_me, is_public_profile, created_at
-		FROM users 
-		WHERE username LIKE ? OR first_name LIKE ? OR last_name LIKE ? OR nickname LIKE ?
+		SELECT DISTINCT u.id, u.username, u.email, u.first_name, u.last_name, u.date_of_birth, u.avatar_path, 
+		       u.nickname, u.about_me, u.is_public_profile, u.created_at
+		FROM users u
+		WHERE (u.username LIKE ? OR u.first_name LIKE ? OR u.last_name LIKE ? OR u.nickname LIKE ?)
+		  AND u.id != ?
+		  AND u.id NOT IN (
+		    SELECT following_id FROM follows 
+		    WHERE follower_id = ? AND status = 'accepted'
+		  )
 		LIMIT 50
 	`
 
 	searchPattern := "%" + searchTerm + "%"
-	rows, err := db.Query(query, searchPattern, searchPattern, searchPattern, searchPattern)
+	rows, err := db.Query(query, searchPattern, searchPattern, searchPattern, searchPattern, currentUserID, currentUserID)
 	if err != nil {
 		return nil, err
 	}

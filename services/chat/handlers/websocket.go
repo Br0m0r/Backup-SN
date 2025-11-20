@@ -277,6 +277,7 @@ func (c *Client) handleChatMessage(wsMsg *models.WebSocketMessage) {
 		SenderID:   c.userID,
 		ReceiverID: wsMsg.ReceiverID,
 		Content:    wsMsg.Content,
+		ImagePath:  wsMsg.ImagePath,
 		IsRead:     false,
 		CreatedAt:  time.Now(),
 	}

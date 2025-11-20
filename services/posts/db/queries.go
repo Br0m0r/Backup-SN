@@ -27,23 +27,50 @@ func CreatePost(db *sql.DB, post *models.Post) error {
 // GetPostByID retrieves a post by ID
 func GetPostByID(db *sql.DB, postID int) (*models.Post, error) {
 	query := `
-		SELECT id, user_id, title, content, image_path, privacy_level, created_at
-		FROM posts
-		WHERE id = ?
+		SELECT 
+			p.id, p.user_id, p.title, p.content, p.image_path, p.privacy_level, p.created_at,
+			u.username, u.first_name, u.last_name, u.avatar_path
+		FROM posts p
+		INNER JOIN users u ON p.user_id = u.id
+		WHERE p.id = ?
 	`
 	post := &models.Post{}
+	var title, imagePath, username, firstName, lastName, avatar sql.NullString
+
 	err := db.QueryRow(query, postID).Scan(
 		&post.ID,
 		&post.UserID,
-		&post.Title,
+		&title,
 		&post.Content,
-		&post.ImagePath,
+		&imagePath,
 		&post.PrivacyLevel,
 		&post.CreatedAt,
+		&username,
+		&firstName,
+		&lastName,
+		&avatar,
 	)
 	if err != nil {
 		return nil, err
 	}
+
+	// Handle nullable fields
+	if title.Valid {
+		post.Title = &title.String
+	}
+	if imagePath.Valid {
+		post.ImagePath = &imagePath.String
+	}
+
+	// Add author information
+	post.Author = &models.Author{
+		ID:        post.UserID,
+		Username:  username.String,
+		FirstName: firstName.String,
+		LastName:  lastName.String,
+		Avatar:    avatar.String,
+	}
+
 	return post, nil
 }
 
@@ -112,11 +139,85 @@ func GetFeedPosts(db *sql.DB, userID int) ([]*models.Post, error) {
 		WHERE 
 			p.privacy_level = 'public' OR
 			p.user_id = ? OR
-			(p.privacy_level = 'almost_private' AND pv.user_id IS NOT NULL) OR
-			(p.privacy_level = 'private' AND f.follower_id IS NOT NULL)
+			(p.privacy_level = 'almost_private' AND f.follower_id IS NOT NULL) OR
+			(p.privacy_level = 'private' AND pv.user_id IS NOT NULL)
 		ORDER BY p.created_at DESC
 	`
 	rows, err := db.Query(query, userID, userID, userID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+
+	var posts []*models.Post
+	for rows.Next() {
+		post := &models.Post{}
+		var title, imagePath, username, firstName, lastName, avatar sql.NullString
+
+		err := rows.Scan(
+			&post.ID,
+			&post.UserID,
+			&title,
+			&post.Content,
+			&imagePath,
+			&post.PrivacyLevel,
+			&post.CreatedAt,
+			&username,
+			&firstName,
+			&lastName,
+			&avatar,
+		)
+		if err != nil {
+			return nil, err
+		}
+
+		// Handle nullable fields
+		if title.Valid {
+			post.Title = &title.String
+		}
+		if imagePath.Valid {
+			post.ImagePath = &imagePath.String
+		}
+
+		// Add author information
+		post.Author = &models.Author{
+			ID:        post.UserID,
+			Username:  username.String,
+			FirstName: firstName.String,
+			LastName:  lastName.String,
+			Avatar:    avatar.String,
+		}
+
+		posts = append(posts, post)
+	}
+	return posts, nil
+}
+
+// SearchPosts searches for posts based on query string (searches content and title)
+func SearchPosts(db *sql.DB, userID int, searchQuery string) ([]*models.Post, error) {
+	query := `
+		SELECT DISTINCT 
+			p.id, p.user_id, p.title, p.content, p.image_path, p.privacy_level, p.created_at,
+			u.username, u.first_name, u.last_name, u.avatar_path
+		FROM posts p
+		INNER JOIN users u ON p.user_id = u.id
+		LEFT JOIN follows f ON p.user_id = f.following_id AND f.follower_id = ? AND f.status = 'accepted'
+		LEFT JOIN post_viewers pv ON p.id = pv.post_id AND pv.user_id = ?
+		WHERE 
+			(p.privacy_level = 'public' OR
+			p.user_id = ? OR
+			(p.privacy_level = 'almost_private' AND f.follower_id IS NOT NULL) OR
+			(p.privacy_level = 'private' AND pv.user_id IS NOT NULL))
+			AND (
+				p.content LIKE ? OR
+				p.title LIKE ? OR
+				u.first_name LIKE ? OR
+				u.last_name LIKE ?
+			)
+		ORDER BY p.created_at DESC
+	`
+	searchPattern := "%" + searchQuery + "%"
+	rows, err := db.Query(query, userID, userID, userID, searchPattern, searchPattern, searchPattern, searchPattern)
 	if err != nil {
 		return nil, err
 	}
@@ -242,10 +343,13 @@ func CreateComment(db *sql.DB, comment *models.Comment) error {
 // GetCommentsByPostID retrieves all comments for a specific post
 func GetCommentsByPostID(db *sql.DB, postID int) ([]*models.Comment, error) {
 	query := `
-		SELECT id, post_id, user_id, content, image_path, created_at
-		FROM comments
-		WHERE post_id = ?
-		ORDER BY created_at ASC
+		SELECT 
+			c.id, c.post_id, c.user_id, c.content, c.image_path, c.created_at,
+			u.username, u.first_name, u.last_name, u.avatar_path
+		FROM comments c
+		INNER JOIN users u ON c.user_id = u.id
+		WHERE c.post_id = ?
+		ORDER BY c.created_at ASC
 	`
 	rows, err := db.Query(query, postID)
 	if err != nil {
@@ -256,17 +360,38 @@ func GetCommentsByPostID(db *sql.DB, postID int) ([]*models.Comment, error) {
 	var comments []*models.Comment
 	for rows.Next() {
 		comment := &models.Comment{}
+		var imagePath, username, firstName, lastName, avatar sql.NullString
+
 		err := rows.Scan(
 			&comment.ID,
 			&comment.PostID,
 			&comment.UserID,
 			&comment.Content,
-			&comment.ImagePath,
+			&imagePath,
 			&comment.CreatedAt,
+			&username,
+			&firstName,
+			&lastName,
+			&avatar,
 		)
 		if err != nil {
 			return nil, err
 		}
+
+		// Handle nullable fields
+		if imagePath.Valid {
+			comment.ImagePath = &imagePath.String
+		}
+
+		// Add author information
+		comment.Author = &models.Author{
+			ID:        comment.UserID,
+			Username:  username.String,
+			FirstName: firstName.String,
+			LastName:  lastName.String,
+			Avatar:    avatar.String,
+		}
+
 		comments = append(comments, comment)
 	}
 	return comments, nil

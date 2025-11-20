@@ -10,12 +10,8 @@ import (
 
 // ValidateRegisterRequest validates the registration request
 func ValidateRegisterRequest(req *models.RegisterRequest) error {
-	// Username validation
-	if req.Username == "" {
-		return errors.New("username is required")
-	}
-
-	if len(req.Username) < 3 {
+	// Username validation - now optional
+	if req.Username != "" && len(req.Username) < 3 {
 		return errors.New("username must be at least 3 characters long")
 	}
 
@@ -45,6 +41,11 @@ func ValidateRegisterRequest(req *models.RegisterRequest) error {
 
 	if strings.TrimSpace(req.LastName) == "" {
 		return errors.New("last name is required")
+	}
+
+	// Date of birth validation
+	if strings.TrimSpace(req.DateOfBirth) == "" {
+		return errors.New("date of birth is required")
 	}
 
 	return nil

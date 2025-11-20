@@ -100,12 +100,12 @@ func (s *UserService) GetFollowing(userID int) ([]*models.User, error) {
 }
 
 // SearchUsers searches for users
-func (s *UserService) SearchUsers(searchTerm string) ([]*models.User, error) {
+func (s *UserService) SearchUsers(searchTerm string, currentUserID int) ([]*models.User, error) {
 	if searchTerm == "" {
 		return nil, errors.New("search term cannot be empty")
 	}
 
-	return db.SearchUsers(s.database, searchTerm)
+	return db.SearchUsers(s.database, searchTerm, currentUserID)
 }
 
 // GetFollowStatus checks the follow relationship status between two users
@@ -128,7 +128,34 @@ func (s *UserService) RespondToFollowRequest(followerID, followingID int, accept
 	// Send notification if accepted
 	if accept {
 		accepter, _ := db.GetUserByID(s.database, followingID)
-		notify.FollowAccepted(followerID, followingID, accepter.Username)
+		if accepter != nil {
+			notify.FollowAccepted(followerID, followingID, accepter.Username)
+
+			// If accepter has private profile, auto-follow back to enable messaging
+			// This creates mutual follows for private profiles when accepting
+			if !accepter.IsPublicProfile {
+				// Check if accepter is already following the requester
+				existingStatus, _ := db.CheckFollowStatus(s.database, followingID, followerID)
+				if existingStatus == "none" {
+					// Auto-follow back (status will be 'accepted' since requester likely has private profile too)
+					follower, _ := db.GetUserByID(s.database, followerID)
+					followStatus := "accepted"
+					if follower != nil && !follower.IsPublicProfile {
+						followStatus = "pending" // If both are private, this would be pending
+					}
+
+					// Create the reverse follow relationship
+					_ = db.CreateFollow(s.database, followingID, followerID, followStatus)
+
+					// Notify the original requester about being followed back
+					if followStatus == "accepted" {
+						notify.NewFollower(followerID, followingID, accepter.Username)
+					} else {
+						notify.FollowRequest(followerID, followingID, accepter.Username)
+					}
+				}
+			}
+		}
 	}
 
 	return nil

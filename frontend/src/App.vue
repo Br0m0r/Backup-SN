@@ -1,7 +1,7 @@
 <template>
   <div v-if="isAuthenticated" class="neon-shell">
     <header class="neon-header">
-      <div class="brand" role="button" tabindex="0" @click="switchToFeed">
+      <div class="brand" role="button" tabindex="0" @click="goToFeed">
         <span class="pulse-dot"></span>
         <span>Neon Connex</span>
       </div>
@@ -26,147 +26,34 @@
       </div>
     </header>
 
-    <main class="content" v-if="currentScreen === 'feed'">
-      <section class="main-panel">
-        <div class="filters-row">
-          <button
-            v-for="option in filterOptions"
-            :key="option.id"
-            :class="['filter-btn', { active: activeView === option.id }]"
-            @click="activeView = option.id"
-          >
-            <span :class="['icon', option.icon]" />
-            {{ option.label }}
-          </button>
-        </div>
-        <div v-if="activeView === 'search'" class="search-pane">
-          <div class="search-input">
-            <span class="icon icon-search" />
-            <input v-model="searchQuery" placeholder="Search creators, groups, events..." />
-          </div>
-          <div class="suggestions">
-            <p>Suggested connections</p>
-            <div class="suggestion-card" v-for="user in filteredSuggestions" :key="user.handle">
-              <div class="user">
-                <img :src="user.avatar" alt="" />
-                <div>
-                  <strong>{{ user.name }}</strong>
-                  <small>{{ user.handle }}</small>
-                </div>
-              </div>
-              <button class="ghost">Follow</button>
-            </div>
-          </div>
-        </div>
-
-        <TransitionGroup name="post" tag="div" class="post-stack" v-else>
-          <article class="post-card" v-for="post in currentFeed" :key="post.id">
-            <header>
-              <div class="author">
-                <img :src="post.avatar" alt="" />
-                <div>
-                  <strong>{{ post.author }}</strong>
-                  <small>{{ post.time }} · {{ post.privacy }}</small>
-                </div>
-              </div>
-              <button class="ghost">•••</button>
-            </header>
-            <p>{{ post.body }}</p>
-          </article>
-        </TransitionGroup>
-      </section>
+    <!-- Routed content when authenticated -->
+    <main class="content">
+      <router-view />
     </main>
-
-    <section v-else class="profile-wrapper">
-      <ProfileView @back="switchToFeed" />
-    </section>
 
     <!-- Chat Component - Fixed at bottom right -->
     <Chat />
   </div>
 
+  <!-- Routed content when not authenticated -->
   <div v-else class="auth-gate">
-    <AuthView @authenticated="handleAuthSuccess" />
+    <router-view />
   </div>
 </template>
 
 <script setup>
 import { computed, onMounted, ref } from 'vue';
-import ProfileView from './pages/ProfileView.vue';
-import AuthView from './pages/AuthView.vue';
+import { useRouter } from 'vue-router';
 import Chat from './components/Chat.vue';
 import SuggestedUsers from './components/SuggestedUsers.vue';
 import Notifications from './components/Notifications.vue';
 import { clearUser, getToken, isAuthenticated as hasSession, restoreSession } from './stores/auth';
 import { logoutUser } from './services/authService';
 
-const activeView = ref('public');
+const router = useRouter();
 const profileOpen = ref(false);
 const searchOpen = ref(false);
-const searchQuery = ref('');
-const currentScreen = ref('feed');
-const isFeedPrivate = ref(false);
 const isAuthenticated = computed(() => hasSession());
-
-const filterOptions = [
-  { id: 'public', label: 'Public', icon: 'icon-globe' },
-  { id: 'private', label: 'Private', icon: 'icon-home' },
-  { id: 'search', label: 'Search', icon: 'icon-search' },
-];
-
-const publicFeed = [
-  {
-    id: 'pub-1',
-    author: 'Astra Pierce',
-    avatar: 'https://placehold.co/80x80/191b2c/fff?text=AP',
-    time: '3m ago',
-    privacy: 'Public',
-    body: 'Dropped a new neon UI kit inspired by orbital sunsets. Thoughts?',
-    tags: ['neon', 'design', 'ux'],
-  },
-  {
-    id: 'pub-2',
-    author: 'Pulse Lab',
-    avatar: 'https://placehold.co/80x80/11121f/fff?text=PL',
-    time: '22m ago',
-    privacy: 'Public',
-    body: 'Hosting a micro-hack this Friday. Build a glowing social widget in 2 hours.',
-    tags: ['event', 'hack'],
-  },
-];
-
-const privateFeed = [
-  {
-    id: 'prv-1',
-    author: 'Echo Lane',
-    avatar: 'https://placehold.co/80x80/211f3a/fff?text=EL',
-    time: '5m ago',
-    privacy: 'Inner Circle',
-    body: 'Beta testing the new follower graph with selective visibility.',
-    tags: ['beta', 'followers'],
-  },
-  {
-    id: 'prv-2',
-    author: 'Solar Alley',
-    avatar: 'https://placehold.co/80x80/1a1c2f/fff?text=SA',
-    time: '1h ago',
-    privacy: 'Mutuals',
-    body: 'Designing onboarding for private profiles. Need thoughts on invite flows.',
-    tags: ['ux', 'privacy'],
-  },
-];
-
-const suggestions = [
-  { name: 'Neon District', handle: '@neond', avatar: 'https://placehold.co/56x56/15162a/fff?text=ND' },
-  { name: 'Circuit Club', handle: '@circuit', avatar: 'https://placehold.co/56x56/181931/fff?text=CC' },
-  { name: 'Glitch Bloom', handle: '@glitch', avatar: 'https://placehold.co/56x56/121325/fff?text=GB' },
-];
-
-const currentFeed = computed(() => (activeView.value === 'private' ? privateFeed : publicFeed));
-const filteredSuggestions = computed(() => {
-  if (!searchQuery.value) return suggestions;
-  return suggestions.filter((user) => user.name.toLowerCase().includes(searchQuery.value.toLowerCase()));
-});
 
 onMounted(() => {
   restoreSession();
@@ -174,36 +61,26 @@ onMounted(() => {
 
 function toggleProfile() {
   profileOpen.value = !profileOpen.value;
-  searchOpen.value = false; // Close search when opening profile
+  searchOpen.value = false;
 }
 
 function toggleSearch() {
   searchOpen.value = !searchOpen.value;
-  profileOpen.value = false; // Close profile when opening search
+  profileOpen.value = false;
 }
 
 function closeSearch() {
   searchOpen.value = false;
 }
 
+function goToFeed() {
+  router.push({ name: 'Feed' });
+  profileOpen.value = false;
+}
+
 function viewProfile() {
-  currentScreen.value = 'profile';
+  router.push({ name: 'Profile' });
   profileOpen.value = false;
-}
-
-function switchToFeed() {
-  currentScreen.value = 'feed';
-  profileOpen.value = false;
-  notificationsOpen.value = false;
-}
-
-function togglePrivacyContext() {
-  isFeedPrivate.value = !isFeedPrivate.value;
-  profileOpen.value = false;
-}
-
-function handleAuthSuccess() {
-  switchToFeed();
 }
 
 async function logout() {
@@ -216,9 +93,8 @@ async function logout() {
     console.error('Failed to logout:', error);
   } finally {
     clearUser();
-    currentScreen.value = 'feed';
     profileOpen.value = false;
-    notificationsOpen.value = false;
+    router.push({ name: 'Auth' });
   }
 }
 </script>

@@ -31,6 +31,7 @@ type Comment struct {
 	Content   string    `json:"content"`
 	ImagePath *string   `json:"image_path,omitempty"`
 	CreatedAt time.Time `json:"created_at"`
+	Author    *Author   `json:"author,omitempty"` // Author information
 }
 
 // PostViewer represents a user who can view an "almost_private" post

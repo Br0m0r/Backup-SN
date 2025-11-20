@@ -28,11 +28,14 @@ type LoginRequest struct {
 
 // RegisterRequest represents the registration request payload
 type RegisterRequest struct {
-	Username  string `json:"username"`
-	Email     string `json:"email"`
-	Password  string `json:"password"`
-	FirstName string `json:"first_name"`
-	LastName  string `json:"last_name"`
+	Username    string  `json:"username"`
+	Email       string  `json:"email"`
+	Password    string  `json:"password"`
+	FirstName   string  `json:"first_name"`
+	LastName    string  `json:"last_name"`
+	DateOfBirth string  `json:"date_of_birth"`
+	Nickname    *string `json:"nickname,omitempty"`
+	AboutMe     *string `json:"about_me,omitempty"`
 }
 
 // AuthResponse represents the authentication response
