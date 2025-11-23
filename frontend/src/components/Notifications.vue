@@ -123,10 +123,11 @@
 import { ref, onMounted, watch } from 'vue'
 import { useNotifications } from '../composables/useNotifications'
 import { getToken } from '../stores/auth'
-import axios from 'axios'
+import { useToast } from '@/composables/useToast'
+import { respondToFollowRequest as respondToFollowRequestService } from '@/services/usersService'
+import { respondToGroupInvite as respondToGroupInviteService } from '@/services/groupsService'
 
-const USERS_API_URL = import.meta.env.VITE_USERS_API_URL || 'http://localhost:8082'
-const GROUPS_API_URL = import.meta.env.VITE_GROUPS_API_URL || 'http://localhost:8084'
+const { error, success } = useToast()
 
 const {
   connected,
@@ -144,17 +145,6 @@ const {
 const showPanel = ref(false)
 const loading = ref(false)
 const processingNotif = ref(null)
-
-// Helper to create authenticated axios instance
-const createAuthClient = (baseURL) => {
-  const token = getToken()
-  return axios.create({
-    baseURL,
-    headers: {
-      Authorization: `Bearer ${token}`
-    }
-  })
-}
 
 function togglePanel() {
   showPanel.value = !showPanel.value
@@ -180,27 +170,22 @@ async function respondToFollowRequest(notif, accept) {
   processingNotif.value = notif.id
   
   try {
-    const client = createAuthClient(USERS_API_URL)
-    const response = await client.post('/follow/respond', {
-      follower_id: notif.related_id,
-      accept: accept
-    })
+    const token = getToken()
+    await respondToFollowRequestService(notif.related_id, accept, token)
 
-    if (response.data.success) {
-      // Mark notification as read
-      markAsRead(notif.id)
-      
-      // Emit event for other components to refresh (e.g., chat contacts)
-      if (accept) {
-        window.dispatchEvent(new CustomEvent('follow-accepted'))
-      }
-      
-      // Show feedback
-      console.log(accept ? 'Follow request accepted' : 'Follow request rejected')
+    // Mark notification as read
+    markAsRead(notif.id)
+    
+    // Emit event for other components to refresh (e.g., chat contacts)
+    if (accept) {
+      window.dispatchEvent(new CustomEvent('follow-accepted'))
     }
-  } catch (error) {
-    console.error('Error responding to follow request:', error)
-    alert('Failed to respond to follow request. Please try again.')
+    
+    // Show feedback
+    success(accept ? 'Follow request accepted' : 'Follow request rejected')
+  } catch (err) {
+    console.error('Error responding to follow request:', err.message)
+    error(err.message || 'Failed to respond to follow request. Please try again.')
   } finally {
     processingNotif.value = null
   }
@@ -210,21 +195,17 @@ async function respondToGroupInvite(notif, accept) {
   processingNotif.value = notif.id
   
   try {
-    const client = createAuthClient(GROUPS_API_URL)
-    const response = await client.post(`/groups/${notif.related_id}/respond`, {
-      accept: accept
-    })
+    const token = getToken()
+    await respondToGroupInviteService(notif.related_id, accept, token)
 
-    if (response.data.success) {
-      // Mark notification as read
-      markAsRead(notif.id)
-      
-      // Show feedback
-      console.log(accept ? 'Group invite accepted' : 'Group invite declined')
-    }
-  } catch (error) {
-    console.error('Error responding to group invite:', error)
-    alert('Failed to respond to group invite. Please try again.')
+    // Mark notification as read
+    markAsRead(notif.id)
+    
+    // Show feedback
+    success(accept ? 'Group invite accepted' : 'Group invite declined')
+  } catch (err) {
+    console.error('Error responding to group invite:', err.message)
+    error(err.message || 'Failed to respond to group invite. Please try again.')
   } finally {
     processingNotif.value = null
   }

@@ -32,6 +32,12 @@ const routes = [
     meta: { requiresAuth: true }
   },
   {
+    path: '/toast-test',
+    name: 'ToastTest',
+    component: () => import('../pages/ToastTest.vue'),
+    meta: { requiresAuth: true }
+  },
+  {
     path: '/:pathMatch(.*)*',
     redirect: '/feed'
   }

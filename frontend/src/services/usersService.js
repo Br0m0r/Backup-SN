@@ -110,3 +110,16 @@ export async function updatePrivacy(isPublic, token) {
   )
   return unwrapResponse(response)
 }
+
+export async function respondToFollowRequest(followerId, accept, token) {
+  const response = await client.post(
+    '/follow/respond',
+    { follower_id: followerId, accept },
+    {
+      headers: {
+        Authorization: `Bearer ${token}`
+      }
+    }
+  )
+  return unwrapResponse(response)
+}

@@ -98,10 +98,11 @@
 <script setup>
 import { ref, computed, onMounted } from 'vue'
 import { getToken } from '../stores/auth'
-import axios from 'axios'
+import { useToast } from '@/composables/useToast'
+import { uploadImage, createPost } from '@/services/postsService'
+import { getFollowers } from '@/services/usersService'
 
-const USERS_API_URL = import.meta.env.VITE_USERS_API_URL || 'http://localhost:8082'
-const POSTS_API_URL = import.meta.env.VITE_POSTS_API_URL || 'http://localhost:8083'
+const { success, error: showError } = useToast()
 
 const emit = defineEmits(['posted'])
 
@@ -138,15 +139,12 @@ async function loadFollowers() {
 
   loadingFollowers.value = true
   try {
-    const response = await axios.get(`${USERS_API_URL}/users/me/followers`, {
-      headers: { Authorization: `Bearer ${token}` }
-    })
-    console.log('Followers response:', response.data)
-    // API returns { success: true, data: { followers: [...], count: N } }
-    followers.value = response.data.data?.followers || []
+    const data = await getFollowers(token)
+    // API returns { followers: [...], count: N }
+    followers.value = data.followers || []
     console.log('Loaded followers:', followers.value)
   } catch (err) {
-    console.warn('Failed to load followers:', err.response?.data || err.message)
+    console.warn('Failed to load followers:', err.message)
     followers.value = [] // Set empty array so private posts still work
   } finally {
     loadingFollowers.value = false
@@ -166,12 +164,14 @@ function handleImageSelect(event) {
   // Validate file type
   const validTypes = ['image/jpeg', 'image/jpg', 'image/png', 'image/gif']
   if (!validTypes.includes(file.type)) {
+    showError('Please select a valid image (JPG, PNG, or GIF)')
     error.value = 'Please select a valid image (JPG, PNG, or GIF)'
     return
   }
 
   // Validate file size (5MB max)
   if (file.size > 5 * 1024 * 1024) {
+    showError('Image must be less than 5MB')
     error.value = 'Image must be less than 5MB'
     return
   }
@@ -201,6 +201,7 @@ async function handleSubmit() {
   const token = getToken()
   if (!token) {
     error.value = 'You must be logged in to post'
+    showError('You must be logged in to post')
     return
   }
 
@@ -212,17 +213,8 @@ async function handleSubmit() {
 
     // Upload image first if present
     if (form.value.image) {
-      const imageFormData = new FormData()
-      imageFormData.append('image', form.value.image)
-
-      const uploadResponse = await axios.post(`${POSTS_API_URL}/upload/image`, imageFormData, {
-        headers: {
-          Authorization: `Bearer ${token}`,
-          'Content-Type': 'multipart/form-data'
-        }
-      })
-
-      imagePath = uploadResponse.data.data.image_path
+      const uploadData = await uploadImage(form.value.image, token)
+      imagePath = uploadData.image_path
     }
 
     // Create post with image path
@@ -237,12 +229,7 @@ async function handleSubmit() {
       postData.viewers = form.value.selectedViewers
     }
 
-    await axios.post(`${POSTS_API_URL}/posts`, postData, {
-      headers: {
-        Authorization: `Bearer ${token}`,
-        'Content-Type': 'application/json'
-      }
-    })
+    await createPost(postData, token)
 
     // Reset form
     form.value = {
@@ -257,10 +244,13 @@ async function handleSubmit() {
       fileInput.value.value = ''
     }
 
+    success('Post created successfully!')
     emit('posted')
   } catch (err) {
     console.error('Failed to create post:', err)
-    error.value = err.response?.data?.error || 'Failed to create post. Please try again.'
+    const errorMessage = err.message || 'Failed to create post. Please try again.'
+    showError(errorMessage)
+    error.value = errorMessage
   } finally {
     submitting.value = false
   }

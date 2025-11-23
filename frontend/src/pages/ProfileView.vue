@@ -264,8 +264,11 @@
 import { computed, ref } from 'vue';
 import { getToken } from '../stores/auth';
 import { updatePrivacy } from '../services/usersService';
+import { useToast } from '@/composables/useToast';
 
 const emit = defineEmits(['back']);
+
+const { error, success } = useToast();
 
 const isPrivate = ref(false);
 const editingSection = ref('');
@@ -390,10 +393,10 @@ async function togglePrivacy() {
     
     // Update local state on success
     isPrivate.value = newPrivacy;
-    console.log(`Privacy updated: ${newPrivacy ? 'Private' : 'Public'}`);
-  } catch (error) {
-    console.error('Failed to update privacy:', error);
-    alert('Failed to update privacy settings. Please try again.');
+    success(`Profile is now ${newPrivacy ? 'Private' : 'Public'}`);
+  } catch (err) {
+    console.error('Failed to update privacy:', err);
+    error('Failed to update privacy settings. Please try again.');
   }
 }
 

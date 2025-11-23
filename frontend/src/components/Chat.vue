@@ -109,7 +109,7 @@
                 :class="{ 'message-sent': msg.sender_id === currentUserId, 'message-received': msg.sender_id !== currentUserId }"
               >
                 <div class="message-bubble">
-                  <img v-if="msg.image_path" :src="`http://localhost:8085${msg.image_path}`" alt="Shared image" class="message-image" />
+                  <img v-if="msg.image_path" :src="getImageUrl(msg.image_path)" alt="Shared image" class="message-image" />
                   <p v-if="msg.content">{{ msg.content }}</p>
                   <span class="message-time">{{ formatMessageTime(msg.created_at || msg.timestamp) }}</span>
                 </div>
@@ -166,10 +166,17 @@
 import { ref, reactive, computed, onMounted, watch, nextTick } from 'vue'
 import { useWebSocket } from '../composables/useWebSocket'
 import { getUser, getToken } from '../stores/auth'
-import axios from 'axios'
 import EmojiPicker from './EmojiPicker.vue'
+import { useToast } from '@/composables/useToast'
+import {
+  getContacts as getContactsService,
+  getChatHistory,
+  uploadImage as uploadImageService,
+  markAsRead as markAsReadService,
+  getImageUrl
+} from '@/services/chatService'
 
-const CHAT_API_URL = import.meta.env.VITE_CHAT_API_URL || 'http://localhost:8085'
+const { error } = useToast()
 
 const { connected, sendMessage: wsSendMessage, on, wsState, connect, disconnect } = useWebSocket()
 
@@ -183,17 +190,6 @@ const chatBodies = ref([])
 const showEmojiPicker = ref({}) // Track emoji picker for each chat
 const selectedImage = ref({}) // Track selected images for each chat
 const imagePreview = ref({}) // Track image previews for each chat
-
-// Helper to create authenticated axios instance
-const createAuthClient = () => {
-  const token = getToken()
-  return axios.create({
-    baseURL: CHAT_API_URL,
-    headers: {
-      Authorization: `Bearer ${token}`
-    }
-  })
-}
 
 // Computed
 const filteredContacts = computed(() => {
@@ -217,13 +213,10 @@ async function loadContacts() {
 
   loading.value = true
   try {
-    const client = createAuthClient()
-    const response = await client.get('/chat/contacts')
-    if (response.data.success) {
-      contacts.value = response.data.data.contacts || []
-    }
-  } catch (error) {
-    console.error('Error loading contacts:', error)
+    const data = await getContactsService(token)
+    contacts.value = data.contacts || []
+  } catch (err) {
+    console.error('Error loading contacts:', err.message)
     // Silently fail - chat feature is optional
     contacts.value = []
   } finally {
@@ -284,14 +277,12 @@ async function openChat(contact) {
 async function loadChatHistory(chat) {
   chat.loadingHistory = true
   try {
-    const client = createAuthClient()
-    const response = await client.get(`/chat/history/${chat.user_id}?limit=50`)
-    if (response.data.success) {
-      chat.messages = response.data.data.messages || []
-      console.log(`Loaded ${chat.messages.length} messages for user ${chat.user_id}`)
-    }
-  } catch (error) {
-    console.error('Error loading chat history:', error)
+    const token = getToken()
+    const data = await getChatHistory(chat.user_id, token, 50)
+    chat.messages = data.messages || []
+    console.log(`Loaded ${chat.messages.length} messages for user ${chat.user_id}`)
+  } catch (err) {
+    console.error('Error loading chat history:', err.message)
     chat.messages = []
   }
   
@@ -345,13 +336,13 @@ function handleImageSelect(userId, event) {
   // Validate file type
   const validTypes = ['image/jpeg', 'image/jpg', 'image/png', 'image/gif']
   if (!validTypes.includes(file.type)) {
-    alert('Invalid file type. Only JPG, PNG, and GIF allowed.')
+    error('Invalid file type. Only JPG, PNG, and GIF allowed.')
     return
   }
 
   // Validate file size (5MB)
   if (file.size > 5 * 1024 * 1024) {
-    alert('File too large. Maximum size is 5MB.')
+    error('File too large. Maximum size is 5MB.')
     return
   }
 
@@ -374,23 +365,13 @@ async function uploadImage(userId) {
   const file = selectedImage.value[userId]
   if (!file) return null
 
-  const formData = new FormData()
-  formData.append('image', file)
-
   try {
-    const client = createAuthClient()
-    const response = await client.post('/upload/image', formData, {
-      headers: {
-        'Content-Type': 'multipart/form-data'
-      }
-    })
-    
-    if (response.data.success) {
-      return response.data.data.image_path
-    }
-  } catch (error) {
-    console.error('Error uploading image:', error)
-    alert('Failed to upload image')
+    const token = getToken()
+    const data = await uploadImageService(file, token)
+    return data.image_path
+  } catch (err) {
+    console.error('Error uploading image:', err.message)
+    error(err.message || 'Failed to upload image')
   }
   return null
 }
@@ -442,10 +423,10 @@ function handleTyping(chat) {
 
 async function markAsRead(userId) {
   try {
-    const client = createAuthClient()
-    await client.post(`/chat/read/${userId}`)
-  } catch (error) {
-    console.error('Error marking as read:', error)
+    const token = getToken()
+    await markAsReadService(userId, token)
+  } catch (err) {
+    console.error('Error marking as read:', err.message)
   }
 }
 

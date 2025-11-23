@@ -84,9 +84,9 @@
 <script setup>
 import { ref, computed, onMounted } from 'vue'
 import { useRouter } from 'vue-router'
-import axios from 'axios'
 import CreatePost from '@/components/CreatePost.vue'
 import { getToken } from '@/stores/auth'
+import { getFeedPosts, searchPosts as searchPostsService } from '@/services/postsService'
 
 const router = useRouter()
 const activeView = ref('feed')
@@ -96,8 +96,6 @@ const searchResults = ref([])
 const loading = ref(false)
 const searchingPosts = ref(false)
 let searchTimeout = null
-
-const POSTS_API_URL = import.meta.env.VITE_POSTS_API_URL || 'http://localhost:8083'
 
 async function loadPosts() {
   loading.value = true
@@ -110,18 +108,11 @@ async function loadPosts() {
       return
     }
 
-    console.log('Loading posts from:', `${POSTS_API_URL}/posts/feed`)
-    const response = await axios.get(`${POSTS_API_URL}/posts/feed`, {
-      headers: {
-        Authorization: `Bearer ${token}`
-      }
-    })
-
-    console.log('Posts response:', response.data)
-    posts.value = response.data.data.posts || []
+    const data = await getFeedPosts(token)
+    posts.value = data.posts || []
     console.log('Loaded posts:', posts.value.length)
   } catch (error) {
-    console.error('Failed to load posts:', error.response?.data || error.message)
+    console.error('Failed to load posts:', error.message)
     posts.value = []
   } finally {
     loading.value = false
@@ -161,6 +152,7 @@ function formatPrivacy(privacy) {
 function getImageUrl(path) {
   if (!path) return ''
   if (path.startsWith('http')) return path
+  const POSTS_API_URL = import.meta.env.VITE_POSTS_API_URL || 'http://localhost:8083'
   return `${POSTS_API_URL}${path}`
 }
 
@@ -180,16 +172,10 @@ async function searchPosts(query) {
       return
     }
 
-    const response = await axios.get(`${POSTS_API_URL}/posts/search`, {
-      params: { q: query },
-      headers: {
-        Authorization: `Bearer ${token}`
-      }
-    })
-
-    searchResults.value = response.data.data.posts || []
+    const data = await searchPostsService(query, token)
+    searchResults.value = data.posts || []
   } catch (error) {
-    console.error('Failed to search posts:', error.response?.data || error.message)
+    console.error('Failed to search posts:', error.message)
     searchResults.value = []
   } finally {
     searchingPosts.value = false

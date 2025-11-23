@@ -33,11 +33,17 @@
 
     <!-- Chat Component - Fixed at bottom right -->
     <Chat />
+    
+    <!-- Toast Notifications - Global -->
+    <ToastContainer />
   </div>
 
   <!-- Routed content when not authenticated -->
   <div v-else class="auth-gate">
     <router-view />
+    
+    <!-- Toast Notifications - Available in auth screens too -->
+    <ToastContainer />
   </div>
 </template>
 
@@ -47,6 +53,7 @@ import { useRouter } from 'vue-router';
 import Chat from './components/Chat.vue';
 import SuggestedUsers from './components/SuggestedUsers.vue';
 import Notifications from './components/Notifications.vue';
+import ToastContainer from './components/ToastContainer.vue';
 import { clearUser, getToken, isAuthenticated as hasSession, restoreSession } from './stores/auth';
 import { logoutUser } from './services/authService';
 
