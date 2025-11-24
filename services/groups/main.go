@@ -9,6 +9,7 @@ import (
 
 	_ "github.com/mattn/go-sqlite3"
 
+	"social-network/services/common/authcache"
 	"social-network/services/groups/handlers"
 	"social-network/services/groups/middleware"
 	"social-network/services/groups/services"
@@ -41,7 +42,8 @@ func main() {
 	}
 
 	// Apply middleware
-	authMiddleware := middleware.AuthMiddleware(authServiceURL)
+	authMiddleware := authcache.AuthMiddleware(authServiceURL)
+	log.Printf("Using simple auth cache with 5-minute TTL")
 
 	// Setup routes
 	mux := http.NewServeMux()

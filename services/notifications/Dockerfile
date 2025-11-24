@@ -12,6 +12,9 @@ COPY go.mod go.sum ./
 # Download dependencies
 RUN go mod download
 
+# Copy shared packages
+COPY services/common/ ./services/common/
+
 # Copy notification service code
 COPY services/notifications/ ./services/notifications/
 
