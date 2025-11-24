@@ -7,10 +7,6 @@ import (
 	"strings"
 )
 
-type contextKey string
-
-const UserIDKey contextKey = "userID"
-
 // CORS middleware
 func CORS(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
@@ -38,13 +34,13 @@ func Logging(next http.Handler) http.Handler {
 
 // GetUserIDFromContext retrieves the user ID from the request context
 func GetUserIDFromContext(r *http.Request) (int, bool) {
-	userID, ok := r.Context().Value(UserIDKey).(int)
+	userID, ok := r.Context().Value("userID").(int)
 	return userID, ok
 }
 
 // SetUserIDInContext sets the user ID in the request context
 func SetUserIDInContext(r *http.Request, userID int) *http.Request {
-	ctx := context.WithValue(r.Context(), UserIDKey, userID)
+	ctx := context.WithValue(r.Context(), "userID", userID)
 	return r.WithContext(ctx)
 }
 

@@ -9,10 +9,6 @@ import (
 	"strings"
 )
 
-type contextKey string
-
-const UserIDKey contextKey = "userID"
-
 // AuthMiddleware verifies the session token with the auth service
 func AuthMiddleware(authServiceURL string) func(http.Handler) http.Handler {
 	return func(next http.Handler) http.Handler {
@@ -72,7 +68,7 @@ func AuthMiddleware(authServiceURL string) func(http.Handler) http.Handler {
 			}
 
 			// Add user ID to context
-			ctx := context.WithValue(r.Context(), UserIDKey, authResp.Data.User.ID)
+			ctx := context.WithValue(r.Context(), "userID", authResp.Data.User.ID)
 			next.ServeHTTP(w, r.WithContext(ctx))
 		})
 	}
@@ -107,7 +103,7 @@ func ExtractToken(r *http.Request) string {
 
 // GetUserIDFromContext retrieves user ID from context
 func GetUserIDFromContext(r *http.Request) (int, bool) {
-	userID, ok := r.Context().Value(UserIDKey).(int)
+	userID, ok := r.Context().Value("userID").(int)
 	return userID, ok
 }
 
