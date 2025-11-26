@@ -2,10 +2,10 @@
   <div class="profile-shell">
     <section class="profile-hero">
       <div class="hero-primary">
-        <img src="https://placehold.co/140x140/161832/fff?text=ME" alt="profile avatar" />
+        <img :src="avatarUrl" alt="profile avatar" />
         <div>
-          <p class="nickname">@neonpilot</p>
-          <h1>Marina Pulse</h1>
+          <p v-if="displayHandle" class="nickname">{{ displayHandle }}</p>
+          <h1>{{ displayName }}</h1>
           <p class="about">
             {{ aboutText }}
           </p>
@@ -73,52 +73,80 @@
     </Transition>
 
     <section class="activity-panel">
-      <div class="activity-body">
-        <div class="post-stack">
-          <article v-for="post in mockPosts" :key="post.id" class="post-card">
-            <header>
-              <strong>{{ post.title }}</strong>
-              <small>{{ post.time }}</small>
-            </header>
-            <p>{{ post.body }}</p>
-          </article>
-        </div>
+      <h2 class="activity-title">Posts</h2>
+      <div class="post-stack">
+        <div v-if="postsLoading" class="loading">Loading posts...</div>
+        <p v-else-if="postsError" class="empty-state">
+          Failed to load posts. {{ postsError }}
+        </p>
+        <p v-else-if="!posts.length" class="empty-state">
+          No posts yet.
+        </p>
+        <article v-else v-for="post in posts" :key="post.id" class="post-card">
+          <header>
+            <div class="author">
+              <div class="avatar">{{ getInitials(post) }}</div>
+              <div>
+                <strong>{{ displayName }}</strong>
+                <small>{{ formatTime(post.created_at) }} · {{ formatPrivacy(post.privacy_level) }}</small>
+              </div>
+            </div>
+            <button class="ghost" @click.stop>•••</button>
+          </header>
+          <h3 v-if="post.title" class="post-title">{{ post.title }}</h3>
+          <p class="post-content">{{ post.content }}</p>
+          <img v-if="post.image_path" :src="getImageUrl(post.image_path)" alt="Post image" class="post-image" />
+        </article>
       </div>
     </section>
 
-    <div v-if="infoMode && editingSection" class="edit-drawer">
-      <div class="drawer-body">
+    <Transition name="side-panel-right">
+      <aside v-if="infoMode && editingSection" class="side-panel editor-panel">
         <header>
-          <h3>Edit {{ currentEdit?.label }}</h3>
-          <button class="icon-btn" @click="closeEditor">
+          <div>
+            <small>Edit field</small>
+            <h3>{{ currentEdit?.label }}</h3>
+          </div>
+          <button class="icon-btn close-btn" aria-label="Close editor" @click="closeEditor">
             ✕
           </button>
         </header>
-        <p>
-          This is a placeholder editor panel. Replace with a real form once backend wiring is ready.
+        <p class="panel-copy">
+          Update your profile info and save. Changes sync to your account immediately.
         </p>
-        <label>
-          <span>{{ currentEdit?.label }}</span>
-          <component
-            :is="currentEdit?.key === 'about' ? 'textarea' : 'input'"
+        <label class="panel-field">
+          <span class="sr-only">{{ currentEdit?.label }}</span>
+          <textarea
+            v-if="currentEdit?.key === 'about'"
             v-model="draftValue"
-            :rows="currentEdit?.key === 'about' ? 5 : undefined"
+            rows="6"
             class="editor-field"
+            :placeholder="currentEdit?.label"
+          />
+          <input
+            v-else
+            v-model="draftValue"
+            type="text"
+            class="editor-field"
+            :placeholder="currentEdit?.label"
           />
         </label>
+        <p v-if="editorError" class="panel-error">{{ editorError }}</p>
         <div class="drawer-actions">
           <button class="ghost" @click="closeEditor">Cancel</button>
-          <button class="cta" @click="saveEditor">Save</button>
+          <button class="cta" :disabled="savingEditor" @click="saveEditor">
+            {{ savingEditor ? 'Saving...' : 'Save' }}
+          </button>
         </div>
-      </div>
-    </div>
+      </aside>
+    </Transition>
 
     <Transition name="side-panel">
       <aside v-if="followersPanelOpen" class="side-panel followers-panel">
         <header>
           <div>
             <small>Followers</small>
-            <h3>{{ mockFollowers.length }} total</h3>
+            <h3>{{ followersTotalDisplay }} total</h3>
           </div>
           <button class="icon-btn close-btn" aria-label="Close followers list" @click="closeFollowersPanel">
             ✕
@@ -134,17 +162,23 @@
           />
         </label>
         <div class="panel-list">
-          <article v-for="user in filteredFollowers" :key="user.handle" class="panel-row">
-            <img :src="user.avatar" :alt="`${user.name} avatar`" />
-            <div>
-              <strong>{{ user.name }}</strong>
-              <small>{{ user.handle }}</small>
-            </div>
-            <button class="ghost mini">View profile</button>
-          </article>
-          <p v-if="!filteredFollowers.length" class="empty-state">
-            No followers match your search.
+          <div v-if="followersLoading" class="loading">Loading followers...</div>
+          <p v-else-if="followersError" class="empty-state">
+            Failed to load followers. {{ followersError }}
           </p>
+          <template v-else>
+            <article v-for="user in filteredFollowers" :key="user.id || user.handle" class="panel-row">
+              <img :src="user.avatar" :alt="`${user.name} avatar`" />
+              <div>
+                <strong>{{ user.name }}</strong>
+                <small>{{ user.handle }}</small>
+              </div>
+              <button class="ghost mini">View profile</button>
+            </article>
+            <p v-if="!filteredFollowers.length" class="empty-state">
+              No followers match your search.
+            </p>
+          </template>
         </div>
       </aside>
     </Transition>
@@ -154,7 +188,7 @@
         <header>
           <div>
             <small>Following</small>
-            <h3>{{ mockFollowing.length }} accounts</h3>
+            <h3>{{ followingTotalDisplay }} accounts</h3>
           </div>
           <button class="icon-btn close-btn" aria-label="Close following list" @click="closeFollowingPanel">
             ✕
@@ -170,17 +204,23 @@
           />
         </label>
         <div class="panel-list">
-          <article v-for="user in filteredFollowing" :key="user.handle" class="panel-row">
-            <img :src="user.avatar" :alt="`${user.name} avatar`" />
-            <div>
-              <strong>{{ user.name }}</strong>
-              <small>{{ user.handle }}</small>
-            </div>
-            <button class="ghost mini">Message</button>
-          </article>
-          <p v-if="!filteredFollowing.length" class="empty-state">
-            No accounts match your search.
+          <div v-if="followingLoading" class="loading">Loading following...</div>
+          <p v-else-if="followingError" class="empty-state">
+            Failed to load following. {{ followingError }}
           </p>
+          <template v-else>
+            <article v-for="user in filteredFollowing" :key="user.id || user.handle" class="panel-row">
+              <img :src="user.avatar" :alt="`${user.name} avatar`" />
+              <div>
+                <strong>{{ user.name }}</strong>
+                <small>{{ user.handle }}</small>
+              </div>
+              <button class="ghost mini">Message</button>
+            </article>
+            <p v-if="!filteredFollowing.length" class="empty-state">
+              No accounts match your search.
+            </p>
+          </template>
         </div>
       </aside>
     </Transition>
@@ -261,16 +301,36 @@
 </template>
 
 <script setup>
-import { computed, ref } from 'vue';
-import { getToken } from '../stores/auth';
-import { updatePrivacy } from '../services/usersService';
-import { useToast } from '@/composables/useToast';
+import { computed, onMounted, ref, watch } from 'vue';
+import { getToken, getUser } from '../stores/auth';
+import { getFollowers, getFollowing, getUserProfile, updatePrivacy, updateProfile } from '../services/usersService';
+import { getUserPosts } from '../services/postsService';
+
+const props = defineProps({
+  id: {
+    type: [String, Number],
+    default: null,
+  },
+});
 
 const emit = defineEmits(['back']);
-
-const { error, success } = useToast();
+const POSTS_API_URL = import.meta.env.VITE_POSTS_API_URL || 'http://localhost:8083';
 
 const isPrivate = ref(false);
+const followerCount = ref(null);
+const followingCount = ref(null);
+const followers = ref([]);
+const followersLoading = ref(false);
+const followersError = ref('');
+const profileUser = ref(null);
+const viewerUserId = ref(null);
+const following = ref([]);
+const followingLoading = ref(false);
+const followingError = ref('');
+const posts = ref([]);
+const postsLoading = ref(false);
+const postsError = ref('');
+const activeProfileId = ref(null);
 const editingSection = ref('');
 const infoMode = ref(false);
 const draftValue = ref('');
@@ -282,13 +342,15 @@ const followerSearch = ref('');
 const followingSearch = ref('');
 const groupSearch = ref('');
 const eventSearch = ref('');
+const editorError = ref('');
+const savingEditor = ref(false);
 
-const stats = [
-  { label: 'Followers', value: '1.3K' },
-  { label: 'Following', value: '402' },
+const stats = computed(() => [
+  { label: 'Followers', value: formatStat(followerCount.value, '0') },
+  { label: 'Following', value: formatStat(followingCount.value, '0') },
   { label: 'Groups', value: '8' },
   { label: 'Events', value: '3' },
-];
+]);
 
 const panelStatLabels = ['Followers', 'Following', 'Groups', 'Events'];
 
@@ -300,31 +362,73 @@ const infoSections = ref([
   { key: 'about', label: 'About Me', value: 'Collecting retro synths & designing social UX.', visible: true },
 ]);
 
-const aboutText = computed(() => infoSections.value.find((section) => section.key === 'about')?.value ?? '');
+const displayHandle = computed(() => {
+  const nicknameSection = getSectionState('nickname');
+  if (nicknameSection.visible) {
+    const nicknameVal = nicknameSection.value || profileUser.value?.nickname || '';
+    if (nicknameVal) {
+      return nicknameVal.startsWith('@') ? nicknameVal : `@${nicknameVal}`;
+    }
 
-const mockPosts = [
-  { id: 'p1', title: 'Private BETA', time: '2h ago', body: 'Rolling out the “almost private” feed filter to my inner circle.' },
-  { id: 'p2', title: 'Group Event', time: '1d ago', body: 'Synthwave Creators meetup this Saturday. RSVP if you are going.' },
-];
+    const username = profileUser.value?.username;
+    if (username) return `@${username}`;
+  }
 
-const mockFollowers = [
-  { name: 'Nova Flux', handle: '@nova', avatar: 'https://placehold.co/64x64/15162a/fff?text=NF' },
-  { name: 'Echo Lane', handle: '@echo', avatar: 'https://placehold.co/64x64/20223c/fff?text=EL' },
-  { name: 'Lumen Rae', handle: '@lumen', avatar: 'https://placehold.co/64x64/181a33/fff?text=LR' },
-];
+  return '';
+});
+
+function getSectionState(key) {
+  return infoSections.value.find((section) => section.key === key) || { value: '', visible: false };
+}
+
+const displayName = computed(() => {
+  const first = getSectionState('firstName');
+  const last = getSectionState('lastName');
+  const nicknameSection = getSectionState('nickname');
+  const parts = [];
+
+  if (first.visible && first.value) parts.push(first.value);
+  if (last.visible && last.value) parts.push(last.value);
+
+  if (parts.length) return parts.join(' ');
+  if (nicknameSection.visible && nicknameSection.value) return nicknameSection.value;
+
+  const user = profileUser.value;
+  if (user) {
+    const fallback = [user.first_name, user.last_name].filter(Boolean);
+    if (fallback.length) return fallback.join(' ');
+    if (user.nickname) return user.nickname;
+    if (user.username) return user.username;
+  }
+
+  return 'Profile';
+});
+
+const avatarUrl = computed(() => {
+  const src = profileUser.value?.avatar_url;
+  return src && src.length ? src : 'https://placehold.co/140x140/161832/fff?text=ME';
+});
+
+const aboutText = computed(() => {
+  const aboutSection = getSectionState('about');
+  if (aboutSection.visible && aboutSection.value) return aboutSection.value;
+  return '';
+});
 
 const filteredFollowers = computed(() => {
   const term = followerSearch.value.trim().toLowerCase();
-  if (!term) return mockFollowers;
-  return mockFollowers.filter((user) => {
+  const list = followers.value || [];
+  if (!term) return list;
+  return list.filter((user) => {
     return [user.name, user.handle].some((field) => field.toLowerCase().includes(term));
   });
 });
 
 const filteredFollowing = computed(() => {
   const term = followingSearch.value.trim().toLowerCase();
-  if (!term) return mockFollowing;
-  return mockFollowing.filter((user) => {
+  const list = following.value || [];
+  if (!term) return list;
+  return list.filter((user) => {
     return [user.name, user.handle].some((field) => field.toLowerCase().includes(term));
   });
 });
@@ -344,11 +448,6 @@ const filteredEvents = computed(() => {
     return [event.title, event.desc, event.location].some((field) => field.toLowerCase().includes(term));
   });
 });
-
-const mockFollowing = [
-  { name: 'Glitch Bloom', handle: '@glitch', avatar: 'https://placehold.co/64x64/161832/fff?text=GB' },
-  { name: 'Circuit Club', handle: '@circuit', avatar: 'https://placehold.co/64x64/101126/fff?text=CC' },
-];
 
 const mockGroups = [
   { title: 'Synthwave Creators', members: 128, desc: 'Designers pushing neon themed UX.' },
@@ -377,6 +476,18 @@ const mockEvents = [
 ];
 
 const currentEdit = computed(() => infoSections.value.find((section) => section.key === editingSection.value));
+const followersTotalDisplay = computed(() =>
+  formatStat(followerCount.value ?? followers.value?.length ?? 0, '0')
+);
+const followingTotalDisplay = computed(() =>
+  formatStat(followingCount.value ?? following.value?.length ?? 0, '0')
+);
+const isOwnProfile = computed(() => {
+  const viewerId = viewerUserId.value || getUser()?.id;
+  const profileId = activeProfileId.value || (props.id ? Number(props.id) : viewerId);
+  if (!viewerId || !profileId) return false;
+  return String(viewerId) === String(profileId);
+});
 
 async function togglePrivacy() {
   const newPrivacy = !isPrivate.value;
@@ -393,10 +504,252 @@ async function togglePrivacy() {
     
     // Update local state on success
     isPrivate.value = newPrivacy;
-    success(`Profile is now ${newPrivacy ? 'Private' : 'Public'}`);
-  } catch (err) {
-    console.error('Failed to update privacy:', err);
-    error('Failed to update privacy settings. Please try again.');
+    console.log(`Privacy updated: ${newPrivacy ? 'Private' : 'Public'}`);
+  } catch (error) {
+    console.error('Failed to update privacy:', error);
+    alert('Failed to update privacy settings. Please try again.');
+  }
+}
+
+function formatCount(value) {
+  if (value === null || value === undefined) return '0';
+  if (value >= 1_000_000) return `${(value / 1_000_000).toFixed(1).replace(/\.0$/, '')}M`;
+  if (value >= 1_000) return `${(value / 1_000).toFixed(1).replace(/\.0$/, '')}K`;
+  return String(value);
+}
+
+function formatStat(value, fallback) {
+  if (value === null || value === undefined) return fallback;
+  return formatCount(value);
+}
+
+function formatTime(timestamp) {
+  if (!timestamp) return '';
+  const date = new Date(timestamp);
+  const now = new Date();
+  const diff = Math.floor((now - date) / 1000);
+  if (diff < 60) return `${diff}s ago`;
+  if (diff < 3600) return `${Math.floor(diff / 60)}m ago`;
+  if (diff < 86400) return `${Math.floor(diff / 3600)}h ago`;
+  return `${Math.floor(diff / 86400)}d ago`;
+}
+
+function getImageUrl(path) {
+  if (!path) return '';
+  if (path.startsWith('http')) return path;
+  return `${POSTS_API_URL}${path}`;
+}
+
+function getInitials(post) {
+  const user = profileUser.value;
+  if (!user) return '??';
+  const first = user.first_name?.[0] || '';
+  const last = user.last_name?.[0] || '';
+  return (first + last).toUpperCase() || user.username?.[0]?.toUpperCase() || '?';
+}
+
+function formatPrivacy(level) {
+  if (level === 'public') return 'Public';
+  if (level === 'private') return 'Private';
+  if (level === 'almost_private') return 'Friends';
+  return level;
+}
+
+function applyUserProfile(user) {
+  profileUser.value = user || null;
+
+  infoSections.value = infoSections.value.map((section) => {
+    switch (section.key) {
+      case 'firstName':
+        return { ...section, value: user?.first_name || '' };
+      case 'lastName':
+        return { ...section, value: user?.last_name || '' };
+      case 'nickname':
+        return { ...section, value: user?.nickname || '' };
+      case 'about':
+        return { ...section, value: user?.about_me || '' };
+      case 'dob':
+        return { ...section, value: user?.date_of_birth || '' };
+      default:
+        return section;
+    }
+  });
+}
+
+function updateSectionValue(key, value) {
+  infoSections.value = infoSections.value.map((section) =>
+    section.key === key ? { ...section, value } : section
+  );
+}
+
+function getSectionValue(key) {
+  const sectionVal = infoSections.value.find((section) => section.key === key)?.value;
+  if (sectionVal !== undefined && sectionVal !== null) return sectionVal;
+
+  // Fallback to profile user in case section state is out of sync
+  const user = profileUser.value || {};
+  switch (key) {
+    case 'firstName':
+      return user.first_name || '';
+    case 'lastName':
+      return user.last_name || '';
+    case 'dob':
+      return user.date_of_birth || '';
+    case 'nickname':
+      return user.nickname || '';
+    case 'about':
+      return user.about_me || '';
+    default:
+      return '';
+  }
+}
+
+function shouldLoadFollowers() {
+  const currentUser = getUser();
+  if (!currentUser?.id) return false;
+  if (props.id === null || props.id === undefined) return true;
+  return String(props.id) === String(currentUser.id);
+}
+
+function shouldLoadFollowing() {
+  const currentUser = getUser();
+  if (!currentUser?.id) return false;
+  if (props.id === null || props.id === undefined) return true;
+  return String(props.id) === String(currentUser.id);
+}
+
+function normalizeFollower(user) {
+  const first = user.first_name || '';
+  const last = user.last_name || '';
+  const name = `${first} ${last}`.trim() || user.username || 'Follower';
+  const handle = user.username ? `@${user.username}` : '@user';
+  return {
+    id: user.id ?? handle,
+    name,
+    handle,
+    avatar: user.avatar_url || 'https://placehold.co/64x64/20223c/fff?text=FF',
+  };
+}
+
+async function loadFollowing() {
+  if (!shouldLoadFollowing()) {
+    following.value = [];
+    followingError.value = 'Following list is available only for your profile.';
+    return;
+  }
+
+  const token = getToken();
+  if (!token) {
+    following.value = [];
+    followingError.value = 'You need to be logged in to load following.';
+    return;
+  }
+
+  followingLoading.value = true;
+  followingError.value = '';
+
+  try {
+    const { following: list = [], count } = await getFollowing(token);
+    following.value = list.map(normalizeFollower);
+    if (count !== undefined && count !== null) {
+      followingCount.value = count;
+    } else {
+      followingCount.value = following.value.length;
+    }
+  } catch (error) {
+    console.error('Failed to load following:', error);
+    followingError.value = error?.message || 'Unable to load following';
+  } finally {
+    followingLoading.value = false;
+  }
+}
+
+async function loadProfileStats() {
+  const token = getToken();
+  const viewerId = getUser()?.id;
+  viewerUserId.value = viewerId || null;
+
+  const targetId = props.id ? Number(props.id) : viewerId;
+  const parsedId = Number(targetId);
+
+  if (!token || !parsedId || Number.isNaN(parsedId)) {
+    console.warn('Cannot load profile stats without auth token and user id.');
+    return;
+  }
+
+  try {
+    const { profile } = await getUserProfile(parsedId, token);
+    applyUserProfile(profile?.user);
+    activeProfileId.value = profile?.user?.id || parsedId;
+    followerCount.value = profile?.follower_count ?? 0;
+    followingCount.value = profile?.following_count ?? 0;
+
+    if (profile?.user?.is_public_profile !== undefined) {
+      isPrivate.value = !profile.user.is_public_profile;
+    }
+
+    await loadProfilePosts();
+  } catch (error) {
+    console.error('Failed to load profile stats:', error);
+  }
+}
+
+async function loadProfilePosts() {
+  const token = getToken();
+  const userId = activeProfileId.value || props.id || getUser()?.id;
+  const targetId = Number(userId);
+
+  if (!token || !targetId || Number.isNaN(targetId)) {
+    posts.value = [];
+    postsError.value = 'Unable to load posts (missing user or token).';
+    return;
+  }
+
+  postsLoading.value = true;
+  postsError.value = '';
+
+  try {
+    const { posts: list = [] } = await getUserPosts(targetId, token);
+    posts.value = list;
+  } catch (error) {
+    console.error('Failed to load profile posts:', error);
+    postsError.value = error?.message || 'Unable to load posts';
+    posts.value = [];
+  } finally {
+    postsLoading.value = false;
+  }
+}
+
+async function loadFollowers() {
+  if (!shouldLoadFollowers()) {
+    followers.value = [];
+    followersError.value = 'Followers list is available only for your profile.';
+    return;
+  }
+
+  const token = getToken();
+  if (!token) {
+    followers.value = [];
+    followersError.value = 'You need to be logged in to load followers.';
+    return;
+  }
+
+  followersLoading.value = true;
+  followersError.value = '';
+
+  try {
+    const { followers: list = [], count } = await getFollowers(token);
+    followers.value = list.map(normalizeFollower);
+    if (count !== undefined && count !== null) {
+      followerCount.value = count;
+    } else {
+      followerCount.value = followers.value.length;
+    }
+  } catch (error) {
+    console.error('Failed to load followers:', error);
+    followersError.value = error?.message || 'Unable to load followers';
+  } finally {
+    followersLoading.value = false;
   }
 }
 
@@ -407,22 +760,109 @@ function toggleVisibility(key) {
 }
 
 function openEditor(key) {
-  if (!infoMode.value) return;
+  if (!infoMode.value || !isOwnProfile.value) return;
+  // Toggle panel closed if clicking the same section while it's already open
+  if (editingSection.value === key) {
+    closeEditor();
+    return;
+  }
   editingSection.value = key;
-  draftValue.value = infoSections.value.find((section) => section.key === key)?.value ?? '';
+  draftValue.value = getSectionValue(key);
+  editorError.value = '';
 }
 
 function closeEditor() {
   editingSection.value = '';
   draftValue.value = '';
+  editorError.value = '';
+  savingEditor.value = false;
 }
 
-function saveEditor() {
-  infoSections.value = infoSections.value.map((section) =>
-    section.key === editingSection.value ? { ...section, value: draftValue.value } : section
-  );
-  closeEditor();
+async function saveEditor() {
+  if (!editingSection.value || savingEditor.value) return;
+
+  const token = getToken();
+  if (!token) {
+    editorError.value = 'You must be logged in to update your profile.';
+    return;
+  }
+
+  const value = draftValue.value;
+  const trimmed = typeof value === 'string' ? value.trim() : value;
+  const payload = {};
+
+  switch (editingSection.value) {
+    case 'firstName':
+      payload.first_name = trimmed;
+      break;
+    case 'lastName':
+      payload.last_name = trimmed;
+      break;
+    case 'dob':
+      payload.date_of_birth = trimmed;
+      break;
+    case 'nickname':
+      payload.nickname = trimmed;
+      break;
+    case 'about':
+      payload.about_me = value;
+      break;
+    default:
+      editorError.value = 'Unsupported field.';
+      return;
+  }
+
+  savingEditor.value = true;
+  editorError.value = '';
+
+  try {
+    const { user } = await updateProfile(payload, token);
+    if (user) {
+      applyUserProfile(user);
+      // refresh draft to reflect saved value in case panel stays open after partial update
+      draftValue.value = getSectionValue(editingSection.value);
+      // also update the specific section immediately using the returned payload
+      switch (editingSection.value) {
+        case 'firstName':
+          updateSectionValue('firstName', user.first_name || '');
+          break;
+        case 'lastName':
+          updateSectionValue('lastName', user.last_name || '');
+          break;
+        case 'dob':
+          updateSectionValue('dob', user.date_of_birth || '');
+          break;
+        case 'nickname':
+          updateSectionValue('nickname', user.nickname || '');
+          break;
+        case 'about':
+          updateSectionValue('about', user.about_me || '');
+          break;
+        default:
+          break;
+      }
+      await loadProfileStats(); // pull latest profile data from backend (counts/visibility/etc.)
+    } else {
+      editorError.value = 'Update failed: no user returned.';
+      savingEditor.value = false;
+      return;
+    }
+    closeEditor();
+  } catch (error) {
+    console.error('Failed to update profile field:', error);
+    editorError.value = error?.response?.data?.error || error?.message || 'Unable to update profile right now.';
+    savingEditor.value = false;
+  }
 }
+
+watch(
+  () => editingSection.value,
+  (key) => {
+    if (!key) return;
+    draftValue.value = getSectionValue(key);
+    editorError.value = '';
+  }
+);
 
 function toggleInfoMode() {
   infoMode.value = !infoMode.value;
@@ -458,11 +898,13 @@ function closeAllPanels() {
 function openFollowersPanel() {
   closeAllPanels();
   followersPanelOpen.value = true;
+  loadFollowers();
 }
 
 function openFollowingPanel() {
   closeAllPanels();
   followingPanelOpen.value = true;
+  loadFollowing();
 }
 
 function openGroupsPanel() {
@@ -494,6 +936,27 @@ function closeEventsPanel() {
   eventsPanelOpen.value = false;
   eventSearch.value = '';
 }
+
+onMounted(() => {
+  if (!props.id) {
+    applyUserProfile(getUser());
+  }
+  loadProfileStats();
+  loadFollowers();
+  loadFollowing();
+});
+
+watch(
+  () => props.id,
+  () => {
+    applyUserProfile(null);
+    loadProfileStats();
+    loadFollowers();
+    loadFollowing();
+    loadProfilePosts();
+    closeAllPanels();
+  }
+);
 </script>
 
 <style scoped>
@@ -722,57 +1185,139 @@ function closeEventsPanel() {
   gap: 1.5rem;
 }
 
-.activity-body .post-card {
-  padding: 1.25rem;
-  border-radius: 1.25rem;
-  border: 1px solid rgba(255, 255, 255, 0.07);
-  background: rgba(10, 12, 22, 0.8);
-  margin-bottom: 1rem;
+.activity-title {
+  margin: 0;
+  font-size: 1.4rem;
+  color: var(--neon-cyan);
 }
 
-.edit-drawer {
+.post-stack {
+  display: flex;
+  flex-direction: column;
+  gap: 1.25rem;
+}
+
+.post-card {
+  padding: 1.5rem;
+  border-radius: 1.25rem;
+  border: 1px solid rgba(255, 255, 255, 0.06);
+  background: rgba(8, 10, 24, 0.8);
+  box-shadow: 0 12px 25px rgba(0, 0, 0, 0.35);
+  backdrop-filter: blur(12px);
+  cursor: pointer;
+  transition: transform 0.2s, box-shadow 0.2s;
+}
+
+.post-card:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 16px 30px rgba(0, 0, 0, 0.4);
+}
+
+.post-card header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 0.85rem;
+}
+
+.author {
+  display: flex;
+  gap: 0.85rem;
+  align-items: center;
+}
+
+.author .avatar {
+  width: 2.75rem;
+  height: 2.75rem;
+  border-radius: 999px;
+  border: 2px solid rgba(255, 255, 255, 0.08);
+  background: linear-gradient(135deg, var(--neon-cyan), var(--neon-pink));
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-weight: 700;
+  font-size: 0.9rem;
+  color: #05060d;
+}
+
+.author small {
+  color: var(--text-muted);
+}
+
+.post-title {
+  font-size: 1.1rem;
+  font-weight: 600;
+  margin: 0 0 0.5rem 0;
+  color: var(--neon-cyan);
+}
+
+.post-content {
+  line-height: 1.6;
+  margin: 0 0 1rem 0;
+  word-wrap: break-word;
+  word-break: break-word;
+  overflow-wrap: break-word;
+  white-space: pre-wrap;
+  max-width: 100%;
+  overflow: hidden;
+}
+
+.post-image {
+  width: 100%;
+  max-height: 500px;
+  object-fit: cover;
+  border-radius: 0.75rem;
+  margin-top: 1rem;
+}
+
+.editor-panel {
   position: fixed;
   top: 0;
-  right: 0;
   bottom: 0;
-  width: min(360px, 80vw);
-  background: rgba(5, 6, 13, 0.7);
-  border-left: 1px solid rgba(255, 255, 255, 0.05);
-  box-shadow: -12px 0 30px rgba(0, 0, 0, 0.25);
-  backdrop-filter: blur(16px);
-  padding: 1.75rem;
-  display: flex;
-  flex-direction: column;
-  gap: 1rem;
-  height: 100%;
+  right: 0;
+  left: auto;
+  width: min(380px, 82vw);
+  border-right: none;
+  border-left: 1px solid rgba(255, 255, 255, 0.08);
+  background: rgba(5, 6, 13, 0.92);
+  box-shadow: -10px 0 30px rgba(0, 0, 0, 0.35);
+  z-index: 31;
 }
 
-.drawer-body {
-  display: flex;
-  flex-direction: column;
-  gap: 1rem;
-  height: 100%;
+.panel-copy {
+  color: var(--text-muted);
+  margin: 0;
 }
 
-.drawer-body .editor-field {
+.panel-field {
   width: 100%;
-  padding: 0.65rem;
-  border-radius: 0.75rem;
+}
+
+.panel-field .editor-field {
+  width: 100%;
+  padding: 0.65rem 0.85rem;
+  border-radius: 0.9rem;
   border: 1px solid rgba(255, 255, 255, 0.2);
-  background: rgba(3, 4, 10, 0.6);
+  background: rgba(8, 9, 20, 0.8);
   color: inherit;
 }
 
-.drawer-body textarea.editor-field {
-  min-height: 140px;
+.panel-field textarea.editor-field {
+  min-height: 160px;
   resize: vertical;
 }
 
+.panel-error {
+  margin: 0;
+  color: var(--neon-pink);
+  font-size: 0.9rem;
+}
+
 .drawer-actions {
-  margin-top: auto;
   display: flex;
   gap: 0.75rem;
   justify-content: flex-end;
+  margin-top: 1rem;
 }
 
 .icon-eye {
@@ -871,6 +1416,16 @@ function closeEventsPanel() {
   background: rgba(7, 8, 18, 0.85);
 }
 
+.editor-panel .panel-field {
+  width: 100%;
+}
+
+.editor-panel .editor-field:focus {
+  outline: none;
+  border-color: var(--neon-cyan);
+  box-shadow: 0 0 0 3px rgba(0, 247, 255, 0.15);
+}
+
 .panel-row img {
   width: 44px;
   height: 44px;
@@ -926,6 +1481,11 @@ function closeEventsPanel() {
   padding: 1rem 0;
 }
 
+.loading {
+  color: var(--text-muted);
+  padding: 0.75rem 0;
+}
+
 .side-panel-enter-active,
 .side-panel-leave-active {
   transition: transform 0.35s ease, opacity 0.3s ease;
@@ -935,6 +1495,26 @@ function closeEventsPanel() {
 .side-panel-leave-to {
   transform: translateX(-100%);
   opacity: 0;
+}
+
+.side-panel-right-enter-active,
+.side-panel-right-leave-active {
+  transition: transform 0.35s ease, opacity 0.3s ease;
+}
+
+.side-panel-right-enter-from,
+.side-panel-right-leave-to {
+  transform: translateX(100%);
+  opacity: 0;
+}
+
+/* Ensure editor panel anchors to the right, overriding default side-panel left positioning */
+.editor-panel {
+  left: auto !important;
+  right: 0 !important;
+  border-left: 1px solid rgba(255, 255, 255, 0.08);
+  border-right: none;
+  box-shadow: -10px 0 30px rgba(0, 0, 0, 0.35);
 }
 
 .sr-only {

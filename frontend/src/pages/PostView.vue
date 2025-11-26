@@ -593,6 +593,9 @@ onMounted(() => {
   background: rgba(255, 255, 255, 0.03);
   color: rgba(255, 255, 255, 0.9);
   transition: all 0.2s;
+  word-wrap: break-word;
+  word-break: break-word;
+  overflow-wrap: break-word;
 }
 
 .edit-post-form textarea:focus {
@@ -670,6 +673,10 @@ onMounted(() => {
   margin-bottom: 20px;
   white-space: pre-wrap;
   word-wrap: break-word;
+  word-break: break-word;
+  overflow-wrap: break-word;
+  max-width: 100%;
+  overflow: hidden;
 }
 
 .post-image {
@@ -732,6 +739,9 @@ onMounted(() => {
   background: rgba(255, 255, 255, 0.03);
   color: rgba(255, 255, 255, 0.9);
   transition: all 0.2s;
+  word-wrap: break-word;
+  word-break: break-word;
+  overflow-wrap: break-word;
 }
 
 .comment-form textarea::placeholder {
@@ -949,6 +959,9 @@ onMounted(() => {
   margin-bottom: 8px;
   background: rgba(255, 255, 255, 0.03);
   color: rgba(255, 255, 255, 0.9);
+  word-wrap: break-word;
+  word-break: break-word;
+  overflow-wrap: break-word;
 }
 
 .edit-comment-form textarea:focus {
@@ -1001,6 +1014,10 @@ onMounted(() => {
   margin: 0;
   white-space: pre-wrap;
   word-wrap: break-word;
+  word-break: break-word;
+  overflow-wrap: break-word;
+  max-width: 100%;
+  overflow: hidden;
 }
 
 .comment-image {

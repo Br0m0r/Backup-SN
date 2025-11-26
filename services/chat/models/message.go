@@ -63,13 +63,14 @@ type WebSocketMessage struct {
 
 // ChatContact represents an available chat contact
 type ChatContact struct {
-	UserID         int    `json:"user_id"`
-	Username       string `json:"username"`
-	FirstName      string `json:"first_name,omitempty"`
-	LastName       string `json:"last_name,omitempty"`
-	Nickname       string `json:"nickname,omitempty"`
-	Avatar         string `json:"avatar,omitempty"`
-	IsOnline       bool   `json:"is_online"`
-	UnreadCount    int    `json:"unread_count"`
-	HasChatHistory bool   `json:"has_chat_history"`
+	UserID           int    `json:"user_id"`
+	Username         string `json:"username"`
+	FirstName        string `json:"first_name,omitempty"`
+	LastName         string `json:"last_name,omitempty"`
+	Nickname         string `json:"nickname,omitempty"`
+	Avatar           string `json:"avatar,omitempty"`
+	IsOnline         bool   `json:"is_online"`
+	UnreadCount      int    `json:"unread_count"`
+	HasChatHistory   bool   `json:"has_chat_history"`
+	IsMessageRequest bool   `json:"is_message_request"` // True if they messaged you but you don't follow them
 }

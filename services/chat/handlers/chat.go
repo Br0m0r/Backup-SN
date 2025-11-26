@@ -186,8 +186,11 @@ func (h *ChatHandlers) SendMessage(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	if req.Content == "" {
-		utils.ErrorResponse(w, "Message content is required", http.StatusBadRequest)
+	// Validate and sanitize message content
+	// Allow empty content since this endpoint is for text-only messages
+	sanitizedContent, err := utils.ValidateMessageContent(req.Content, false)
+	if err != nil {
+		utils.ErrorResponse(w, err.Error(), http.StatusBadRequest)
 		return
 	}
 
@@ -204,11 +207,11 @@ func (h *ChatHandlers) SendMessage(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// Save message
+	// Save message (use sanitized content)
 	msg := &models.Message{
 		SenderID:   userID,
 		ReceiverID: req.ReceiverID,
-		Content:    req.Content,
+		Content:    sanitizedContent,
 		IsRead:     false,
 		CreatedAt:  time.Now(),
 	}
@@ -225,7 +228,7 @@ func (h *ChatHandlers) SendMessage(w http.ResponseWriter, r *http.Request) {
 		MessageID:  msg.ID,
 		SenderID:   userID,
 		ReceiverID: req.ReceiverID,
-		Content:    req.Content,
+		Content:    sanitizedContent,
 		Timestamp:  msg.CreatedAt,
 	}
 	h.hub.broadcast <- wsMsg
@@ -331,8 +334,10 @@ func (h *ChatHandlers) SendGroupMessage(w http.ResponseWriter, r *http.Request) 
 		return
 	}
 
-	if req.Content == "" {
-		utils.ErrorResponse(w, "Message content is required", http.StatusBadRequest)
+	// Validate message content
+	sanitizedContent, err := utils.ValidateMessageContent(req.Content, false)
+	if err != nil {
+		utils.ErrorResponse(w, err.Error(), http.StatusBadRequest)
 		return
 	}
 
@@ -349,11 +354,11 @@ func (h *ChatHandlers) SendGroupMessage(w http.ResponseWriter, r *http.Request) 
 		return
 	}
 
-	// Save message
+	// Save message with sanitized content
 	msg := &models.GroupMessage{
 		GroupID:   groupID,
 		SenderID:  userID,
-		Content:   req.Content,
+		Content:   sanitizedContent,
 		CreatedAt: time.Now(),
 	}
 
@@ -363,13 +368,13 @@ func (h *ChatHandlers) SendGroupMessage(w http.ResponseWriter, r *http.Request) 
 		return
 	}
 
-	// Broadcast via WebSocket to online group members
+	// Broadcast via WebSocket to online group members with sanitized content
 	wsMsg := &models.WebSocketMessage{
 		Type:      "group_message",
 		MessageID: msg.ID,
 		SenderID:  userID,
 		GroupID:   groupID,
-		Content:   req.Content,
+		Content:   sanitizedContent,
 		Timestamp: msg.CreatedAt,
 	}
 	h.hub.broadcast <- wsMsg

@@ -276,7 +276,7 @@ func SearchUsers(db *sql.DB, searchTerm string, currentUserID int) ([]*models.Us
 		  AND u.id != ?
 		  AND u.id NOT IN (
 		    SELECT following_id FROM follows 
-		    WHERE follower_id = ? AND status = 'accepted'
+		    WHERE follower_id = ? AND status IN ('accepted', 'pending')
 		  )
 		LIMIT 50
 	`

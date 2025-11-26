@@ -7,6 +7,7 @@ import (
 	"social-network/services/common/notify"
 	"social-network/services/users/db"
 	"social-network/services/users/models"
+	"social-network/services/users/utils"
 )
 
 // UserService handles user-related business logic
@@ -28,7 +29,41 @@ func (s *UserService) GetProfile(userID int) (*models.User, error) {
 
 // UpdateProfile updates a user's profile
 func (s *UserService) UpdateProfile(userID int, req *models.UpdateProfileRequest) (*models.User, error) {
-	err := db.UpdateUserProfile(s.database, userID, req)
+	// Validate and sanitize first name
+	sanitizedFirstName, err := utils.ValidateName(req.FirstName)
+	if err != nil {
+		return nil, err
+	}
+
+	// Validate and sanitize last name
+	sanitizedLastName, err := utils.ValidateName(req.LastName)
+	if err != nil {
+		return nil, err
+	}
+
+	// Validate and sanitize nickname
+	sanitizedNickname, err := utils.ValidateNickname(req.Nickname)
+	if err != nil {
+		return nil, err
+	}
+
+	// Validate and sanitize about me
+	sanitizedAboutMe, err := utils.ValidateAboutMe(req.AboutMe)
+	if err != nil {
+		return nil, err
+	}
+
+	// Create sanitized request
+	sanitizedReq := &models.UpdateProfileRequest{
+		FirstName:       sanitizedFirstName,
+		LastName:        sanitizedLastName,
+		DateOfBirth:     req.DateOfBirth, // Date format validated by database
+		Nickname:        sanitizedNickname,
+		AboutMe:         sanitizedAboutMe,
+		IsPublicProfile: req.IsPublicProfile,
+	}
+
+	err = db.UpdateUserProfile(s.database, userID, sanitizedReq)
 	if err != nil {
 		return nil, err
 	}

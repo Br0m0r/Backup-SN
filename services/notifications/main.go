@@ -42,8 +42,9 @@ func main() {
 	// Create handlers
 	notifHandlers := handlers.NewNotificationHandlers(database, hub)
 
-	// Create auth middleware
+	// Create auth middleware and rate limiter
 	authMiddleware := authcache.AuthMiddleware(authServiceURL)
+	rateLimiter := middleware.NewRateLimiter()
 	log.Printf("Using simple auth cache with 5-minute TTL")
 
 	// Setup routes
@@ -52,9 +53,9 @@ func main() {
 	// Health check (no auth required)
 	mux.HandleFunc("/health", notifHandlers.HealthCheck)
 
-	// Create notification (no auth required - called by other services)
+	// Create notification (rate limited - called by other services)
 	// In production, you'd want to secure this with API keys or service-to-service auth
-	mux.HandleFunc("/notifications", notifHandlers.CreateNotification)
+	mux.Handle("/notifications", rateLimiter.RateLimit(http.HandlerFunc(notifHandlers.CreateNotification)))
 
 	// Get notifications (auth required)
 	mux.Handle("/notifications/list", authMiddleware(http.HandlerFunc(notifHandlers.GetNotifications)))
@@ -62,14 +63,14 @@ func main() {
 	// Get unread count (auth required)
 	mux.Handle("/notifications/unread-count", authMiddleware(http.HandlerFunc(notifHandlers.GetUnreadCount)))
 
-	// Mark as read (auth required)
-	mux.Handle("/notifications/read/", authMiddleware(http.HandlerFunc(notifHandlers.MarkAsRead)))
+	// Mark as read (auth required + rate limited)
+	mux.Handle("/notifications/read/", authMiddleware(rateLimiter.RateLimit(http.HandlerFunc(notifHandlers.MarkAsRead))))
 
-	// Mark all as read (auth required)
-	mux.Handle("/notifications/read-all", authMiddleware(http.HandlerFunc(notifHandlers.MarkAllAsRead)))
+	// Mark all as read (auth required + rate limited)
+	mux.Handle("/notifications/read-all", authMiddleware(rateLimiter.RateLimit(http.HandlerFunc(notifHandlers.MarkAllAsRead))))
 
-	// Delete notification (auth required)
-	mux.Handle("/notifications/delete/", authMiddleware(http.HandlerFunc(notifHandlers.DeleteNotification)))
+	// Delete notification (auth required + rate limited)
+	mux.Handle("/notifications/delete/", authMiddleware(rateLimiter.RateLimit(http.HandlerFunc(notifHandlers.DeleteNotification))))
 
 	// WebSocket endpoint (auth required via query param)
 	mux.Handle("/ws", authMiddleware(http.HandlerFunc(hub.HandleWebSocket)))

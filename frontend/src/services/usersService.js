@@ -123,3 +123,16 @@ export async function respondToFollowRequest(followerId, accept, token) {
   )
   return unwrapResponse(response)
 }
+
+export async function updateProfile(profileData, token) {
+  const response = await client.put(
+    '/users/me/profile',
+    profileData,
+    {
+      headers: {
+        Authorization: `Bearer ${token}`
+      }
+    }
+  )
+  return unwrapResponse(response)
+}

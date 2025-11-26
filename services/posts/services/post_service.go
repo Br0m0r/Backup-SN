@@ -8,6 +8,7 @@ import (
 	"social-network/services/common/notify"
 	"social-network/services/posts/db"
 	"social-network/services/posts/models"
+	"social-network/services/posts/utils"
 )
 
 // PostService handles business logic for posts
@@ -29,22 +30,34 @@ func (s *PostService) CreatePost(req *models.CreatePostRequest, userID int) (*mo
 		return nil, errors.New("invalid privacy level")
 	}
 
-	// Validate content
-	if req.Content == "" {
-		return nil, errors.New("content is required")
+	// Validate and sanitize content
+	sanitizedContent, err := utils.ValidatePostContent(req.Content, false)
+	if err != nil {
+		return nil, err
 	}
 
-	// Create post
+	// Validate and sanitize title
+	sanitizedTitle, err := utils.ValidateTitle(req.Title)
+	if err != nil {
+		return nil, err
+	}
+
+	// Validate image path
+	if err := utils.ValidateImagePath(req.ImagePath); err != nil {
+		return nil, err
+	}
+
+	// Create post with sanitized content
 	post := &models.Post{
 		UserID:       userID,
-		Title:        req.Title,
-		Content:      req.Content,
+		Title:        sanitizedTitle,
+		Content:      sanitizedContent,
 		ImagePath:    req.ImagePath,
 		PrivacyLevel: req.PrivacyLevel,
 		CreatedAt:    time.Now(),
 	}
 
-	err := db.CreatePost(s.database, post)
+	err = db.CreatePost(s.database, post)
 	if err != nil {
 		return nil, err
 	}
@@ -173,16 +186,22 @@ func (s *PostService) CreateComment(req *models.CreateCommentRequest, userID int
 		return nil, errors.New("access denied: cannot comment on this post")
 	}
 
-	// Validate content
-	if req.Content == "" {
-		return nil, errors.New("content is required")
+	// Validate and sanitize content
+	sanitizedContent, err := utils.ValidatePostContent(req.Content, false)
+	if err != nil {
+		return nil, err
 	}
 
-	// Create comment
+	// Validate image path
+	if err := utils.ValidateImagePath(req.ImagePath); err != nil {
+		return nil, err
+	}
+
+	// Create comment with sanitized content
 	comment := &models.Comment{
 		PostID:    req.PostID,
 		UserID:    userID,
-		Content:   req.Content,
+		Content:   sanitizedContent,
 		ImagePath: req.ImagePath,
 		CreatedAt: time.Now(),
 	}
@@ -196,7 +215,7 @@ func (s *PostService) CreateComment(req *models.CreateCommentRequest, userID int
 	post, err := db.GetPostByID(s.database, req.PostID)
 	if err == nil && post.UserID != userID {
 		// Truncate content for preview
-		preview := req.Content
+		preview := sanitizedContent
 		if len(preview) > 50 {
 			preview = preview[:50] + "..."
 		}

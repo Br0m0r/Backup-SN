@@ -316,6 +316,9 @@ function getAvatarColor(username) {
   font-weight: 600;
   resize: none;
   transition: border-color 0.2s, box-shadow 0.2s;
+  word-wrap: break-word;
+  word-break: break-word;
+  overflow-wrap: break-word;
 }
 
 .title-input:focus {
@@ -340,6 +343,9 @@ textarea {
   font-family: inherit;
   resize: vertical;
   min-height: 100px;
+  word-wrap: break-word;
+  word-break: break-word;
+  overflow-wrap: break-word;
 }
 
 textarea:focus {

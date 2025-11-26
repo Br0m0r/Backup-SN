@@ -151,12 +151,19 @@ func GetConversations(db *sql.DB, userID int) ([]models.Conversation, error) {
 
 // CanChat checks if a user can chat with another user
 // Rules:
+// - If there's existing message history: allow reply (regardless of follow status)
 // - If receiver has public profile: sender must be following receiver (one-way)
 // - If receiver has private profile: BOTH must be following each other (mutual)
 func CanChat(db *sql.DB, senderID, receiverID int) (bool, error) {
 	query := `
 		SELECT 
 			CASE 
+				-- Allow reply if there's existing message history
+				WHEN EXISTS (
+					SELECT 1 FROM messages
+					WHERE (sender_id = ? AND recipient_id = ?)
+					   OR (sender_id = ? AND recipient_id = ?)
+				) THEN 1
 				-- If receiver has public profile, sender just needs to follow them
 				WHEN (SELECT is_public_profile FROM users WHERE id = ?) = 1 
 					AND EXISTS (
@@ -179,6 +186,7 @@ func CanChat(db *sql.DB, senderID, receiverID int) (bool, error) {
 
 	var canChat int
 	err := db.QueryRow(query,
+		senderID, receiverID, receiverID, senderID, // message history check
 		receiverID, senderID, receiverID, // public profile check
 		receiverID, senderID, receiverID, receiverID, senderID). // private profile check
 		Scan(&canChat)
@@ -303,6 +311,7 @@ func GetGroupMembers(db *sql.DB, groupID int) ([]int, error) {
 // GetAvailableContacts retrieves all users the current user can chat with
 // Returns users ordered by: 1) Recent chat activity, 2) Alphabetically
 // Rules:
+// - Users who have messaged you (in last 30 days)
 // - Public profiles: Show if current user is following them
 // - Private profiles: Show only if BOTH users follow each other (mutual)
 func GetAvailableContacts(db *sql.DB, userID int) ([]models.ChatContact, error) {
@@ -324,21 +333,43 @@ func GetAvailableContacts(db *sql.DB, userID int) ([]models.ChatContact, error) 
             (SELECT COUNT(*) 
              FROM messages 
              WHERE sender_id = u.id AND recipient_id = ? AND is_read = 0
-            ) as unread_count
+            ) as unread_count,
+            -- Check if this is a message-only contact (not following)
+            CASE 
+                WHEN NOT EXISTS (
+                    SELECT 1 FROM follows 
+                    WHERE follower_id = ? AND following_id = u.id AND status = 'accepted'
+                ) THEN 1
+                ELSE 0
+            END as is_message_request
         FROM users u
-        -- Current user must be following this contact
-        INNER JOIN follows f1 ON f1.following_id = u.id 
-            AND f1.follower_id = ? 
-            AND f1.status = 'accepted'
         WHERE u.id != ?
-            -- Filter: if contact has private profile, they must also follow back
             AND (
-                u.is_public_profile = 1
-                OR EXISTS (
-                    SELECT 1 FROM follows f2 
-                    WHERE f2.follower_id = u.id 
-                        AND f2.following_id = ? 
-                        AND f2.status = 'accepted'
+                -- Option 1: User who has sent you messages (last 30 days)
+                EXISTS (
+                    SELECT 1 FROM messages
+                    WHERE sender_id = u.id 
+                        AND recipient_id = ?
+                        AND created_at >= datetime('now', '-30 days')
+                )
+                -- Option 2: Current user is following this contact
+                OR (
+                    EXISTS (
+                        SELECT 1 FROM follows f1 
+                        WHERE f1.following_id = u.id 
+                            AND f1.follower_id = ? 
+                            AND f1.status = 'accepted'
+                    )
+                    -- Filter: if contact has private profile, they must also follow back
+                    AND (
+                        u.is_public_profile = 1
+                        OR EXISTS (
+                            SELECT 1 FROM follows f2 
+                            WHERE f2.follower_id = u.id 
+                                AND f2.following_id = ? 
+                                AND f2.status = 'accepted'
+                        )
+                    )
                 )
             )
         ORDER BY 
@@ -353,8 +384,10 @@ func GetAvailableContacts(db *sql.DB, userID int) ([]models.ChatContact, error) 
 	rows, err := db.Query(query,
 		userID, userID, // last_chat_time subquery
 		userID, // unread_count subquery
-		userID, // f1 join (user follows contact)
+		userID, // is_message_request check
 		userID, // WHERE clause (exclude self)
+		userID, // message history check (last 30 days)
+		userID, // f1 (user follows contact)
 		userID) // WHERE EXISTS (mutual follow for private profiles)
 	if err != nil {
 		return nil, err
@@ -365,6 +398,7 @@ func GetAvailableContacts(db *sql.DB, userID int) ([]models.ChatContact, error) 
 	for rows.Next() {
 		var contact models.ChatContact
 		var firstName, lastName, nickname, avatar, lastChatTime sql.NullString
+		var isMessageRequest int
 
 		err := rows.Scan(
 			&contact.UserID,
@@ -375,6 +409,7 @@ func GetAvailableContacts(db *sql.DB, userID int) ([]models.ChatContact, error) 
 			&avatar,
 			&lastChatTime,
 			&contact.UnreadCount,
+			&isMessageRequest,
 		)
 		if err != nil {
 			log.Printf("Error scanning contact: %v", err)
@@ -397,6 +432,7 @@ func GetAvailableContacts(db *sql.DB, userID int) ([]models.ChatContact, error) 
 		if lastChatTime.Valid && lastChatTime.String != "" {
 			contact.HasChatHistory = true
 		}
+		contact.IsMessageRequest = isMessageRequest == 1
 
 		contacts = append(contacts, contact)
 	}

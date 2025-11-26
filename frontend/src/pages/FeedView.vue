@@ -321,6 +321,12 @@ onMounted(() => {
 .post-content {
   line-height: 1.6;
   margin-bottom: 1rem;
+  word-wrap: break-word;
+  word-break: break-word;
+  overflow-wrap: break-word;
+  white-space: pre-wrap;
+  max-width: 100%;
+  overflow: hidden;
 }
 
 .post-image {

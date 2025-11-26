@@ -90,8 +90,8 @@ func main() {
 	mux.Handle("/follow/requests", authMiddleware(http.HandlerFunc(userHandlers.GetPendingFollowRequests)))
 	mux.Handle("/follow/respond", authMiddleware(http.HandlerFunc(userHandlers.RespondToFollowRequest)))
 
-	// Search route (auth required)
-	mux.Handle("/search", authMiddleware(http.HandlerFunc(userHandlers.SearchUsers)))
+	// Search route (auth required + rate limited)
+	mux.Handle("/search", authMiddleware(rateLimiter.RateLimit(http.HandlerFunc(userHandlers.SearchUsers))))
 
 	// User profile by ID route (auth required)
 	// Pattern: /users/:id/profile

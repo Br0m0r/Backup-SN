@@ -44,13 +44,21 @@ export async function uploadImage(imageFile, token) {
 }
 
 export async function createPost(postData, token) {
-  const response = await client.post('/posts', postData, {
-    headers: {
-      Authorization: `Bearer ${token}`
-    }
-  })
+  try {
+    const response = await client.post('/posts', postData, {
+      headers: {
+        Authorization: `Bearer ${token}`
+      }
+    })
 
-  return unwrapResponse(response)
+    return unwrapResponse(response)
+  } catch (error) {
+    // Extract backend error message if available
+    if (error.response?.data?.error) {
+      throw new Error(error.response.data.error)
+    }
+    throw error
+  }
 }
 
 export async function getPost(postId, token) {
@@ -64,13 +72,20 @@ export async function getPost(postId, token) {
 }
 
 export async function updatePost(postId, postData, token) {
-  const response = await client.put(`/posts/${postId}`, postData, {
-    headers: {
-      Authorization: `Bearer ${token}`
-    }
-  })
+  try {
+    const response = await client.put(`/posts/${postId}`, postData, {
+      headers: {
+        Authorization: `Bearer ${token}`
+      }
+    })
 
-  return unwrapResponse(response)
+    return unwrapResponse(response)
+  } catch (error) {
+    if (error.response?.data?.error) {
+      throw new Error(error.response.data.error)
+    }
+    throw error
+  }
 }
 
 export async function deletePost(postId, token) {
@@ -95,23 +110,37 @@ export async function getComments(postId, token) {
 }
 
 export async function createComment(commentData, token) {
-  const response = await client.post('/comments', commentData, {
-    headers: {
-      Authorization: `Bearer ${token}`
-    }
-  })
+  try {
+    const response = await client.post('/comments', commentData, {
+      headers: {
+        Authorization: `Bearer ${token}`
+      }
+    })
 
-  return unwrapResponse(response)
+    return unwrapResponse(response)
+  } catch (error) {
+    if (error.response?.data?.error) {
+      throw new Error(error.response.data.error)
+    }
+    throw error
+  }
 }
 
 export async function updateComment(commentId, commentData, token) {
-  const response = await client.put(`/comments/${commentId}`, commentData, {
-    headers: {
-      Authorization: `Bearer ${token}`
-    }
-  })
+  try {
+    const response = await client.put(`/comments/${commentId}`, commentData, {
+      headers: {
+        Authorization: `Bearer ${token}`
+      }
+    })
 
-  return unwrapResponse(response)
+    return unwrapResponse(response)
+  } catch (error) {
+    if (error.response?.data?.error) {
+      throw new Error(error.response.data.error)
+    }
+    throw error
+  }
 }
 
 export async function deleteComment(commentId, token) {
@@ -143,4 +172,24 @@ export async function searchPosts(searchTerm, token) {
   })
 
   return unwrapResponse(response)
+}
+
+export async function getUserPosts(userId, token) {
+  // Get feed posts and filter by user ID on the frontend
+  const response = await client.get('/posts/feed', {
+    headers: {
+      Authorization: `Bearer ${token}`
+    }
+  })
+
+  const data = unwrapResponse(response)
+  
+  // Filter posts by the target user ID
+  if (data.posts && Array.isArray(data.posts)) {
+    return {
+      posts: data.posts.filter(post => post.user_id === userId)
+    }
+  }
+  
+  return { posts: [] }
 }

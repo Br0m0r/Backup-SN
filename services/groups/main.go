@@ -43,6 +43,7 @@ func main() {
 
 	// Apply middleware
 	authMiddleware := authcache.AuthMiddleware(authServiceURL)
+	rateLimiter := middleware.NewRateLimiter()
 	log.Printf("Using simple auth cache with 5-minute TTL")
 
 	// Setup routes
@@ -51,11 +52,11 @@ func main() {
 	// Health check (no auth required)
 	mux.HandleFunc("/health", handlers.HealthHandler)
 
-	// Group routes
+	// Group routes (auth required + rate limited for write operations)
 	mux.Handle("/groups", authMiddleware(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		switch r.Method {
 		case "POST":
-			groupHandlers.CreateGroup(w, r)
+			rateLimiter.RateLimit(http.HandlerFunc(groupHandlers.CreateGroup)).ServeHTTP(w, r)
 		case "GET":
 			groupHandlers.GetGroups(w, r)
 		default:
@@ -68,11 +69,11 @@ func main() {
 		path := r.URL.Path
 
 		if strings.HasSuffix(path, "/invite") {
-			groupHandlers.InviteMember(w, r)
+			rateLimiter.RateLimit(http.HandlerFunc(groupHandlers.InviteMember)).ServeHTTP(w, r)
 		} else if strings.HasSuffix(path, "/request") {
-			groupHandlers.RequestToJoin(w, r)
+			rateLimiter.RateLimit(http.HandlerFunc(groupHandlers.RequestToJoin)).ServeHTTP(w, r)
 		} else if strings.HasSuffix(path, "/requests/respond") {
-			groupHandlers.RespondToRequest(w, r)
+			rateLimiter.RateLimit(http.HandlerFunc(groupHandlers.RespondToRequest)).ServeHTTP(w, r)
 		} else if strings.HasSuffix(path, "/requests") {
 			groupHandlers.GetPendingRequests(w, r)
 		} else if strings.HasSuffix(path, "/members") {
@@ -86,7 +87,7 @@ func main() {
 		} else if strings.HasSuffix(path, "/messages") {
 			switch r.Method {
 			case "POST":
-				groupHandlers.CreateGroupMessage(w, r)
+				rateLimiter.RateLimit(http.HandlerFunc(groupHandlers.CreateGroupMessage)).ServeHTTP(w, r)
 			case "GET":
 				groupHandlers.GetGroupMessages(w, r)
 			default:
@@ -98,17 +99,17 @@ func main() {
 			case "GET":
 				groupHandlers.GetGroup(w, r)
 			case "PUT":
-				groupHandlers.UpdateGroup(w, r)
+				rateLimiter.RateLimit(http.HandlerFunc(groupHandlers.UpdateGroup)).ServeHTTP(w, r)
 			default:
 				http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
 			}
 		}
 	})))
 
-	// Event routes
+	// Event routes (auth required + rate limited for writes)
 	mux.Handle("/events", authMiddleware(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.Method == "POST" {
-			groupHandlers.CreateEvent(w, r)
+			rateLimiter.RateLimit(http.HandlerFunc(groupHandlers.CreateEvent)).ServeHTTP(w, r)
 		} else {
 			http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
 		}
@@ -116,7 +117,7 @@ func main() {
 
 	mux.Handle("/events/", authMiddleware(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if strings.HasSuffix(r.URL.Path, "/respond") {
-			groupHandlers.RespondToEvent(w, r)
+			rateLimiter.RateLimit(http.HandlerFunc(groupHandlers.RespondToEvent)).ServeHTTP(w, r)
 		} else if r.Method == "GET" {
 			groupHandlers.GetEvent(w, r)
 		} else {

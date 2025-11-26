@@ -35,7 +35,10 @@
             v-for="contact in filteredContacts"
             :key="contact.user_id"
             class="contact-item"
-            :class="{ 'active': isContactActive(contact.user_id) }"
+            :class="{ 
+              'active': isContactActive(contact.user_id),
+              'message-request': contact.is_message_request 
+            }"
             @click="openChat(contact)"
           >
             <div class="contact-avatar">
@@ -43,11 +46,15 @@
                 {{ getInitials(contact) }}
               </div>
               <div v-if="contact.is_online" class="online-indicator"></div>
+              <div v-if="contact.is_message_request" class="message-request-indicator" title="Message request">
+                📩
+              </div>
             </div>
 
             <div class="contact-info">
               <div class="contact-name">
                 {{ getDisplayName(contact) }}
+                <span v-if="contact.is_message_request" class="new-badge">NEW</span>
               </div>
               <div class="contact-status">
                 {{ contact.is_online ? 'Active now' : 'Offline' }}
@@ -85,6 +92,14 @@
             </div>
           </div>
           <div class="chat-header-actions">
+            <button 
+              v-if="chat.is_message_request" 
+              @click.stop="followUserFromChat(chat)" 
+              class="follow-back-btn"
+              title="Follow back"
+            >
+              + Follow
+            </button>
             <button @click.stop="toggleMinimize(chat.user_id)" class="header-btn">
               {{ chat.minimized ? '□' : '_' }}
             </button>
@@ -175,6 +190,7 @@ import {
   markAsRead as markAsReadService,
   getImageUrl
 } from '@/services/chatService'
+import { followUser } from '@/services/usersService'
 
 const { error } = useToast()
 
@@ -255,6 +271,7 @@ async function openChat(contact) {
     nickname: contact.nickname,
     avatar: contact.avatar,
     is_online: contact.is_online,
+    is_message_request: contact.is_message_request || false,
     messages: [],
     messageInput: '',
     minimized: false,
@@ -480,6 +497,30 @@ function formatMessageTime(timestamp) {
   return date.toLocaleDateString()
 }
 
+async function followUserFromChat(chat) {
+  try {
+    const token = getToken()
+    if (!token) return
+
+    await followUser(chat.user_id, token)
+    
+    // Update chat to remove message request badge
+    chat.is_message_request = false
+    
+    // Update contact list
+    const contact = contacts.value.find(c => c.user_id === chat.user_id)
+    if (contact) {
+      contact.is_message_request = false
+    }
+    
+    // Notify other components
+    window.dispatchEvent(new CustomEvent('follow-accepted'))
+  } catch (err) {
+    console.error('Failed to follow user:', err)
+    error(err.message || 'Failed to follow user')
+  }
+}
+
 // Listen for incoming messages
 onMounted(() => {
   // Connect to WebSocket for real-time chat
@@ -508,10 +549,15 @@ onMounted(() => {
       }
       markAsRead(data.sender_id)
     } else {
-      // Update contact unread count
+      // Message from someone not in open chats
       const contact = contacts.value.find(c => c.user_id === data.sender_id)
       if (contact) {
+        // Existing contact - just update unread count
         contact.unread_count = (contact.unread_count || 0) + 1
+      } else {
+        // New contact - reload contact list to show them
+        console.log('New message from unknown contact, reloading contact list')
+        loadContacts()
       }
     }
   })
@@ -684,10 +730,34 @@ watch(() => wsState.onlineUsers, () => {
   border-left-color: var(--neon-cyan);
 }
 
+.contact-item.message-request {
+  border-left-color: rgba(255, 165, 0, 0.6);
+}
+
+.contact-item.message-request:hover {
+  background: rgba(255, 165, 0, 0.08);
+  border-left-color: rgba(255, 165, 0, 0.8);
+}
+
 .contact-avatar {
   position: relative;
   margin-right: 12px;
   flex-shrink: 0;
+}
+
+.message-request-indicator {
+  position: absolute;
+  top: -4px;
+  right: -4px;
+  font-size: 14px;
+  background: rgba(5, 6, 13, 0.95);
+  border-radius: 50%;
+  width: 20px;
+  height: 20px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border: 1px solid rgba(255, 165, 0, 0.5);
 }
 
 .avatar-circle {
@@ -739,6 +809,19 @@ watch(() => wsState.onlineUsers, () => {
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.new-badge {
+  font-size: 9px;
+  font-weight: 700;
+  background: rgba(255, 165, 0, 0.9);
+  color: #05060d;
+  padding: 2px 6px;
+  border-radius: 8px;
+  letter-spacing: 0.5px;
 }
 
 .contact-status {
@@ -830,6 +913,26 @@ watch(() => wsState.onlineUsers, () => {
 .chat-header-actions {
   display: flex;
   gap: 4px;
+  align-items: center;
+}
+
+.follow-back-btn {
+  background: linear-gradient(120deg, var(--neon-cyan), var(--neon-pink));
+  border: none;
+  color: #05060d;
+  padding: 4px 10px;
+  border-radius: 0.75rem;
+  cursor: pointer;
+  font-size: 12px;
+  font-weight: 700;
+  transition: all 0.2s ease;
+  white-space: nowrap;
+  box-shadow: 0 2px 8px rgba(0, 247, 255, 0.3);
+}
+
+.follow-back-btn:hover {
+  transform: translateY(-1px);
+  box-shadow: 0 4px 12px rgba(0, 247, 255, 0.4);
 }
 
 .header-btn {
@@ -925,6 +1028,11 @@ watch(() => wsState.onlineUsers, () => {
   margin: 0 0 4px;
   font-size: 14px;
   line-height: 1.4;
+  word-wrap: break-word;
+  word-break: break-word;
+  overflow-wrap: break-word;
+  white-space: pre-wrap;
+  max-width: 100%;
 }
 
 .message-time {
@@ -1030,6 +1138,9 @@ watch(() => wsState.onlineUsers, () => {
   background: rgba(0, 0, 0, 0.45);
   color: #f8f9ff;
   transition: all 0.2s ease;
+  word-wrap: break-word;
+  word-break: break-word;
+  overflow-wrap: break-word;
 }
 
 .message-input::placeholder {

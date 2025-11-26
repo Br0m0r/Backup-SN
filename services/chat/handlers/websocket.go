@@ -8,6 +8,7 @@ import (
 	"social-network/services/chat/db"
 	"social-network/services/chat/middleware"
 	"social-network/services/chat/models"
+	"social-network/services/chat/utils"
 	"social-network/services/common/notify"
 	"sync"
 	"time"
@@ -258,6 +259,14 @@ func (c *Client) writePump() {
 
 // handleChatMessage processes incoming chat messages
 func (c *Client) handleChatMessage(wsMsg *models.WebSocketMessage) {
+	// Validate message content
+	sanitizedContent, err := utils.ValidateMessageContent(wsMsg.Content, false)
+	if err != nil {
+		log.Printf("Message validation failed: %v", err)
+		c.sendError(err.Error())
+		return
+	}
+
 	// Check if sender can chat with receiver
 	canChat, err := db.CanChat(c.hub.database, c.userID, wsMsg.ReceiverID)
 	if err != nil {
@@ -272,11 +281,11 @@ func (c *Client) handleChatMessage(wsMsg *models.WebSocketMessage) {
 		return
 	}
 
-	// Save message to database
+	// Save message to database with sanitized content
 	msg := &models.Message{
 		SenderID:   c.userID,
 		ReceiverID: wsMsg.ReceiverID,
-		Content:    wsMsg.Content,
+		Content:    sanitizedContent,
 		ImagePath:  wsMsg.ImagePath,
 		IsRead:     false,
 		CreatedAt:  time.Now(),
@@ -288,8 +297,9 @@ func (c *Client) handleChatMessage(wsMsg *models.WebSocketMessage) {
 		return
 	}
 
-	// Update WebSocket message with database ID
+	// Update WebSocket message with database ID and sanitized content
 	wsMsg.MessageID = msg.ID
+	wsMsg.Content = sanitizedContent
 	wsMsg.Type = "message"
 
 	// Broadcast to receiver if online
@@ -337,6 +347,14 @@ func (c *Client) sendError(errMsg string) {
 
 // handleGroupChatMessage processes incoming group chat messages
 func (c *Client) handleGroupChatMessage(wsMsg *models.WebSocketMessage) {
+	// Validate message content
+	sanitizedContent, err := utils.ValidateMessageContent(wsMsg.Content, false)
+	if err != nil {
+		log.Printf("Message validation failed: %v", err)
+		c.sendError(err.Error())
+		return
+	}
+
 	// Check if sender is a member of the group
 	isMember, err := db.IsGroupMember(c.hub.database, wsMsg.GroupID, c.userID)
 	if err != nil {
@@ -351,11 +369,11 @@ func (c *Client) handleGroupChatMessage(wsMsg *models.WebSocketMessage) {
 		return
 	}
 
-	// Save message to database
+	// Save message to database with sanitized content
 	msg := &models.GroupMessage{
 		GroupID:   wsMsg.GroupID,
 		SenderID:  c.userID,
-		Content:   wsMsg.Content,
+		Content:   sanitizedContent,
 		CreatedAt: time.Now(),
 	}
 
@@ -365,8 +383,9 @@ func (c *Client) handleGroupChatMessage(wsMsg *models.WebSocketMessage) {
 		return
 	}
 
-	// Update WebSocket message with database ID
+	// Update WebSocket message with database ID and sanitized content
 	wsMsg.MessageID = msg.ID
+	wsMsg.Content = sanitizedContent
 	wsMsg.Type = "group_message"
 	wsMsg.SenderID = c.userID
 	wsMsg.Timestamp = msg.CreatedAt

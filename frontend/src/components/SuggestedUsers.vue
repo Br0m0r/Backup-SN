@@ -46,11 +46,19 @@
         </div>
         <button
           class="follow-btn"
-          :class="{ following: user.isFollowing }"
+          :class="{ 
+            following: user.isFollowing,
+            pending: user.isPending
+          }"
           @click="toggleFollow(user)"
-          :disabled="user.actionLoading"
+          :disabled="user.actionLoading || user.isPending"
         >
-          {{ user.actionLoading ? '...' : user.isFollowing ? 'Following' : 'Follow' }}
+          {{ 
+            user.actionLoading ? '...' : 
+            user.isPending ? 'Pending' :
+            user.isFollowing ? 'Following' : 
+            'Follow' 
+          }}
         </button>
       </div>
     </div>
@@ -117,12 +125,14 @@ async function performSearch() {
     const response = await searchUsers(query, token)
     const allUsers = response.users || []
     
-    // Limit to 10 results for search
+    // Backend already filters out accepted and pending follows
+    // Just add UI state properties
     suggestedUsers.value = allUsers
       .slice(0, 10)
       .map(user => ({
         ...user,
         isFollowing: false,
+        isPending: false,
         actionLoading: false
       }))
   } catch (err) {
@@ -150,6 +160,7 @@ async function loadSuggestions() {
     const randomLetter = searchLetters[Math.floor(Math.random() * searchLetters.length)]
     const response = await searchUsers(randomLetter, token)
     
+    // Backend already filters out accepted and pending follows
     // Filter and limit to 5 users, randomize order
     const allUsers = response.users || []
     const shuffled = allUsers.sort(() => 0.5 - Math.random())
@@ -159,6 +170,7 @@ async function loadSuggestions() {
       .map(user => ({
         ...user,
         isFollowing: false,
+        isPending: false,
         actionLoading: false
       }))
   } catch (err) {
@@ -171,7 +183,7 @@ async function loadSuggestions() {
 
 async function toggleFollow(user) {
   const token = getToken()
-  if (!token || user.actionLoading) return
+  if (!token || user.actionLoading || user.isPending) return
 
   user.actionLoading = true
 
@@ -179,15 +191,29 @@ async function toggleFollow(user) {
     if (user.isFollowing) {
       await unfollowUser(user.id, token)
       user.isFollowing = false
+      user.isPending = false
     } else {
       await followUser(user.id, token)
-      user.isFollowing = true
+      // After following, mark as pending (will be 'accepted' for public profiles)
+      // The backend handles this automatically
+      user.isPending = true
       // Notify other components (like Chat) that a follow happened
       window.dispatchEvent(new CustomEvent('follow-accepted'))
+      
+      // Remove user from suggestions after following
+      setTimeout(() => {
+        const index = suggestedUsers.value.findIndex(u => u.id === user.id)
+        if (index > -1) {
+          suggestedUsers.value.splice(index, 1)
+        }
+      }, 1000)
     }
   } catch (err) {
     console.error('Follow action failed:', err)
     error.value = err.message || 'Failed to update follow status'
+    // Reset states on error
+    user.isFollowing = false
+    user.isPending = false
   } finally {
     user.actionLoading = false
   }
@@ -396,6 +422,18 @@ async function toggleFollow(user) {
 .follow-btn.following:hover:not(:disabled) {
   border-color: rgba(255, 0, 230, 0.5);
   color: var(--neon-pink);
+}
+
+.follow-btn.pending {
+  background: transparent;
+  border: 1px solid rgba(255, 165, 0, 0.4);
+  color: rgba(255, 165, 0, 0.9);
+  box-shadow: none;
+  cursor: not-allowed;
+}
+
+.follow-btn.pending:hover {
+  border-color: rgba(255, 165, 0, 0.6);
 }
 
 .ghost.mini {

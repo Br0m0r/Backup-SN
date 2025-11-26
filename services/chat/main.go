@@ -44,8 +44,9 @@ func main() {
 	chatHandlers := handlers.NewChatHandlers(database, hub)
 	uploadHandlers := handlers.NewUploadHandlers()
 
-	// Create auth middleware
+	// Create auth middleware and rate limiter
 	authMiddleware := authcache.AuthMiddleware(authServiceURL)
+	rateLimiter := middleware.NewRateLimiter()
 	log.Printf("Using simple auth cache with 5-minute TTL")
 
 	// Setup routes
@@ -57,19 +58,19 @@ func main() {
 	// WebSocket endpoint (auth required via query param or header)
 	mux.Handle("/ws", authMiddleware(http.HandlerFunc(hub.HandleWebSocket)))
 
-	// REST endpoints (auth required)
+	// REST endpoints (auth required + rate limited for write operations)
 	mux.Handle("/chat/conversations", authMiddleware(http.HandlerFunc(chatHandlers.GetConversations)))
 	mux.Handle("/chat/contacts", authMiddleware(http.HandlerFunc(chatHandlers.GetAvailableContacts)))
 	mux.Handle("/chat/history/", authMiddleware(http.HandlerFunc(chatHandlers.GetChatHistory)))
-	mux.Handle("/chat/read/", authMiddleware(http.HandlerFunc(chatHandlers.MarkAsRead)))
+	mux.Handle("/chat/read/", authMiddleware(rateLimiter.RateLimit(http.HandlerFunc(chatHandlers.MarkAsRead))))
 	mux.Handle("/chat/unread", authMiddleware(http.HandlerFunc(chatHandlers.GetUnreadCount)))
-	mux.Handle("/chat/send", authMiddleware(http.HandlerFunc(chatHandlers.SendMessage)))
+	mux.Handle("/chat/send", authMiddleware(rateLimiter.RateLimit(http.HandlerFunc(chatHandlers.SendMessage))))
 
-	// Upload endpoints (auth required)
-	mux.Handle("/upload/image", authMiddleware(http.HandlerFunc(uploadHandlers.UploadImage)))
-	mux.Handle("/upload/delete", authMiddleware(http.HandlerFunc(uploadHandlers.DeleteImage)))
+	// Upload endpoints (auth required + rate limited)
+	mux.Handle("/upload/image", authMiddleware(rateLimiter.RateLimit(http.HandlerFunc(uploadHandlers.UploadImage))))
+	mux.Handle("/upload/delete", authMiddleware(rateLimiter.RateLimit(http.HandlerFunc(uploadHandlers.DeleteImage))))
 
-	// Group chat endpoints (auth required)
+	// Group chat endpoints (auth required + rate limited for writes)
 	mux.Handle("/chat/groups/", authMiddleware(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		// Route based on path pattern
 		path := r.URL.Path
@@ -78,7 +79,7 @@ func main() {
 			chatHandlers.GetGroupChatHistory(w, r)
 		} else if strings.HasSuffix(path, "/messages") {
 			if r.Method == "POST" {
-				chatHandlers.SendGroupMessage(w, r)
+				rateLimiter.RateLimit(http.HandlerFunc(chatHandlers.SendGroupMessage)).ServeHTTP(w, r)
 			} else {
 				http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
 			}
