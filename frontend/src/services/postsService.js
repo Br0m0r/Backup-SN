@@ -193,3 +193,13 @@ export async function getUserPosts(userId, token) {
   
   return { posts: [] }
 }
+
+export async function getGroupPosts(groupId, token) {
+  const response = await client.get(`/posts/group/${groupId}`, {
+    headers: {
+      Authorization: `Bearer ${token}`
+    }
+  })
+
+  return unwrapResponse(response)
+}

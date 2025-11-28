@@ -23,8 +23,8 @@
         maxlength="5000"
       ></textarea>
 
-      <!-- Privacy selector -->
-      <div class="privacy-selector">
+      <!-- Privacy selector (hidden for group posts) -->
+      <div v-if="!props.groupId" class="privacy-selector">
         <label>
           <span class="icon icon-lock"></span>
           <select v-model="form.privacy" @change="handlePrivacyChange">
@@ -35,8 +35,8 @@
         </label>
       </div>
 
-      <!-- Follower selector for private posts -->
-      <div v-if="form.privacy === 'private'" class="follower-selector">
+      <!-- Follower selector for private posts (hidden for group posts) -->
+      <div v-if="!props.groupId && form.privacy === 'private'" class="follower-selector">
         <p class="selector-label">Choose who can see this post:</p>
         <div v-if="loadingFollowers" class="loading">Loading followers...</div>
         <div v-else-if="followers.length === 0" class="no-followers">
@@ -104,7 +104,14 @@ import { getFollowers } from '@/services/usersService'
 
 const { success, error: showError } = useToast()
 
-const emit = defineEmits(['posted'])
+const props = defineProps({
+  groupId: {
+    type: Number,
+    default: null
+  }
+})
+
+const emit = defineEmits(['posted', 'postCreated'])
 
 const form = ref({
   title: '',
@@ -123,14 +130,18 @@ const error = ref('')
 
 const canSubmit = computed(() => {
   if (!form.value.content.trim()) return false
-  if (form.value.privacy === 'private' && form.value.selectedViewers.length === 0) {
+  // Only check privacy/viewers if not in a group
+  if (!props.groupId && form.value.privacy === 'private' && form.value.selectedViewers.length === 0) {
     return false
   }
   return true
 })
 
 onMounted(() => {
-  loadFollowers()
+  // Only load followers if not posting to a group
+  if (!props.groupId) {
+    loadFollowers()
+  }
 })
 
 async function loadFollowers() {
@@ -221,12 +232,21 @@ async function handleSubmit() {
     const postData = {
       title: form.value.title.trim() || null,
       content: form.value.content.trim(),
-      privacy_level: form.value.privacy,
       image_path: imagePath
     }
 
-    if (form.value.privacy === 'private' && form.value.selectedViewers.length > 0) {
-      postData.viewers = form.value.selectedViewers
+    // Add group_id if posting to a group
+    if (props.groupId) {
+      postData.group_id = props.groupId
+      // Group posts are always public (visible to group members only)
+      postData.privacy_level = 'public'
+    } else {
+      // Only include privacy settings for non-group posts
+      postData.privacy_level = form.value.privacy
+      
+      if (form.value.privacy === 'private' && form.value.selectedViewers.length > 0) {
+        postData.viewers = form.value.selectedViewers
+      }
     }
 
     await createPost(postData, token)
@@ -246,6 +266,7 @@ async function handleSubmit() {
 
     success('Post created successfully!')
     emit('posted')
+    emit('postCreated')
   } catch (err) {
     console.error('Failed to create post:', err)
     const errorMessage = err.message || 'Failed to create post. Please try again.'

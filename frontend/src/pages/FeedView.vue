@@ -1,7 +1,12 @@
 <template>
-  <section class="main-panel">
-    <!-- Create Post Component -->
-    <CreatePost @posted="loadPosts" />
+  <div class="feed-layout">
+    <!-- Left Sidebar - Suggested Groups -->
+    <SuggestedGroups />
+
+    <!-- Main Feed Content -->
+    <section class="main-panel">
+      <!-- Create Post Component -->
+      <CreatePost @posted="loadPosts" />
     
     <div class="filters-row">
       <button
@@ -41,7 +46,7 @@
           <article class="post-card" v-for="post in searchResults" :key="post.id" @click="navigateToPost(post.id)">
             <header>
               <div class="author">
-                <div class="avatar">{{ getInitials(post.author) }}</div>
+                <img :src="getUserAvatarUrl(post.author, 48)" :alt="`${post.author.first_name} ${post.author.last_name}`" class="avatar" />
                 <div>
                   <strong>{{ post.author.first_name }} {{ post.author.last_name }}</strong>
                   <small>{{ formatTime(post.created_at) }} · {{ formatPrivacy(post.privacy_level) }}</small>
@@ -65,7 +70,7 @@
       <article v-else class="post-card" v-for="post in posts" :key="post.id" @click="navigateToPost(post.id)">
         <header>
           <div class="author">
-            <div class="avatar">{{ getInitials(post.author) }}</div>
+            <img :src="getUserAvatarUrl(post.author, 48)" :alt="`${post.author.first_name} ${post.author.last_name}`" class="avatar" />
             <div>
               <strong>{{ post.author.first_name }} {{ post.author.last_name }}</strong>
               <small>{{ formatTime(post.created_at) }} · {{ formatPrivacy(post.privacy_level) }}</small>
@@ -79,15 +84,19 @@
       </article>
     </TransitionGroup>
   </section>
+  </div>
 </template>
 
 <script setup>
 import { ref, computed, onMounted } from 'vue'
 import { useRouter } from 'vue-router'
 import CreatePost from '@/components/CreatePost.vue'
+import SuggestedGroups from '@/components/SuggestedGroups.vue'
 import { getToken } from '@/stores/auth'
 import { getFeedPosts, searchPosts as searchPostsService } from '@/services/postsService'
+import { useAvatar } from '@/composables/useAvatar'
 
+const { getUserAvatarUrl } = useAvatar()
 const router = useRouter()
 const activeView = ref('feed')
 const searchQuery = ref('')
@@ -153,7 +162,9 @@ function getImageUrl(path) {
   if (!path) return ''
   if (path.startsWith('http')) return path
   const POSTS_API_URL = import.meta.env.VITE_POSTS_API_URL || 'http://localhost:8083'
-  return `${POSTS_API_URL}${path}`
+  // Add leading slash if path doesn't have one
+  const fullPath = path.startsWith('/') ? path : `/${path}`
+  return `${POSTS_API_URL}${fullPath}`
 }
 
 async function searchPosts(query) {
@@ -211,6 +222,14 @@ onMounted(() => {
 </script>
 
 <style scoped>
+.feed-layout {
+  display: flex;
+  gap: 1.5rem;
+  max-width: 1400px;
+  width: 100%;
+  margin: 0 auto;
+}
+
 .main-panel {
   width: min(900px, 100%);
   border-radius: 1.5rem;
@@ -439,6 +458,12 @@ onMounted(() => {
 @media (max-width: 960px) {
   .main-panel {
     width: 100%;
+  }
+}
+
+@media (max-width: 1200px) {
+  .feed-layout {
+    flex-direction: column;
   }
 }
 

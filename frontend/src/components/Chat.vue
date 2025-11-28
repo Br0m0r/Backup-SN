@@ -42,9 +42,7 @@
             @click="openChat(contact)"
           >
             <div class="contact-avatar">
-              <div class="avatar-circle" :style="{ backgroundColor: getAvatarColor(contact.username) }">
-                {{ getInitials(contact) }}
-              </div>
+              <img :src="getUserAvatarUrl(contact, 48)" :alt="getDisplayName(contact)" class="avatar-circle" />
               <div v-if="contact.is_online" class="online-indicator"></div>
               <div v-if="contact.is_message_request" class="message-request-indicator" title="Message request">
                 📩
@@ -81,9 +79,7 @@
         <div class="chat-header" @click="toggleMinimize(chat.user_id)">
           <div class="chat-header-left">
             <div class="chat-avatar">
-              <div class="avatar-circle small" :style="{ backgroundColor: getAvatarColor(chat.username) }">
-                {{ getInitials(chat) }}
-              </div>
+              <img :src="getUserAvatarUrl(chat, 40)" :alt="getDisplayName(chat)" class="avatar-circle small" />
               <div v-if="chat.is_online" class="online-indicator small"></div>
             </div>
             <div class="chat-title">
@@ -183,6 +179,7 @@ import { useWebSocket } from '../composables/useWebSocket'
 import { getUser, getToken } from '../stores/auth'
 import EmojiPicker from './EmojiPicker.vue'
 import { useToast } from '@/composables/useToast'
+import { useAvatar } from '@/composables/useAvatar'
 import {
   getContacts as getContactsService,
   getChatHistory,
@@ -193,6 +190,7 @@ import {
 import { followUser } from '@/services/usersService'
 
 const { error } = useToast()
+const { getUserAvatarUrl } = useAvatar()
 
 const { connected, sendMessage: wsSendMessage, on, wsState, connect, disconnect } = useWebSocket()
 

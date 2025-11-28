@@ -126,7 +126,7 @@ export async function respondToFollowRequest(followerId, accept, token) {
 
 export async function updateProfile(profileData, token) {
   const response = await client.put(
-    '/users/me/profile',
+    '/users/me',
     profileData,
     {
       headers: {
@@ -134,5 +134,28 @@ export async function updateProfile(profileData, token) {
       }
     }
   )
+  return unwrapResponse(response)
+}
+
+export async function uploadAvatar(file, token) {
+  const formData = new FormData()
+  formData.append('avatar', file)
+
+  const response = await axios.post(`${USERS_BASE_URL}/upload/avatar`, formData, {
+    headers: {
+      'Authorization': `Bearer ${token}`,
+      'Content-Type': 'multipart/form-data'
+    }
+  })
+  return unwrapResponse(response)
+}
+
+export async function deleteAvatar(avatarPath, token) {
+  const response = await client.delete('/upload/avatar', {
+    params: { path: avatarPath },
+    headers: {
+      Authorization: `Bearer ${token}`
+    }
+  })
   return unwrapResponse(response)
 }

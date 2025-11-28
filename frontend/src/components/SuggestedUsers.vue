@@ -35,7 +35,7 @@
       <div v-for="user in suggestedUsers" :key="user.id" class="user-card">
         <div class="user-info">
           <img
-            :src="user.avatar_path || `https://placehold.co/48x48/191b2c/fff?text=${user.username.charAt(0).toUpperCase()}`"
+            :src="getUserAvatarUrl(user, 48)"
             :alt="user.username"
             class="user-avatar"
           />
@@ -73,7 +73,9 @@
 import { onMounted, ref, watch } from 'vue'
 import { getToken } from '../stores/auth'
 import { searchUsers, followUser, unfollowUser } from '../services/usersService'
+import { useAvatar } from '../composables/useAvatar'
 
+const { getUserAvatarUrl } = useAvatar()
 const suggestedUsers = ref([])
 const loading = ref(false)
 const error = ref('')

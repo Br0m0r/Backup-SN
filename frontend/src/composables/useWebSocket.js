@@ -96,6 +96,9 @@ export function useWebSocket() {
         connecting.value = false
         reconnectAttempts.value = 0
         
+        // Expose WebSocket globally for direct access (needed for group messages)
+        window._chatWebSocket = ws.value
+        
         // Start heartbeat to keep connection alive
         startHeartbeat()
         
@@ -134,6 +137,9 @@ export function useWebSocket() {
         connecting.value = false
         ws.value = null
         
+        // Clear global reference
+        window._chatWebSocket = null
+        
         stopHeartbeat()
         
         // Attempt to reconnect if not a normal closure
@@ -159,6 +165,9 @@ export function useWebSocket() {
    */
   function disconnect() {
     console.log('🔌 Disconnecting Chat WebSocket...')
+    
+    // Clear global reference
+    window._chatWebSocket = null
     
     // Clear timers
     stopHeartbeat()
@@ -363,6 +372,36 @@ export function useWebSocket() {
   }
 
   /**
+   * Send a group message
+   * 
+   * @param {number} groupId - Group ID to send message to
+   * @param {string} content - Message content
+   * @returns {boolean} - Success status
+   */
+  function sendGroupMessage(groupId, content) {
+    if (!ws.value || !connected.value) {
+      console.error('Cannot send group message: not connected')
+      return false
+    }
+
+    try {
+      const message = {
+        type: 'group_message',
+        group_id: groupId,
+        content: content,
+        timestamp: new Date().toISOString()
+      }
+
+      ws.value.send(JSON.stringify(message))
+      console.log('✉️ Group message sent:', message)
+      return true
+    } catch (error) {
+      console.error('Failed to send group message:', error)
+      return false
+    }
+  }
+
+  /**
    * Register event listener
    * 
    * WHY EVENT SYSTEM:
@@ -446,6 +485,7 @@ export function useWebSocket() {
     connect,
     disconnect,
     sendMessage,
+    sendGroupMessage,
     sendTyping,
     on,
     off

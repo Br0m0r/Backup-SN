@@ -32,7 +32,7 @@
       <!-- Main Post -->
       <article class="main-post">
         <div class="post-author">
-          <div class="avatar">{{ getInitials(post.author) }}</div>
+          <img :src="getUserAvatarUrl(post.author, 48)" :alt="`${post.author.first_name} ${post.author.last_name}`" class="avatar" />
           <div class="author-info">
             <strong>{{ post.author.first_name }} {{ post.author.last_name }}</strong>
             <small>{{ formatTime(post.created_at) }} · {{ formatPrivacy(post.privacy_level) }}</small>
@@ -72,7 +72,7 @@
         </div>
         <div v-else class="comments-list">
           <article v-for="comment in comments" :key="comment.id" class="comment">
-            <div class="avatar">{{ getInitials(comment.author) }}</div>
+            <img :src="getUserAvatarUrl(comment.author, 48)" :alt="`${comment.author.first_name} ${comment.author.last_name}`" class="avatar" />
             <div class="comment-content">
               <!-- Edit Comment Form -->
               <div v-if="editingComment === comment.id" class="edit-comment-form">
@@ -141,6 +141,7 @@ import { ref, onMounted, computed } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { getToken, getUser } from '@/stores/auth'
 import { useToast } from '@/composables/useToast'
+import { useAvatar } from '@/composables/useAvatar'
 import {
   getPost,
   getComments,
@@ -155,6 +156,7 @@ import {
 const route = useRoute()
 const router = useRouter()
 const { success, error: showError } = useToast()
+const { getUserAvatarUrl } = useAvatar()
 
 const post = ref(null)
 const comments = ref([])
@@ -339,7 +341,9 @@ function getImageUrl(path) {
   if (!path) return ''
   if (path.startsWith('http')) return path
   const POSTS_API_URL = import.meta.env.VITE_POSTS_API_URL || 'http://localhost:8083'
-  return `${POSTS_API_URL}${path}`
+  // Add leading slash if path doesn't have one
+  const fullPath = path.startsWith('/') ? path : `/${path}`
+  return `${POSTS_API_URL}${fullPath}`
 }
 
 // Post edit/delete functions

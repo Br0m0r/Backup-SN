@@ -74,24 +74,6 @@
                   {{ processingNotif === notif.id ? '...' : '✗ Reject' }}
                 </button>
               </div>
-
-              <!-- Action Buttons for Group Invites -->
-              <div v-else-if="notif.type === 'group_invite' && !notif.is_read" class="notif-actions">
-                <button
-                  @click="respondToGroupInvite(notif, true)"
-                  class="accept-btn"
-                  :disabled="processingNotif === notif.id"
-                >
-                  {{ processingNotif === notif.id ? '...' : '✓ Accept' }}
-                </button>
-                <button
-                  @click="respondToGroupInvite(notif, false)"
-                  class="reject-btn"
-                  :disabled="processingNotif === notif.id"
-                >
-                  {{ processingNotif === notif.id ? '...' : '✗ Decline' }}
-                </button>
-              </div>
             </div>
 
             <!-- Mark as Read / Delete -->
@@ -125,7 +107,6 @@ import { useNotifications } from '../composables/useNotifications'
 import { getToken } from '../stores/auth'
 import { useToast } from '@/composables/useToast'
 import { respondToFollowRequest as respondToFollowRequestService } from '@/services/usersService'
-import { respondToGroupInvite as respondToGroupInviteService } from '@/services/groupsService'
 
 const { error, success } = useToast()
 
@@ -186,26 +167,6 @@ async function respondToFollowRequest(notif, accept) {
   } catch (err) {
     console.error('Error responding to follow request:', err.message)
     error(err.message || 'Failed to respond to follow request. Please try again.')
-  } finally {
-    processingNotif.value = null
-  }
-}
-
-async function respondToGroupInvite(notif, accept) {
-  processingNotif.value = notif.id
-  
-  try {
-    const token = getToken()
-    await respondToGroupInviteService(notif.related_id, accept, token)
-
-    // Mark notification as read
-    markAsRead(notif.id)
-    
-    // Show feedback
-    success(accept ? 'Group invite accepted' : 'Group invite declined')
-  } catch (err) {
-    console.error('Error responding to group invite:', err.message)
-    error(err.message || 'Failed to respond to group invite. Please try again.')
   } finally {
     processingNotif.value = null
   }

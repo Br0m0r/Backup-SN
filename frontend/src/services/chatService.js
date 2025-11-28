@@ -75,5 +75,7 @@ export async function markAsRead(userId, token) {
 export function getImageUrl(path) {
   if (!path) return ''
   if (path.startsWith('http')) return path
-  return `${CHAT_API_URL}${path}`
+  // Add leading slash if path doesn't have one
+  const fullPath = path.startsWith('/') ? path : `/${path}`
+  return `${CHAT_API_URL}${fullPath}`
 }

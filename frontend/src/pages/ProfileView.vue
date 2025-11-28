@@ -2,7 +2,19 @@
   <div class="profile-shell">
     <section class="profile-hero">
       <div class="hero-primary">
-        <img :src="avatarUrl" alt="profile avatar" />
+        <div class="avatar-container">
+          <img :src="avatarUrl" alt="profile avatar" class="profile-avatar" />
+          <button class="avatar-upload-btn" @click="triggerAvatarUpload" title="Change avatar">
+            <span>📷</span>
+          </button>
+          <input 
+            ref="avatarInput" 
+            type="file" 
+            accept="image/*" 
+            @change="handleAvatarChange" 
+            style="display: none"
+          />
+        </div>
         <div>
           <p v-if="displayHandle" class="nickname">{{ displayHandle }}</p>
           <h1>{{ displayName }}</h1>
@@ -303,9 +315,11 @@
 <script setup>
 import { computed, onMounted, ref, watch } from 'vue';
 import { getToken, getUser } from '../stores/auth';
-import { getFollowers, getFollowing, getUserProfile, updatePrivacy, updateProfile } from '../services/usersService';
+import { getFollowers, getFollowing, getUserProfile, updatePrivacy, updateProfile, uploadAvatar } from '../services/usersService';
 import { getUserPosts } from '../services/postsService';
+import { useToast } from '@/composables/useToast';
 
+const { success, error: showError } = useToast();
 const props = defineProps({
   id: {
     type: [String, Number],
@@ -344,6 +358,8 @@ const groupSearch = ref('');
 const eventSearch = ref('');
 const editorError = ref('');
 const savingEditor = ref(false);
+const avatarInput = ref(null);
+const uploadingAvatar = ref(false);
 
 const stats = computed(() => [
   { label: 'Followers', value: formatStat(followerCount.value, '0') },
@@ -405,8 +421,15 @@ const displayName = computed(() => {
 });
 
 const avatarUrl = computed(() => {
-  const src = profileUser.value?.avatar_url;
-  return src && src.length ? src : 'https://placehold.co/140x140/161832/fff?text=ME';
+  const avatarPath = profileUser.value?.avatar_path;
+  if (!avatarPath) return 'https://placehold.co/140x140/161832/fff?text=ME';
+  
+  // If it's already a full URL, return it
+  if (avatarPath.startsWith('http')) return avatarPath;
+  
+  // Otherwise, construct the full URL to the users service
+  const USERS_API_URL = import.meta.env.VITE_USERS_API_URL || 'http://localhost:8082';
+  return `${USERS_API_URL}${avatarPath}`;
 });
 
 const aboutText = computed(() => {
@@ -537,7 +560,9 @@ function formatTime(timestamp) {
 function getImageUrl(path) {
   if (!path) return '';
   if (path.startsWith('http')) return path;
-  return `${POSTS_API_URL}${path}`;
+  // Add leading slash if path doesn't have one
+  const fullPath = path.startsWith('/') ? path : `/${path}`;
+  return `${POSTS_API_URL}${fullPath}`;
 }
 
 function getInitials(post) {
@@ -553,6 +578,49 @@ function formatPrivacy(level) {
   if (level === 'private') return 'Private';
   if (level === 'almost_private') return 'Friends';
   return level;
+}
+
+function triggerAvatarUpload() {
+  avatarInput.value?.click();
+}
+
+async function handleAvatarChange(event) {
+  const file = event.target.files?.[0];
+  if (!file) return;
+
+  // Validate file type
+  if (!file.type.startsWith('image/')) {
+    showError('Please select an image file');
+    return;
+  }
+
+  // Validate file size (max 10MB)
+  if (file.size > 10 * 1024 * 1024) {
+    showError('File size must be less than 10MB');
+    return;
+  }
+
+  uploadingAvatar.value = true;
+  try {
+    const token = getToken();
+    const result = await uploadAvatar(file, token);
+    
+    // Update profile user with new avatar path
+    if (profileUser.value) {
+      profileUser.value.avatar_path = result.avatar_path;
+    }
+    
+    success('Avatar updated successfully!');
+  } catch (error) {
+    console.error('Failed to upload avatar:', error);
+    showError(error.message || 'Failed to upload avatar');
+  } finally {
+    uploadingAvatar.value = false;
+    // Reset input
+    if (avatarInput.value) {
+      avatarInput.value.value = '';
+    }
+  }
 }
 
 function applyUserProfile(user) {
@@ -984,13 +1052,45 @@ watch(
   min-width: 260px;
 }
 
-.hero-primary img {
+.avatar-container {
+  position: relative;
   width: 140px;
   height: 140px;
+}
+
+.profile-avatar {
+  width: 100%;
+  height: 100%;
   border-radius: 1.5rem;
   border: 2px solid rgba(255, 255, 255, 0.15);
   object-fit: cover;
   box-shadow: 0 10px 30px rgba(0, 0, 0, 0.45);
+}
+
+.avatar-upload-btn {
+  position: absolute;
+  bottom: 8px;
+  right: 8px;
+  width: 40px;
+  height: 40px;
+  border-radius: 50%;
+  border: 2px solid rgba(255, 255, 255, 0.2);
+  background: rgba(5, 6, 13, 0.9);
+  color: var(--neon-cyan);
+  font-size: 1.2rem;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  transition: all 0.2s ease;
+  backdrop-filter: blur(10px);
+}
+
+.avatar-upload-btn:hover {
+  background: rgba(0, 247, 255, 0.15);
+  border-color: var(--neon-cyan);
+  box-shadow: 0 0 15px rgba(0, 247, 255, 0.4);
+  transform: scale(1.05);
 }
 
 .hero-primary h1 {
