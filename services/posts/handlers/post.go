@@ -317,6 +317,40 @@ func (h *PostHandlers) GetComments(w http.ResponseWriter, r *http.Request) {
 	})
 }
 
+// GetGroupPosts handles GET /posts/group/:id requests
+func (h *PostHandlers) GetGroupPosts(w http.ResponseWriter, r *http.Request) {
+	if r.Method != "GET" {
+		utils.ErrorResponse(w, "Method not allowed", http.StatusMethodNotAllowed)
+		return
+	}
+
+	// Get authenticated user ID from context (for future access control)
+	_, ok := middleware.GetUserIDFromContext(r)
+	if !ok {
+		utils.ErrorResponse(w, "Unauthorized", http.StatusUnauthorized)
+		return
+	}
+
+	// Extract group ID from URL path
+	path := strings.TrimPrefix(r.URL.Path, "/posts/group/")
+	groupID, err := strconv.Atoi(path)
+	if err != nil {
+		utils.ErrorResponse(w, "Invalid group ID", http.StatusBadRequest)
+		return
+	}
+
+	posts, err := h.postService.GetGroupPosts(groupID)
+	if err != nil {
+		log.Printf("GetGroupPosts error for group %d: %v", groupID, err)
+		utils.ErrorResponse(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
+
+	utils.SuccessResponse(w, map[string]interface{}{
+		"posts": posts,
+	})
+}
+
 // HealthHandler handles GET /health requests
 func HealthHandler(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Content-Type", "application/json")

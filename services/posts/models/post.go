@@ -4,17 +4,18 @@ import "time"
 
 // Author represents post author information
 type Author struct {
-	ID        int    `json:"id"`
-	Username  string `json:"username"`
-	FirstName string `json:"first_name"`
-	LastName  string `json:"last_name"`
-	Avatar    string `json:"avatar,omitempty"`
+	ID         int    `json:"id"`
+	Username   string `json:"username"`
+	FirstName  string `json:"first_name"`
+	LastName   string `json:"last_name"`
+	AvatarPath string `json:"avatar_path,omitempty"`
 }
 
 // Post represents a user post
 type Post struct {
 	ID           int       `json:"id"`
 	UserID       int       `json:"user_id"`
+	GroupID      *int      `json:"group_id,omitempty"`
 	Title        *string   `json:"title,omitempty"`
 	Content      string    `json:"content"`
 	ImagePath    *string   `json:"image_path,omitempty"`
@@ -44,6 +45,7 @@ type PostViewer struct {
 
 // CreatePostRequest represents the request to create a post
 type CreatePostRequest struct {
+	GroupID      *int    `json:"group_id,omitempty"`
 	Title        *string `json:"title,omitempty"`
 	Content      string  `json:"content"`
 	ImagePath    *string `json:"image_path,omitempty"`

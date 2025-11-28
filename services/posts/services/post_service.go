@@ -50,6 +50,7 @@ func (s *PostService) CreatePost(req *models.CreatePostRequest, userID int) (*mo
 	// Create post with sanitized content
 	post := &models.Post{
 		UserID:       userID,
+		GroupID:      req.GroupID,
 		Title:        sanitizedTitle,
 		Content:      sanitizedContent,
 		ImagePath:    req.ImagePath,
@@ -239,4 +240,9 @@ func (s *PostService) GetComments(postID, userID int) ([]*models.Comment, error)
 
 	// Get comments
 	return db.GetCommentsByPostID(s.database, postID)
+}
+
+// GetGroupPosts retrieves all posts for a specific group
+func (s *PostService) GetGroupPosts(groupID int) ([]*models.Post, error) {
+	return db.GetPostsByGroupID(s.database, groupID)
 }

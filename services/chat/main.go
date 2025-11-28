@@ -70,6 +70,10 @@ func main() {
 	mux.Handle("/upload/image", authMiddleware(rateLimiter.RateLimit(http.HandlerFunc(uploadHandlers.UploadImage))))
 	mux.Handle("/upload/delete", authMiddleware(rateLimiter.RateLimit(http.HandlerFunc(uploadHandlers.DeleteImage))))
 
+	// Static file server for uploaded images (no auth required for viewing)
+	fs := http.FileServer(http.Dir("./uploads"))
+	mux.Handle("/uploads/", http.StripPrefix("/uploads/", fs))
+
 	// Group chat endpoints (auth required + rate limited for writes)
 	mux.Handle("/chat/groups/", authMiddleware(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		// Route based on path pattern

@@ -288,3 +288,30 @@ func (h *GroupHandlers) GetMembers(w http.ResponseWriter, r *http.Request) {
 
 	utils.SendJSON(w, http.StatusOK, members)
 }
+
+func (h *GroupHandlers) LeaveGroup(w http.ResponseWriter, r *http.Request) {
+
+	if r.Method != http.MethodDelete {
+		utils.SendError(w, http.StatusMethodNotAllowed, "Method not allowed")
+		return
+	}
+	userID, ok := middleware.GetUserIDFromContext(r)
+	if !ok {
+		utils.SendError(w, http.StatusUnauthorized, "User not authenticated")
+		return
+	}
+	// Extract group ID from path
+	path := strings.TrimPrefix(r.URL.Path, "/groups/")
+	path = strings.TrimSuffix(path, "/leave")
+	groupID, err := strconv.Atoi(path)
+	if err != nil {
+		utils.SendError(w, http.StatusBadRequest, "Invalid group ID")
+		return
+	}
+	if err := h.service.LeaveGroup(groupID, userID); err != nil {
+		log.Printf("Error leaving group: %v", err)
+		utils.SendError(w, http.StatusForbidden, err.Error())
+		return
+	}
+	utils.SendJSON(w, http.StatusOK, map[string]string{"message": "Left group successfully"})
+}

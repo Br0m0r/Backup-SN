@@ -68,7 +68,7 @@ type ChatContact struct {
 	FirstName        string `json:"first_name,omitempty"`
 	LastName         string `json:"last_name,omitempty"`
 	Nickname         string `json:"nickname,omitempty"`
-	Avatar           string `json:"avatar,omitempty"`
+	AvatarPath       string `json:"avatar_path,omitempty"`
 	IsOnline         bool   `json:"is_online"`
 	UnreadCount      int    `json:"unread_count"`
 	HasChatHistory   bool   `json:"has_chat_history"`

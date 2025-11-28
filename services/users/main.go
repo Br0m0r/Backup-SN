@@ -33,6 +33,7 @@ func main() {
 
 	// Initialize handlers
 	userHandlers := handlers.NewUserHandlers(userService)
+	uploadHandlers := handlers.NewUploadHandlers(userService)
 
 	// Get auth service URL from environment
 	authServiceURL := os.Getenv("AUTH_SERVICE_URL")
@@ -50,6 +51,22 @@ func main() {
 
 	// Health check (no auth required)
 	mux.HandleFunc("/health", handlers.HealthHandler)
+
+	// Static file server for uploaded avatars
+	fs := http.FileServer(http.Dir("./uploads"))
+	mux.Handle("/uploads/", http.StripPrefix("/uploads/", fs))
+
+	// Upload routes (auth required + rate limited)
+	mux.Handle("/upload/avatar", authMiddleware(rateLimiter.RateLimit(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		switch r.Method {
+		case "POST":
+			uploadHandlers.UploadAvatar(w, r)
+		case "DELETE":
+			uploadHandlers.DeleteAvatar(w, r)
+		default:
+			http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
+		}
+	}))))
 
 	// Profile routes (auth required)
 	mux.Handle("/profile/", authMiddleware(http.HandlerFunc(userHandlers.GetProfile)))

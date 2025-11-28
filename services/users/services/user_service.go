@@ -308,3 +308,10 @@ func (s *UserService) GetUserStats(userID int) (map[string]int, error) {
 		"following": len(following),
 	}, nil
 }
+
+// UpdateUserAvatarPath updates only the avatar_path field for a user
+func (s *UserService) UpdateUserAvatarPath(userID int, avatarPath string) error {
+	query := `UPDATE users SET avatar_path = ? WHERE id = ?`
+	_, err := s.database.Exec(query, avatarPath, userID)
+	return err
+}

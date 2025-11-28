@@ -83,8 +83,8 @@ func (h *UploadHandlers) UploadImage(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// Return the file path
-	relativePath := fmt.Sprintf("/uploads/posts/%s", filename)
+	// Return the file path (relative, without leading slash)
+	relativePath := fmt.Sprintf("uploads/posts/%s", filename)
 	utils.SuccessResponse(w, map[string]string{
 		"image_path": relativePath,
 		"filename":   filename,

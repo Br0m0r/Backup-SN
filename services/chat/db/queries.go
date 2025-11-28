@@ -427,7 +427,7 @@ func GetAvailableContacts(db *sql.DB, userID int) ([]models.ChatContact, error) 
 			contact.Nickname = nickname.String
 		}
 		if avatar.Valid {
-			contact.Avatar = avatar.String
+			contact.AvatarPath = avatar.String
 		}
 		if lastChatTime.Valid && lastChatTime.String != "" {
 			contact.HasChatHistory = true

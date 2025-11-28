@@ -8,10 +8,10 @@ import (
 // CreatePost inserts a new post into the database
 func CreatePost(db *sql.DB, post *models.Post) error {
 	query := `
-		INSERT INTO posts (user_id, title, content, image_path, privacy_level, created_at)
-		VALUES (?, ?, ?, ?, ?, ?)
+		INSERT INTO posts (user_id, group_id, title, content, image_path, privacy_level, created_at)
+		VALUES (?, ?, ?, ?, ?, ?, ?)
 	`
-	result, err := db.Exec(query, post.UserID, post.Title, post.Content, post.ImagePath, post.PrivacyLevel, post.CreatedAt)
+	result, err := db.Exec(query, post.UserID, post.GroupID, post.Title, post.Content, post.ImagePath, post.PrivacyLevel, post.CreatedAt)
 	if err != nil {
 		return err
 	}
@@ -28,18 +28,20 @@ func CreatePost(db *sql.DB, post *models.Post) error {
 func GetPostByID(db *sql.DB, postID int) (*models.Post, error) {
 	query := `
 		SELECT 
-			p.id, p.user_id, p.title, p.content, p.image_path, p.privacy_level, p.created_at,
+			p.id, p.user_id, p.group_id, p.title, p.content, p.image_path, p.privacy_level, p.created_at,
 			u.username, u.first_name, u.last_name, u.avatar_path
 		FROM posts p
 		INNER JOIN users u ON p.user_id = u.id
 		WHERE p.id = ?
 	`
 	post := &models.Post{}
+	var groupID sql.NullInt64
 	var title, imagePath, username, firstName, lastName, avatar sql.NullString
 
 	err := db.QueryRow(query, postID).Scan(
 		&post.ID,
 		&post.UserID,
+		&groupID,
 		&title,
 		&post.Content,
 		&imagePath,
@@ -55,6 +57,10 @@ func GetPostByID(db *sql.DB, postID int) (*models.Post, error) {
 	}
 
 	// Handle nullable fields
+	if groupID.Valid {
+		gid := int(groupID.Int64)
+		post.GroupID = &gid
+	}
 	if title.Valid {
 		post.Title = &title.String
 	}
@@ -64,11 +70,11 @@ func GetPostByID(db *sql.DB, postID int) (*models.Post, error) {
 
 	// Add author information
 	post.Author = &models.Author{
-		ID:        post.UserID,
-		Username:  username.String,
-		FirstName: firstName.String,
-		LastName:  lastName.String,
-		Avatar:    avatar.String,
+		ID:         post.UserID,
+		Username:   username.String,
+		FirstName:  firstName.String,
+		LastName:   lastName.String,
+		AvatarPath: avatar.String,
 	}
 
 	return post, nil
@@ -95,9 +101,9 @@ func DeletePost(db *sql.DB, postID int) error {
 // GetPostsByUserID retrieves all posts by a specific user (for user's own profile)
 func GetPostsByUserID(db *sql.DB, userID int) ([]*models.Post, error) {
 	query := `
-		SELECT id, user_id, title, content, image_path, privacy_level, created_at
+		SELECT id, user_id, group_id, title, content, image_path, privacy_level, created_at
 		FROM posts
-		WHERE user_id = ?
+		WHERE user_id = ? AND group_id IS NULL
 		ORDER BY created_at DESC
 	`
 	rows, err := db.Query(query, userID)
@@ -109,18 +115,36 @@ func GetPostsByUserID(db *sql.DB, userID int) ([]*models.Post, error) {
 	var posts []*models.Post
 	for rows.Next() {
 		post := &models.Post{}
+		var groupID sql.NullInt64
+		var title, content, imagePath sql.NullString
+		var privacyLevel string
 		err := rows.Scan(
 			&post.ID,
 			&post.UserID,
-			&post.Title,
-			&post.Content,
-			&post.ImagePath,
-			&post.PrivacyLevel,
+			&groupID,
+			&title,
+			&content,
+			&imagePath,
+			&privacyLevel,
 			&post.CreatedAt,
 		)
 		if err != nil {
 			return nil, err
 		}
+		if groupID.Valid {
+			gid := int(groupID.Int64)
+			post.GroupID = &gid
+		}
+		if title.Valid {
+			post.Title = &title.String
+		}
+		if content.Valid {
+			post.Content = content.String
+		}
+		if imagePath.Valid {
+			post.ImagePath = &imagePath.String
+		}
+		post.PrivacyLevel = privacyLevel
 		posts = append(posts, post)
 	}
 	return posts, nil
@@ -137,10 +161,12 @@ func GetFeedPosts(db *sql.DB, userID int) ([]*models.Post, error) {
 		LEFT JOIN follows f ON p.user_id = f.following_id AND f.follower_id = ? AND f.status = 'accepted'
 		LEFT JOIN post_viewers pv ON p.id = pv.post_id AND pv.user_id = ?
 		WHERE 
-			p.privacy_level = 'public' OR
-			p.user_id = ? OR
-			(p.privacy_level = 'almost_private' AND f.follower_id IS NOT NULL) OR
-			(p.privacy_level = 'private' AND pv.user_id IS NOT NULL)
+			p.group_id IS NULL AND (
+				p.privacy_level = 'public' OR
+				p.user_id = ? OR
+				(p.privacy_level = 'almost_private' AND f.follower_id IS NOT NULL) OR
+				(p.privacy_level = 'private' AND pv.user_id IS NOT NULL)
+			)
 		ORDER BY p.created_at DESC
 	`
 	rows, err := db.Query(query, userID, userID, userID)
@@ -185,7 +211,74 @@ func GetFeedPosts(db *sql.DB, userID int) ([]*models.Post, error) {
 			Username:  username.String,
 			FirstName: firstName.String,
 			LastName:  lastName.String,
-			Avatar:    avatar.String,
+			AvatarPath:    avatar.String,
+		}
+
+		posts = append(posts, post)
+	}
+	return posts, nil
+}
+
+// GetPostsByGroupID retrieves all posts for a specific group
+func GetPostsByGroupID(db *sql.DB, groupID int) ([]*models.Post, error) {
+	query := `
+		SELECT 
+			p.id, p.user_id, p.group_id, p.title, p.content, p.image_path, p.privacy_level, p.created_at,
+			u.username, u.first_name, u.last_name, u.avatar_path
+		FROM posts p
+		INNER JOIN users u ON p.user_id = u.id
+		WHERE p.group_id = ?
+		ORDER BY p.created_at DESC
+	`
+	rows, err := db.Query(query, groupID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+
+	var posts []*models.Post
+	for rows.Next() {
+		post := &models.Post{}
+		var postGroupID sql.NullInt64
+		var title, imagePath, username, firstName, lastName, avatar sql.NullString
+
+		err := rows.Scan(
+			&post.ID,
+			&post.UserID,
+			&postGroupID,
+			&title,
+			&post.Content,
+			&imagePath,
+			&post.PrivacyLevel,
+			&post.CreatedAt,
+			&username,
+			&firstName,
+			&lastName,
+			&avatar,
+		)
+		if err != nil {
+			return nil, err
+		}
+
+		// Handle nullable fields
+		if postGroupID.Valid {
+			gid := int(postGroupID.Int64)
+			post.GroupID = &gid
+		}
+		if title.Valid {
+			post.Title = &title.String
+		}
+		if imagePath.Valid {
+			post.ImagePath = &imagePath.String
+		}
+
+		// Add author information
+		post.Author = &models.Author{
+			ID:        post.UserID,
+			Username:  username.String,
+			FirstName: firstName.String,
+			LastName:  lastName.String,
+			AvatarPath:    avatar.String,
 		}
 
 		posts = append(posts, post)
@@ -204,11 +297,12 @@ func SearchPosts(db *sql.DB, userID int, searchQuery string) ([]*models.Post, er
 		LEFT JOIN follows f ON p.user_id = f.following_id AND f.follower_id = ? AND f.status = 'accepted'
 		LEFT JOIN post_viewers pv ON p.id = pv.post_id AND pv.user_id = ?
 		WHERE 
-			(p.privacy_level = 'public' OR
-			p.user_id = ? OR
-			(p.privacy_level = 'almost_private' AND f.follower_id IS NOT NULL) OR
-			(p.privacy_level = 'private' AND pv.user_id IS NOT NULL))
-			AND (
+			p.group_id IS NULL AND (
+				p.privacy_level = 'public' OR
+				p.user_id = ? OR
+				(p.privacy_level = 'almost_private' AND f.follower_id IS NOT NULL) OR
+				(p.privacy_level = 'private' AND pv.user_id IS NOT NULL)
+			) AND (
 				p.content LIKE ? OR
 				p.title LIKE ? OR
 				u.first_name LIKE ? OR
@@ -259,7 +353,7 @@ func SearchPosts(db *sql.DB, userID int, searchQuery string) ([]*models.Post, er
 			Username:  username.String,
 			FirstName: firstName.String,
 			LastName:  lastName.String,
-			Avatar:    avatar.String,
+			AvatarPath:    avatar.String,
 		}
 
 		posts = append(posts, post)
@@ -389,7 +483,7 @@ func GetCommentsByPostID(db *sql.DB, postID int) ([]*models.Comment, error) {
 			Username:  username.String,
 			FirstName: firstName.String,
 			LastName:  lastName.String,
-			Avatar:    avatar.String,
+			AvatarPath:    avatar.String,
 		}
 
 		comments = append(comments, comment)

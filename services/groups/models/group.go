@@ -20,6 +20,11 @@ type GroupMember struct {
 	Role     string    `json:"role"`   // "admin" or "member"
 	Status   string    `json:"status"` // "pending" or "accepted"
 	JoinedAt time.Time `json:"joined_at"`
+	// User details (populated when joined with users table)
+	Username  string  `json:"username,omitempty"`
+	FirstName *string `json:"first_name,omitempty"`
+	LastName  *string `json:"last_name,omitempty"`
+	Nickname  *string `json:"nickname,omitempty"`
 }
 
 // GroupMessage represents a message in a group chat

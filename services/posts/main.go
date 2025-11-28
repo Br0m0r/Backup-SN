@@ -73,6 +73,9 @@ func main() {
 	// Search endpoint
 	mux.Handle("/posts/search", authMiddleware(http.HandlerFunc(postHandlers.SearchPosts)))
 
+	// Group posts endpoint
+	mux.Handle("/posts/group/", authMiddleware(http.HandlerFunc(postHandlers.GetGroupPosts)))
+
 	mux.Handle("/posts/", authMiddleware(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		switch r.Method {
 		case "GET":

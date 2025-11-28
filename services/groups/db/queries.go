@@ -220,13 +220,16 @@ func RequestToJoinGroup(db *sql.DB, groupID, userID int) error {
 	return err
 }
 
-// GetPendingRequests gets all pending join requests for a group (admin only)
+// GetPendingRequests gets all pending join requests for a group with user details
 func GetPendingRequests(db *sql.DB, groupID int) ([]*models.GroupMember, error) {
 	query := `
-		SELECT id, group_id, user_id, role, status, joined_at
-		FROM group_members
-		WHERE group_id = ? AND status = 'pending'
-		ORDER BY joined_at DESC
+		SELECT 
+			gm.id, gm.group_id, gm.user_id, gm.role, gm.status, gm.joined_at,
+			u.username, u.first_name, u.last_name, u.nickname
+		FROM group_members gm
+		JOIN users u ON gm.user_id = u.id
+		WHERE gm.group_id = ? AND gm.status = 'pending'
+		ORDER BY gm.joined_at DESC
 	`
 
 	rows, err := db.Query(query, groupID)
@@ -238,6 +241,7 @@ func GetPendingRequests(db *sql.DB, groupID int) ([]*models.GroupMember, error) 
 	var members []*models.GroupMember
 	for rows.Next() {
 		member := &models.GroupMember{}
+		var firstName, lastName, nickname *string
 		err := rows.Scan(
 			&member.ID,
 			&member.GroupID,
@@ -245,10 +249,18 @@ func GetPendingRequests(db *sql.DB, groupID int) ([]*models.GroupMember, error) 
 			&member.Role,
 			&member.Status,
 			&member.JoinedAt,
+			&member.Username,
+			&firstName,
+			&lastName,
+			&nickname,
 		)
 		if err != nil {
 			return nil, err
 		}
+		// Assign optional fields
+		member.FirstName = firstName
+		member.LastName = lastName
+		member.Nickname = nickname
 		members = append(members, member)
 	}
 
@@ -272,13 +284,16 @@ func RespondToJoinRequest(db *sql.DB, memberID int, accept bool) error {
 	}
 }
 
-// GetGroupMembers retrieves all accepted members of a group
+// GetGroupMembers retrieves all accepted members of a group with user details
 func GetGroupMembers(db *sql.DB, groupID int) ([]*models.GroupMember, error) {
 	query := `
-		SELECT id, group_id, user_id, role, status, joined_at
-		FROM group_members
-		WHERE group_id = ? AND status = 'accepted'
-		ORDER BY joined_at ASC
+		SELECT 
+			gm.id, gm.group_id, gm.user_id, gm.role, gm.status, gm.joined_at,
+			u.username, u.first_name, u.last_name, u.nickname
+		FROM group_members gm
+		JOIN users u ON gm.user_id = u.id
+		WHERE gm.group_id = ? AND gm.status = 'accepted'
+		ORDER BY gm.joined_at ASC
 	`
 
 	rows, err := db.Query(query, groupID)
@@ -290,6 +305,7 @@ func GetGroupMembers(db *sql.DB, groupID int) ([]*models.GroupMember, error) {
 	var members []*models.GroupMember
 	for rows.Next() {
 		member := &models.GroupMember{}
+		var firstName, lastName, nickname *string
 		err := rows.Scan(
 			&member.ID,
 			&member.GroupID,
@@ -297,10 +313,18 @@ func GetGroupMembers(db *sql.DB, groupID int) ([]*models.GroupMember, error) {
 			&member.Role,
 			&member.Status,
 			&member.JoinedAt,
+			&member.Username,
+			&firstName,
+			&lastName,
+			&nickname,
 		)
 		if err != nil {
 			return nil, err
 		}
+		// Assign optional fields
+		member.FirstName = firstName
+		member.LastName = lastName
+		member.Nickname = nickname
 		members = append(members, member)
 	}
 
@@ -546,4 +570,13 @@ func GetUsernameByID(db *sql.DB, userID int) (string, error) {
 		return "", err
 	}
 	return username, nil
+}
+
+func RemoveGroupMember(db *sql.DB, groupID, userID int) error {
+	query := `
+		DELETE FROM group_members
+		WHERE group_id = ? AND user_id = ?
+	`
+	_, err := db.Exec(query, groupID, userID)
+	return err
 }

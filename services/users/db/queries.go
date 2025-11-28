@@ -70,19 +70,21 @@ func UpdateUserProfile(db *sql.DB, userID int, req *models.UpdateProfileRequest)
 		SET first_name = COALESCE(?, first_name),
 		    last_name = COALESCE(?, last_name),
 		    date_of_birth = COALESCE(?, date_of_birth),
+		    avatar_path = COALESCE(?, avatar_path),
 		    nickname = COALESCE(?, nickname),
 		    about_me = COALESCE(?, about_me),
 		    is_public_profile = COALESCE(?, is_public_profile)
 		WHERE id = ?
 	`
 
-	log.Printf("UpdateUserProfile: Executing query for user %d with values: firstName=%v, lastName=%v, dob=%v, nickname=%v, about=%v, isPublic=%v",
-		userID, req.FirstName, req.LastName, req.DateOfBirth, req.Nickname, req.AboutMe, req.IsPublicProfile)
+	log.Printf("UpdateUserProfile: Executing query for user %d with values: firstName=%v, lastName=%v, dob=%v, avatar=%v, nickname=%v, about=%v, isPublic=%v",
+		userID, req.FirstName, req.LastName, req.DateOfBirth, req.AvatarPath, req.Nickname, req.AboutMe, req.IsPublicProfile)
 
 	result, err := db.Exec(query,
 		req.FirstName,
 		req.LastName,
 		req.DateOfBirth,
+		req.AvatarPath,
 		req.Nickname,
 		req.AboutMe,
 		req.IsPublicProfile,

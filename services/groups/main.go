@@ -78,6 +78,12 @@ func main() {
 			groupHandlers.GetPendingRequests(w, r)
 		} else if strings.HasSuffix(path, "/members") {
 			groupHandlers.GetMembers(w, r)
+		} else if strings.HasSuffix(path, "/leave") {
+			if r.Method == "DELETE" {
+				rateLimiter.RateLimit(http.HandlerFunc(groupHandlers.LeaveGroup)).ServeHTTP(w, r)
+			} else {
+				http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
+			}
 		} else if strings.HasSuffix(path, "/events") {
 			if r.Method == "GET" {
 				groupHandlers.GetGroupEvents(w, r)

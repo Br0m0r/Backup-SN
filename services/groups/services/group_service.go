@@ -306,3 +306,16 @@ func (s *GroupService) GetGroupMessages(groupID, userID int, limit int) ([]*mode
 
 	return db.GetGroupMessages(s.database, groupID, limit)
 }
+
+func (s *GroupService) LeaveGroup(groupID, userID int) error {
+	// Check if user is a member
+	isMember, err := db.IsGroupMember(s.database, groupID, userID)
+	if err != nil {
+		return err
+	}
+	if !isMember {
+		return errors.New("only group members can leave the group")
+	}
+
+	return db.RemoveGroupMember(s.database, groupID, userID)
+}

@@ -39,6 +39,7 @@ type UpdateProfileRequest struct {
 	FirstName       *string `json:"first_name,omitempty"`
 	LastName        *string `json:"last_name,omitempty"`
 	DateOfBirth     *string `json:"date_of_birth,omitempty"`
+	AvatarPath      *string `json:"avatar_path,omitempty"`
 	Nickname        *string `json:"nickname,omitempty"`
 	AboutMe         *string `json:"about_me,omitempty"`
 	IsPublicProfile *bool   `json:"is_public_profile,omitempty"`
