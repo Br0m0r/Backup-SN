@@ -231,6 +231,19 @@ async function handleRegister() {
     const { user, token } = await registerUser(payload)
     setUser(user, token)
 
+    // If avatar was selected, upload it after registration
+    if (registerForm.avatar) {
+      try {
+        const { uploadAvatar } = await import('../services/usersService')
+        const result = await uploadAvatar(registerForm.avatar, token)
+        // Update user object with avatar path
+        user.avatar_path = result.avatar_path
+      } catch (avatarError) {
+        console.error('Failed to upload avatar during registration:', avatarError)
+        // Don't fail registration if avatar upload fails
+      }
+    }
+
     const welcomeName = user.first_name || email
     setFeedback(`Welcome aboard, ${welcomeName}! Taking you to your feed...`, 'success')
     
