@@ -34,7 +34,9 @@
         <div class="post-author">
           <img :src="getUserAvatarUrl(post.author, 48)" :alt="`${post.author.first_name} ${post.author.last_name}`" class="avatar" />
           <div class="author-info">
-            <strong>{{ post.author.first_name }} {{ post.author.last_name }}</strong>
+            <button class="author-name" type="button" @click="navigateToProfile(post)">
+              {{ getAuthorName(post.author) }}
+            </button>
             <small>{{ formatTime(post.created_at) }} · {{ formatPrivacy(post.privacy_level) }}</small>
           </div>
           <!-- Post Actions (Edit/Delete) -->
@@ -86,7 +88,9 @@
               <!-- View Comment Content -->
               <div v-else>
                 <div class="comment-header">
-                  <strong>{{ comment.author.first_name }} {{ comment.author.last_name }}</strong>
+                  <button class="author-name" type="button" @click="navigateToProfile(comment)">
+                    {{ getAuthorName(comment.author) }}
+                  </button>
                   <small>{{ formatTime(comment.created_at) }}</small>
                   <!-- Comment Actions (Edit/Delete) -->
                   <div v-if="isCommentOwner(comment)" class="comment-actions">
@@ -335,6 +339,26 @@ function formatPrivacy(privacy) {
     'private': 'Private'
   }
   return map[privacy] || privacy
+}
+
+function getAuthorName(author) {
+  if (!author) return 'Unknown user'
+  const fullName = [author.first_name, author.last_name].filter(Boolean).join(' ').trim()
+  if (fullName) return fullName
+  return author.username || author.nickname || 'Unknown user'
+}
+
+function resolveUserId(target) {
+  if (!target) return null
+  if (typeof target === 'number' || typeof target === 'string') return target
+  if (target.author) return resolveUserId(target.author)
+  return target.id ?? target.user_id ?? null
+}
+
+function navigateToProfile(target) {
+  const userId = resolveUserId(target)
+  if (!userId) return
+  router.push({ name: 'Profile', params: { id: userId } })
 }
 
 function getImageUrl(path) {
@@ -646,10 +670,24 @@ onMounted(() => {
   gap: 2px;
 }
 
-.author-info strong {
-  font-size: 16px;
-  font-weight: 600;
+.author-name {
+  background: transparent;
+  border: none;
+  padding: 0;
+  margin: 0;
   color: rgba(255, 255, 255, 0.95);
+  font: inherit;
+  font-weight: 600;
+  text-align: left;
+  cursor: pointer;
+}
+
+.author-name:hover {
+  color: var(--neon-cyan);
+}
+
+.author-info .author-name {
+  font-size: 16px;
   letter-spacing: 0.2px;
 }
 
@@ -907,7 +945,7 @@ onMounted(() => {
   position: relative;
 }
 
-.comment-header strong {
+.comment-header .author-name {
   font-size: 14px;
   font-weight: 600;
   color: rgba(255, 255, 255, 0.9);
@@ -1141,3 +1179,5 @@ onMounted(() => {
   border-color: rgba(255, 255, 255, 0.2);
 }
 </style>
+
+
