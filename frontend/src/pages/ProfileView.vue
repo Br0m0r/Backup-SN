@@ -4,7 +4,7 @@
       <div class="hero-primary">
         <div class="avatar-container">
           <img :src="avatarUrl" alt="profile avatar" class="profile-avatar" />
-          <button class="avatar-upload-btn" @click="triggerAvatarUpload" title="Change avatar">
+          <button v-if="isOwnProfile" class="avatar-upload-btn" @click="triggerAvatarUpload" title="Change avatar">
             <span>📷</span>
           </button>
           <input 
@@ -20,6 +20,9 @@
           <h1>{{ displayName }}</h1>
           <p class="about">
             {{ aboutText }}
+          </p>
+          <p v-if="dateOfBirthDisplay" class="dob-line">
+            Born {{ dateOfBirthDisplay }}
           </p>
           <div class="hero-stats">
             <div
@@ -38,7 +41,8 @@
           </div>
         </div>
       </div>
-        <div class="hero-controls">
+      <div class="hero-controls">
+        <template v-if="isOwnProfile">
           <button class="privacy-toggle" @click="togglePrivacy">
             <span :class="['status-dot', isPrivate ? 'dot-private' : 'dot-public']"></span>
             {{ isPrivate ? 'Private mode' : 'Public mode' }}
@@ -53,18 +57,34 @@
         <div class="hero-buttons">
           <button class="ghost" @click="toggleInfoMode">{{ infoMode ? 'Hide info' : 'Info' }}</button>
         </div>
+        </template>
+        <template v-else>
+          <div class="viewer-note">
+            <p>You are viewing {{ displayName }}'s profile.</p>
+            <button
+              class="follow-btn"
+              :disabled="followActionLoading || isFollowPending"
+              @click="handleFollowToggle"
+            >
+              <span v-if="followActionLoading">...</span>
+              <span v-else-if="isFollowPending">Request sent</span>
+              <span v-else-if="isFollowing">Unfollow</span>
+              <span v-else>Follow</span>
+            </button>
+          </div>
+        </template>
       </div>
     </section>
 
     <Transition name="info-fade">
-      <section v-if="infoMode" class="info-grid">
+      <section v-if="showInfoGrid" class="info-grid" :class="{ readonly: !isOwnProfile }">
         <article v-for="section in infoSections" :key="section.key">
           <header>
             <div>
               <small>{{ section.label }}</small>
               <h3>{{ displaySectionValue(section) }}</h3>
             </div>
-            <div class="info-actions">
+            <div v-if="isOwnProfile" class="info-actions">
               <button
                 class="icon-btn"
                 @click="toggleVisibility(section.key)"
@@ -111,7 +131,7 @@
     </section>
 
     <Transition name="side-panel-right">
-      <aside v-if="infoMode && editingSection" class="side-panel editor-panel">
+      <aside v-if="isOwnProfile && infoMode && editingSection" class="side-panel editor-panel">
         <header>
           <div>
             <small>Edit field</small>
@@ -130,13 +150,6 @@
             v-if="currentEdit?.key === 'about'"
             v-model="draftValue"
             rows="6"
-            class="editor-field"
-            :placeholder="currentEdit?.label"
-          />
-          <input
-            v-else-if="currentEdit?.key === 'dob'"
-            v-model="draftValue"
-            type="date"
             class="editor-field"
             :placeholder="currentEdit?.label"
           />
@@ -332,7 +345,7 @@
 <script setup>
 import { computed, onMounted, ref, watch } from 'vue';
 import { getToken, getUser } from '../stores/auth';
-import { getFollowers, getFollowing, getUserProfile, updatePrivacy, updateProfile, uploadAvatar } from '../services/usersService';
+import { getFollowers, getFollowing, getUserProfile, updatePrivacy, updateProfile, uploadAvatar, followUser, unfollowUser, getFollowStatus } from '../services/usersService';
 import { getUserPosts } from '../services/postsService';
 import { getGroupEvents, getMyGroups } from '../services/groupsService';
 import { useToast } from '@/composables/useToast';
@@ -384,6 +397,8 @@ const groupsLoading = ref(false);
 const groupsError = ref('');
 const eventsLoading = ref(false);
 const eventsError = ref('');
+const followStatus = ref('none');
+const followActionLoading = ref(false);
 
 const groupsCount = computed(() => myGroups.value.length);
 const eventsCount = computed(() => myEvents.value.length);
@@ -465,6 +480,16 @@ const aboutText = computed(() => {
   return '';
 });
 
+const dateOfBirthDisplay = computed(() => {
+  const dobSection = getSectionState('dob');
+  if (!dobSection.visible || !dobSection.value) return '';
+  return formatDateOfBirth(dobSection.value);
+});
+
+const isFollowing = computed(() => followStatus.value === 'accepted');
+const isFollowPending = computed(() => followStatus.value === 'pending');
+const isOtherProfile = computed(() => !isOwnProfile.value && !!activeProfileId.value);
+
 const filteredFollowers = computed(() => {
   const term = followerSearch.value.trim().toLowerCase();
   const list = followers.value || [];
@@ -516,8 +541,14 @@ const isOwnProfile = computed(() => {
   if (!viewerId || !profileId) return false;
   return String(viewerId) === String(profileId);
 });
+const showInfoGrid = computed(() => infoMode.value && isOwnProfile.value);
 
 async function togglePrivacy() {
+  if (!isOwnProfile.value) {
+    showError('You can only update privacy on your own profile.');
+    return;
+  }
+
   const newPrivacy = !isPrivate.value;
   
   try {
@@ -644,10 +675,13 @@ function formatPrivacy(level) {
 }
 
 function triggerAvatarUpload() {
+  if (!isOwnProfile.value) return;
   avatarInput.value?.click();
 }
 
 async function handleAvatarChange(event) {
+  if (!isOwnProfile.value) return;
+
   const file = event.target.files?.[0];
   if (!file) return;
 
@@ -885,6 +919,7 @@ async function loadProfileStats() {
   const token = getToken();
   const viewerId = getUser()?.id;
   viewerUserId.value = viewerId || null;
+  followStatus.value = 'none';
 
   const targetId = props.id ? Number(props.id) : viewerId;
   const parsedId = Number(targetId);
@@ -900,6 +935,17 @@ async function loadProfileStats() {
     activeProfileId.value = profile?.user?.id || parsedId;
     followerCount.value = profile?.follower_count ?? 0;
     followingCount.value = profile?.following_count ?? 0;
+    if (!isOwnProfile.value) {
+      if (profile?.follow_status) {
+        followStatus.value = profile.follow_status;
+      } else if (profile?.is_following) {
+        followStatus.value = 'accepted';
+      } else {
+        followStatus.value = 'none';
+      }
+    } else {
+      followStatus.value = 'self';
+    }
 
     if (profile?.user?.is_public_profile !== undefined) {
       isPrivate.value = !profile.user.is_public_profile;
@@ -934,6 +980,48 @@ async function loadProfilePosts() {
     posts.value = [];
   } finally {
     postsLoading.value = false;
+  }
+}
+
+async function loadFollowStatus() {
+  const token = getToken();
+  const targetId = activeProfileId.value || props.id;
+  if (!token || !targetId || isOwnProfile.value) return;
+
+  try {
+    const { status } = await getFollowStatus(targetId, token);
+    followStatus.value = status || 'none';
+  } catch (error) {
+    console.error('Failed to load follow status:', error);
+  }
+}
+
+async function handleFollowToggle() {
+  const token = getToken();
+  const targetId = activeProfileId.value || props.id;
+  if (!token || !targetId) {
+    showError('You need to be logged in to follow users.');
+    return;
+  }
+  if (isOwnProfile.value) return;
+
+  followActionLoading.value = true;
+  try {
+    if (isFollowing.value) {
+      await unfollowUser(targetId, token);
+      followStatus.value = 'none';
+      success('Unfollowed');
+    } else {
+      await followUser(targetId, token);
+      // Backend returns pending for private profiles; keep status optimistic as pending
+      followStatus.value = 'pending';
+      success('Follow requested');
+    }
+  } catch (error) {
+    console.error('Follow toggle failed:', error);
+    showError(error?.message || 'Unable to update follow status');
+  } finally {
+    followActionLoading.value = false;
   }
 }
 
@@ -1082,6 +1170,7 @@ watch(
 );
 
 function toggleInfoMode() {
+  if (!isOwnProfile.value) return;
   infoMode.value = !infoMode.value;
   if (!infoMode.value) {
     closeEditor();
@@ -1089,7 +1178,7 @@ function toggleInfoMode() {
 }
 
 function isPanelStat(label) {
-  return panelStatLabels.includes(label);
+  return isOwnProfile.value && panelStatLabels.includes(label);
 }
 
 function handleStatInteraction(label) {
@@ -1158,7 +1247,8 @@ onMounted(async () => {
   if (!props.id) {
     applyUserProfile(getUser());
   }
-  loadProfileStats();
+  await loadProfileStats();
+  await loadFollowStatus();
   loadFollowers();
   loadFollowing();
   await loadGroups();
@@ -1169,7 +1259,12 @@ watch(
   () => props.id,
   async () => {
     applyUserProfile(null);
-    loadProfileStats();
+    followStatus.value = 'none';
+    followActionLoading.value = false;
+    closeEditor();
+    infoMode.value = false;
+    await loadProfileStats();
+    await loadFollowStatus();
     loadFollowers();
     loadFollowing();
     loadProfilePosts();
@@ -1264,6 +1359,12 @@ watch(
   max-width: 36ch;
 }
 
+.dob-line {
+  color: var(--text-muted);
+  margin: 0.2rem 0 0.4rem 0;
+  font-size: 0.95rem;
+}
+
 .hero-stats {
   display: flex;
   gap: 1.5rem;
@@ -1301,6 +1402,36 @@ watch(
   display: flex;
   flex-direction: column;
   gap: 0.85rem;
+}
+
+.viewer-note {
+  display: flex;
+  flex-direction: column;
+  gap: 0.65rem;
+  color: var(--text-muted);
+  max-width: 32ch;
+}
+
+.follow-btn {
+  border: 1px solid rgba(255, 255, 255, 0.2);
+  background: linear-gradient(120deg, var(--neon-cyan), var(--neon-pink));
+  color: #05060d;
+  border-radius: 999px;
+  padding: 0.55rem 1.3rem;
+  font-weight: 700;
+  cursor: pointer;
+  transition: transform 0.2s ease, box-shadow 0.2s ease, opacity 0.2s ease;
+  box-shadow: 0 10px 25px rgba(0, 0, 0, 0.25);
+}
+
+.follow-btn:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+}
+
+.follow-btn:hover:not(:disabled) {
+  transform: translateY(-1px);
+  box-shadow: 0 14px 30px rgba(0, 0, 0, 0.3);
 }
 
 .privacy-toggle {
@@ -1352,6 +1483,11 @@ watch(
   display: grid;
   grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
   gap: 1rem;
+}
+
+.info-grid.readonly .info-actions,
+.info-grid.readonly .visibility-pill {
+  display: none;
 }
 
 .info-fade-enter-active,
@@ -1796,3 +1932,4 @@ watch(
   }
 }
 </style>
+
