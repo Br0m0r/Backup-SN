@@ -48,7 +48,9 @@
               <div class="author">
                 <img :src="getUserAvatarUrl(post.author, 48)" :alt="`${post.author.first_name} ${post.author.last_name}`" class="avatar" />
                 <div>
-                  <strong>{{ post.author.first_name }} {{ post.author.last_name }}</strong>
+                  <button class="author-name" type="button" @click.stop="navigateToProfile(post)">
+                    {{ getAuthorName(post.author) }}
+                  </button>
                   <small>{{ formatTime(post.created_at) }} · {{ formatPrivacy(post.privacy_level) }}</small>
                 </div>
               </div>
@@ -72,7 +74,9 @@
           <div class="author">
             <img :src="getUserAvatarUrl(post.author, 48)" :alt="`${post.author.first_name} ${post.author.last_name}`" class="avatar" />
             <div>
-              <strong>{{ post.author.first_name }} {{ post.author.last_name }}</strong>
+              <button class="author-name" type="button" @click.stop="navigateToProfile(post)">
+                {{ getAuthorName(post.author) }}
+              </button>
               <small>{{ formatTime(post.created_at) }} · {{ formatPrivacy(post.privacy_level) }}</small>
             </div>
           </div>
@@ -158,6 +162,20 @@ function formatPrivacy(privacy) {
   return map[privacy] || privacy
 }
 
+function getAuthorName(author) {
+  if (!author) return 'Unknown user'
+  const fullName = [author.first_name, author.last_name].filter(Boolean).join(' ').trim()
+  if (fullName) return fullName
+  return author.username || author.nickname || 'Unknown user'
+}
+
+function resolveUserId(target) {
+  if (!target) return null
+  if (typeof target === 'number' || typeof target === 'string') return target
+  if (target.author) return resolveUserId(target.author)
+  return target.id ?? target.user_id ?? null
+}
+
 function getImageUrl(path) {
   if (!path) return ''
   if (path.startsWith('http')) return path
@@ -203,6 +221,12 @@ function handleSearch() {
 
 function navigateToPost(postId) {
   router.push(`/post/${postId}`)
+}
+
+function navigateToProfile(target) {
+  const userId = resolveUserId(target)
+  if (!userId) return
+  router.push({ name: 'Profile', params: { id: userId } })
 }
 
 const suggestions = [
@@ -328,6 +352,21 @@ onMounted(() => {
 
 .author small {
   color: var(--text-muted);
+}
+
+.author-name {
+  background: transparent;
+  border: none;
+  padding: 0;
+  margin: 0;
+  color: inherit;
+  font: inherit;
+  cursor: pointer;
+  text-align: left;
+}
+
+.author-name:hover {
+  color: var(--neon-cyan);
 }
 
 .post-title {
@@ -473,3 +512,5 @@ onMounted(() => {
   }
 }
 </style>
+
+
