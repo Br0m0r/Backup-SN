@@ -51,9 +51,7 @@
           }}
         </p>
         <div class="hero-buttons">
-          <button class="ghost" @click="emit('back')">Back to feed</button>
           <button class="ghost" @click="toggleInfoMode">{{ infoMode ? 'Hide info' : 'Info' }}</button>
-          <button class="cta">Share profile</button>
         </div>
       </div>
     </section>
@@ -242,7 +240,7 @@
         <header>
           <div>
             <small>Groups</small>
-            <h3>{{ mockGroups.length }} joined</h3>
+            <h3>{{ formatStat(groupsCount, '0') }} joined</h3>
           </div>
           <button class="icon-btn close-btn" aria-label="Close groups list" @click="closeGroupsPanel">
             ✕
@@ -258,17 +256,23 @@
           />
         </label>
         <div class="panel-list groups-list">
-          <article v-for="group in filteredGroups" :key="group.title" class="panel-row group-row">
-            <div class="group-row__body">
-              <strong>{{ group.title }}</strong>
-              <small>{{ group.members }} members</small>
-              <p>{{ group.desc }}</p>
-            </div>
-            <button class="ghost mini">Open</button>
-          </article>
-          <p v-if="!filteredGroups.length" class="empty-state">
-            No groups match your search.
+          <div v-if="groupsLoading" class="loading">Loading groups...</div>
+          <p v-else-if="groupsError" class="empty-state">
+            Failed to load groups. {{ groupsError }}
           </p>
+          <template v-else>
+            <article v-for="group in filteredGroups" :key="group.id || group.title" class="panel-row group-row">
+              <div class="group-row__body">
+                <strong>{{ group.title }}</strong>
+                <small>{{ group.members }} members</small>
+                <p>{{ group.desc }}</p>
+              </div>
+              <button class="ghost mini">Open</button>
+            </article>
+            <p v-if="!filteredGroups.length" class="empty-state">
+              No groups match your search.
+            </p>
+          </template>
         </div>
       </aside>
     </Transition>
@@ -278,7 +282,7 @@
         <header>
           <div>
             <small>Events</small>
-            <h3>{{ mockEvents.length }} upcoming</h3>
+            <h3>{{ formatStat(eventsCount, '0') }} upcoming</h3>
           </div>
           <button class="icon-btn close-btn" aria-label="Close events list" @click="closeEventsPanel">
             ✕
@@ -294,18 +298,24 @@
           />
         </label>
         <div class="panel-list events-list">
-          <article v-for="event in filteredEvents" :key="event.title" class="panel-row event-row">
-            <div class="event-row__meta">
-              <strong>{{ event.title }}</strong>
-              <small>{{ event.date }}</small>
-            </div>
-            <p>{{ event.desc }}</p>
-            <span class="event-location">{{ event.location }}</span>
-            <button class="ghost mini">Details</button>
-          </article>
-          <p v-if="!filteredEvents.length" class="empty-state">
-            No events match your search.
+          <div v-if="eventsLoading" class="loading">Loading events...</div>
+          <p v-else-if="eventsError" class="empty-state">
+            Failed to load events. {{ eventsError }}
           </p>
+          <template v-else>
+            <article v-for="event in filteredEvents" :key="event.id || event.title" class="panel-row event-row">
+              <div class="event-row__meta">
+                <strong>{{ event.title }}</strong>
+                <small>{{ event.date }}</small>
+              </div>
+              <p>{{ event.desc }}</p>
+              <span class="event-location">{{ event.location }}</span>
+              <button class="ghost mini">Details</button>
+            </article>
+            <p v-if="!filteredEvents.length" class="empty-state">
+              No events match your search.
+            </p>
+          </template>
         </div>
       </aside>
     </Transition>
@@ -317,6 +327,7 @@ import { computed, onMounted, ref, watch } from 'vue';
 import { getToken, getUser } from '../stores/auth';
 import { getFollowers, getFollowing, getUserProfile, updatePrivacy, updateProfile, uploadAvatar } from '../services/usersService';
 import { getUserPosts } from '../services/postsService';
+import { getGroupEvents, getMyGroups } from '../services/groupsService';
 import { useToast } from '@/composables/useToast';
 
 const { success, error: showError } = useToast();
@@ -360,12 +371,21 @@ const editorError = ref('');
 const savingEditor = ref(false);
 const avatarInput = ref(null);
 const uploadingAvatar = ref(false);
+const myGroups = ref([]);
+const myEvents = ref([]);
+const groupsLoading = ref(false);
+const groupsError = ref('');
+const eventsLoading = ref(false);
+const eventsError = ref('');
+
+const groupsCount = computed(() => myGroups.value.length);
+const eventsCount = computed(() => myEvents.value.length);
 
 const stats = computed(() => [
   { label: 'Followers', value: formatStat(followerCount.value, '0') },
   { label: 'Following', value: formatStat(followingCount.value, '0') },
-  { label: 'Groups', value: '8' },
-  { label: 'Events', value: '3' },
+  { label: 'Groups', value: formatStat(groupsCount.value, '0') },
+  { label: 'Events', value: formatStat(eventsCount.value, '0') },
 ]);
 
 const panelStatLabels = ['Followers', 'Following', 'Groups', 'Events'];
@@ -458,45 +478,23 @@ const filteredFollowing = computed(() => {
 
 const filteredGroups = computed(() => {
   const term = groupSearch.value.trim().toLowerCase();
-  if (!term) return mockGroups;
-  return mockGroups.filter((group) => {
-    return [group.title, group.desc].some((field) => field.toLowerCase().includes(term));
+  const list = myGroups.value || [];
+  if (!term) return list;
+  return list.filter((group) => {
+    return [group.title, group.desc].some((field) => (field || '').toLowerCase().includes(term));
   });
 });
 
 const filteredEvents = computed(() => {
   const term = eventSearch.value.trim().toLowerCase();
-  if (!term) return mockEvents;
-  return mockEvents.filter((event) => {
-    return [event.title, event.desc, event.location].some((field) => field.toLowerCase().includes(term));
+  const list = myEvents.value || [];
+  if (!term) return list;
+  return list.filter((event) => {
+    return [event.title, event.desc, event.location]
+      .filter(Boolean)
+      .some((field) => field.toLowerCase().includes(term));
   });
 });
-
-const mockGroups = [
-  { title: 'Synthwave Creators', members: 128, desc: 'Designers pushing neon themed UX.' },
-  { title: 'Hyperlink Hub', members: 82, desc: 'Invite-only crew testing privacy tools.' },
-];
-
-const mockEvents = [
-  {
-    title: 'Neon Nights Meetup',
-    date: 'Fri, Mar 22',
-    location: 'Arcade District',
-    desc: 'Showcase your latest glow UI concepts and retro synth sets.',
-  },
-  {
-    title: 'Pulse Design Sprint',
-    date: 'Tue, Mar 26',
-    location: 'Virtual • Holo Conference',
-    desc: 'Collaborate on privacy-first social flows and prototypes.',
-  },
-  {
-    title: 'Synthwave Creator Jam',
-    date: 'Sun, Mar 31',
-    location: 'Downtown Studio 07',
-    desc: 'Live jam session with surprise guest VJs.',
-  },
-];
 
 const currentEdit = computed(() => infoSections.value.find((section) => section.key === editingSection.value));
 const followersTotalDisplay = computed(() =>
@@ -555,6 +553,41 @@ function formatTime(timestamp) {
   if (diff < 3600) return `${Math.floor(diff / 60)}m ago`;
   if (diff < 86400) return `${Math.floor(diff / 3600)}h ago`;
   return `${Math.floor(diff / 86400)}d ago`;
+}
+
+function formatEventDate(value) {
+  if (!value) return 'Date TBA';
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) return 'Date TBA';
+  return date.toLocaleString(undefined, {
+    month: 'short',
+    day: 'numeric',
+    hour: '2-digit',
+    minute: '2-digit',
+  });
+}
+
+function normalizeGroup(group) {
+  const title = group?.name || group?.title || 'Group';
+  return {
+    id: group?.id ?? title,
+    title,
+    desc: group?.description || 'No description provided.',
+    members: group?.member_count ?? 0,
+  };
+}
+
+function normalizeEvent(event, group) {
+  const groupTitle = group?.title || group?.name || '';
+  const dateValue = event?.event_time || event?.event_date || event?.date;
+  return {
+    id: event?.id ?? `${group?.id || 'event'}-${event?.title || 'event'}`,
+    title: event?.title || 'Event',
+    desc: event?.description || event?.desc || '',
+    date: formatEventDate(dateValue),
+    location: groupTitle ? `Group • ${groupTitle}` : 'Group event',
+    groupId: event?.group_id || group?.id,
+  };
 }
 
 function getImageUrl(path) {
@@ -686,6 +719,13 @@ function shouldLoadFollowing() {
   return String(props.id) === String(currentUser.id);
 }
 
+function shouldLoadGroupData() {
+  const currentUser = getUser();
+  if (!currentUser?.id) return false;
+  if (props.id === null || props.id === undefined) return true;
+  return String(props.id) === String(currentUser.id);
+}
+
 function normalizeFollower(user) {
   const first = user.first_name || '';
   const last = user.last_name || '';
@@ -729,6 +769,85 @@ async function loadFollowing() {
     followingError.value = error?.message || 'Unable to load following';
   } finally {
     followingLoading.value = false;
+  }
+}
+
+async function loadGroups() {
+  if (!shouldLoadGroupData()) {
+    myGroups.value = [];
+    groupsError.value = 'Groups list is available only for your profile.';
+    return;
+  }
+
+  const token = getToken();
+  if (!token) {
+    myGroups.value = [];
+    groupsError.value = 'You need to be logged in to load groups.';
+    return;
+  }
+
+  groupsLoading.value = true;
+  groupsError.value = '';
+
+  try {
+    const { groups = [] } = await getMyGroups(token);
+    myGroups.value = groups.map(normalizeGroup);
+  } catch (error) {
+    console.error('Failed to load groups:', error);
+    groupsError.value = error?.message || 'Unable to load groups';
+    myGroups.value = [];
+  } finally {
+    groupsLoading.value = false;
+  }
+}
+
+async function loadEvents() {
+  if (!shouldLoadGroupData()) {
+    myEvents.value = [];
+    eventsError.value = 'Events are available only for your profile.';
+    return;
+  }
+
+  const token = getToken();
+  if (!token) {
+    myEvents.value = [];
+    eventsError.value = 'You need to be logged in to load events.';
+    return;
+  }
+
+  eventsLoading.value = true;
+  eventsError.value = '';
+
+  try {
+    await loadGroups();
+
+    const groupsForEvents = myGroups.value || [];
+    if (!groupsForEvents.length) {
+      if (groupsError.value) {
+        eventsError.value = groupsError.value;
+      }
+      myEvents.value = [];
+      return;
+    }
+
+    const allEvents = [];
+    for (const group of groupsForEvents) {
+      try {
+        const data = await getGroupEvents(group.id, token);
+        const eventsList = Array.isArray(data) ? data : [];
+        allEvents.push(...eventsList.map((evt) => normalizeEvent(evt, group)));
+      } catch (err) {
+        console.error(`Failed to load events for group ${group.id}:`, err);
+      }
+    }
+
+    myEvents.value = allEvents;
+  } catch (error) {
+    console.error('Failed to load events:', error);
+    eventsError.value = error?.message || 'Unable to load events';
+    myEvents.value = [];
+  } finally {
+    eventsLoading.value = false;
   }
 }
 
@@ -957,10 +1076,10 @@ function handleStatInteraction(label) {
 }
 
 function closeAllPanels() {
-  followersPanelOpen.value = false;
-  followingPanelOpen.value = false;
-  groupsPanelOpen.value = false;
-  eventsPanelOpen.value = false;
+  closeFollowersPanel();
+  closeFollowingPanel();
+  closeGroupsPanel();
+  closeEventsPanel();
 }
 
 function openFollowersPanel() {
@@ -975,12 +1094,12 @@ function openFollowingPanel() {
   loadFollowing();
 }
 
-function openGroupsPanel() {
+async function openGroupsPanel() {
   closeAllPanels();
   groupsPanelOpen.value = true;
 }
 
-function openEventsPanel() {
+async function openEventsPanel() {
   closeAllPanels();
   eventsPanelOpen.value = true;
 }
@@ -1005,23 +1124,27 @@ function closeEventsPanel() {
   eventSearch.value = '';
 }
 
-onMounted(() => {
+onMounted(async () => {
   if (!props.id) {
     applyUserProfile(getUser());
   }
   loadProfileStats();
   loadFollowers();
   loadFollowing();
+  await loadGroups();
+  await loadEvents();
 });
 
 watch(
   () => props.id,
-  () => {
+  async () => {
     applyUserProfile(null);
     loadProfileStats();
     loadFollowers();
     loadFollowing();
     loadProfilePosts();
+    await loadGroups();
+    await loadEvents();
     closeAllPanels();
   }
 );
@@ -1643,3 +1766,4 @@ watch(
   }
 }
 </style>
+
