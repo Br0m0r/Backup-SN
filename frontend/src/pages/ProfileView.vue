@@ -62,7 +62,7 @@
           <header>
             <div>
               <small>{{ section.label }}</small>
-              <h3>{{ section.value }}</h3>
+              <h3>{{ displaySectionValue(section) }}</h3>
             </div>
             <div class="info-actions">
               <button
@@ -130,6 +130,13 @@
             v-if="currentEdit?.key === 'about'"
             v-model="draftValue"
             rows="6"
+            class="editor-field"
+            :placeholder="currentEdit?.label"
+          />
+          <input
+            v-else-if="currentEdit?.key === 'dob'"
+            v-model="draftValue"
+            type="date"
             class="editor-field"
             :placeholder="currentEdit?.label"
           />
@@ -565,6 +572,29 @@ function formatEventDate(value) {
     hour: '2-digit',
     minute: '2-digit',
   });
+}
+
+function formatDateOfBirth(value) {
+  if (!value) return '';
+  const plain = /^(\d{4})-(\d{2})-(\d{2})$/.exec(value);
+  if (plain) {
+    const [, y, m, d] = plain;
+    return `${d}-${m}-${y}`;
+  }
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) return value;
+  const dd = String(date.getDate()).padStart(2, '0');
+  const mm = String(date.getMonth() + 1).padStart(2, '0');
+  const yyyy = date.getFullYear();
+  return `${dd}-${mm}-${yyyy}`;
+}
+
+function displaySectionValue(section) {
+  if (!section) return '';
+  if (section.key === 'dob') {
+    return formatDateOfBirth(section.value);
+  }
+  return section.value;
 }
 
 function normalizeGroup(group) {
@@ -1766,4 +1796,3 @@ watch(
   }
 }
 </style>
-
