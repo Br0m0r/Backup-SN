@@ -4,6 +4,16 @@
 
 ---
 
+## 2025-12-04
+
+### Profile Navigation and Read-Only Viewing
+**Made author/user names clickable to open `/profile/:id` from feed, post view, comments, and suggestions, and hardened ProfileView so only the owner can edit privacy/avatar/info while other profiles render read-only.** Ensures cross-surface profile deep-links work and prevents non-owners from toggling privacy or uploading avatars.
+
+### Profile Follow Actions
+**Added follow/unfollow controls on ProfileView with backend sync and status fetching.** Non-owner profiles now show a follow button that reflects pending/accepted states, calls follow/unfollow endpoints, and refreshes status when switching profiles.
+
+---
+
 ## 2025-11-17
 
 ### Simple Auth Cache for Resilience
