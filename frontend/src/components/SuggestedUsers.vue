@@ -40,7 +40,9 @@
             class="user-avatar"
           />
           <div class="user-details">
-            <strong class="user-name">{{ user.first_name }} {{ user.last_name }}</strong>
+            <button class="user-name" type="button" @click="openProfile(user)">
+              {{ user.first_name }} {{ user.last_name }}
+            </button>
             <small class="user-handle">@{{ user.username }}</small>
           </div>
         </div>
@@ -71,11 +73,13 @@
 
 <script setup>
 import { onMounted, ref, watch } from 'vue'
+import { useRouter } from 'vue-router'
 import { getToken } from '../stores/auth'
 import { searchUsers, followUser, unfollowUser } from '../services/usersService'
 import { useAvatar } from '../composables/useAvatar'
 
 const { getUserAvatarUrl } = useAvatar()
+const router = useRouter()
 const suggestedUsers = ref([])
 const loading = ref(false)
 const error = ref('')
@@ -181,6 +185,11 @@ async function loadSuggestions() {
   } finally {
     loading.value = false
   }
+}
+
+function openProfile(user) {
+  if (!user?.id) return
+  router.push({ name: 'Profile', params: { id: user.id } })
 }
 
 async function toggleFollow(user) {
@@ -374,11 +383,22 @@ async function toggleFollow(user) {
 }
 
 .user-name {
+  background: transparent;
+  border: none;
+  padding: 0;
+  margin: 0;
+  color: inherit;
   font-size: 0.9rem;
   font-weight: 600;
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
+  text-align: left;
+  cursor: pointer;
+}
+
+.user-name:hover {
+  color: var(--neon-cyan);
 }
 
 .user-handle {
