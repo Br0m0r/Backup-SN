@@ -12,6 +12,9 @@
 ### Profile Follow Actions
 **Added follow/unfollow controls on ProfileView with backend sync and status fetching.** Non-owner profiles now show a follow button that reflects pending/accepted states, calls follow/unfollow endpoints, and refreshes status when switching profiles.
 
+### Chat Profile Navigation
+**Made chat names clickable to open user profiles from chat headers and contacts.** Added routing helpers and styling so clicking a user in chat navigates to their `/profile/:id`.
+
 ---
 
 ## 2025-11-17
