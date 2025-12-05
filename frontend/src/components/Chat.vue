@@ -51,7 +51,9 @@
 
             <div class="contact-info">
               <div class="contact-name">
-                {{ getDisplayName(contact) }}
+                <button class="profile-link" type="button" @click.stop="goToProfile(contact)">
+                  {{ getDisplayName(contact) }}
+                </button>
                 <span v-if="contact.is_message_request" class="new-badge">NEW</span>
               </div>
               <div class="contact-status">
@@ -77,16 +79,18 @@
       >
         <!-- Chat Header -->
         <div class="chat-header" @click="toggleMinimize(chat.user_id)">
-          <div class="chat-header-left">
-            <div class="chat-avatar">
-              <img :src="getUserAvatarUrl(chat, 40)" :alt="getDisplayName(chat)" class="avatar-circle small" />
-              <div v-if="chat.is_online" class="online-indicator small"></div>
+            <div class="chat-header-left">
+              <div class="chat-avatar">
+                <img :src="getUserAvatarUrl(chat, 40)" :alt="getDisplayName(chat)" class="avatar-circle small" />
+                <div v-if="chat.is_online" class="online-indicator small"></div>
+              </div>
+              <div class="chat-title">
+                <button class="chat-name profile-link" type="button" @click.stop="goToProfile(chat)">
+                  {{ getDisplayName(chat) }}
+                </button>
+                <span class="chat-status">{{ chat.is_online ? 'Active' : 'Offline' }}</span>
+              </div>
             </div>
-            <div class="chat-title">
-              <span class="chat-name">{{ getDisplayName(chat) }}</span>
-              <span class="chat-status">{{ chat.is_online ? 'Active' : 'Offline' }}</span>
-            </div>
-          </div>
           <div class="chat-header-actions">
             <button 
               v-if="chat.is_message_request" 
@@ -175,6 +179,7 @@
 
 <script setup>
 import { ref, reactive, computed, onMounted, watch, nextTick } from 'vue'
+import { useRouter } from 'vue-router'
 import { useWebSocket } from '../composables/useWebSocket'
 import { getUser, getToken } from '../stores/auth'
 import EmojiPicker from './EmojiPicker.vue'
@@ -191,6 +196,7 @@ import { followUser } from '@/services/usersService'
 
 const { error } = useToast()
 const { getUserAvatarUrl } = useAvatar()
+const router = useRouter()
 
 const { connected, sendMessage: wsSendMessage, on, wsState, connect, disconnect } = useWebSocket()
 
@@ -482,6 +488,18 @@ function getAvatarColor(username) {
     hash = username.charCodeAt(i) + ((hash << 5) - hash)
   }
   return colors[Math.abs(hash) % colors.length]
+}
+
+function resolveUserId(target) {
+  if (!target) return null
+  if (typeof target === 'number' || typeof target === 'string') return target
+  return target.user_id ?? target.id ?? null
+}
+
+function goToProfile(target) {
+  const id = resolveUserId(target)
+  if (!id) return
+  router.push({ name: 'Profile', params: { id } })
 }
 
 function formatMessageTime(timestamp) {
@@ -810,6 +828,21 @@ watch(() => wsState.onlineUsers, () => {
   display: flex;
   align-items: center;
   gap: 6px;
+}
+
+.profile-link {
+  background: transparent;
+  border: none;
+  padding: 0;
+  margin: 0;
+  color: inherit;
+  font: inherit;
+  cursor: pointer;
+  text-align: left;
+}
+
+.profile-link:hover {
+  color: var(--neon-cyan);
 }
 
 .new-badge {
