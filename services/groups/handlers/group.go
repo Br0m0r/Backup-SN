@@ -2,14 +2,19 @@ package handlers
 
 import (
 	"encoding/json"
+	"fmt"
+	"io"
 	"log"
 	"net/http"
+	"os"
+	"path/filepath"
 	"social-network/services/groups/middleware"
 	"social-network/services/groups/models"
 	"social-network/services/groups/services"
 	"social-network/services/groups/utils"
 	"strconv"
 	"strings"
+	"time"
 )
 
 type GroupHandlers struct {
@@ -33,10 +38,66 @@ func (h *GroupHandlers) CreateGroup(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	var req models.CreateGroupRequest
-	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
-		utils.SendError(w, http.StatusBadRequest, "Invalid request body")
+	// Parse multipart form for image upload
+	err := r.ParseMultipartForm(10 << 20) // 10MB max
+	if err != nil {
+		utils.SendError(w, http.StatusBadRequest, "Failed to parse form data")
 		return
+	}
+
+	name := r.FormValue("name")
+	description := r.FormValue("description")
+
+	if name == "" || description == "" {
+		utils.SendError(w, http.StatusBadRequest, "Name and description are required")
+		return
+	}
+
+	req := models.CreateGroupRequest{
+		Name:        name,
+		Description: &description,
+	}
+
+	// Handle optional image upload
+	file, header, err := r.FormFile("image")
+	if err == nil {
+		defer file.Close()
+
+		// Validate file type
+		contentType := header.Header.Get("Content-Type")
+		if !strings.HasPrefix(contentType, "image/") {
+			utils.SendError(w, http.StatusBadRequest, "File must be an image")
+			return
+		}
+
+		// Generate unique filename
+		ext := filepath.Ext(header.Filename)
+		if ext == "" {
+			ext = ".jpg"
+		}
+		filename := fmt.Sprintf("group_%d_%d%s", userID, time.Now().Unix(), ext)
+		filePath := filepath.Join("uploads", "groups", filename)
+
+		// Create directory if not exists
+		dirPath := filepath.Dir(filePath)
+		os.MkdirAll(dirPath, os.ModePerm)
+
+		// Save file
+		dst, err := os.Create(filePath)
+		if err != nil {
+			log.Printf("Error creating file: %v", err)
+			utils.SendError(w, http.StatusInternalServerError, "Failed to save image")
+			return
+		}
+		defer dst.Close()
+
+		if _, err := io.Copy(dst, file); err != nil {
+			log.Printf("Error saving file: %v", err)
+			utils.SendError(w, http.StatusInternalServerError, "Failed to save image")
+			return
+		}
+
+		req.ImageURL = &filePath
 	}
 
 	group, err := h.service.CreateGroup(&req, userID)
@@ -52,6 +113,107 @@ func (h *GroupHandlers) CreateGroup(w http.ResponseWriter, r *http.Request) {
 	}
 
 	utils.SendJSON(w, http.StatusCreated, group)
+}
+
+// UpdateGroupImage handles PUT /groups/:id/image (owner only)
+func (h *GroupHandlers) UpdateGroupImage(w http.ResponseWriter, r *http.Request) {
+	userID, ok := middleware.GetUserIDFromContext(r)
+	if !ok {
+		utils.SendError(w, http.StatusUnauthorized, "User not authenticated")
+		return
+	}
+
+	// Extract group ID from URL
+	parts := strings.Split(strings.Trim(r.URL.Path, "/"), "/")
+	if len(parts) < 2 {
+		utils.SendError(w, http.StatusBadRequest, "Invalid group ID")
+		return
+	}
+
+	groupID, err := strconv.Atoi(parts[1])
+	if err != nil {
+		utils.SendError(w, http.StatusBadRequest, "Invalid group ID")
+		return
+	}
+
+	// Check if user is the group creator
+	group, err := h.service.GetGroup(groupID, userID)
+	if err != nil {
+		utils.SendError(w, http.StatusNotFound, "Group not found")
+		return
+	}
+
+	if group.CreatorID != userID {
+		utils.SendError(w, http.StatusForbidden, "Only the group creator can update the image")
+		return
+	}
+
+	// Parse multipart form
+	err = r.ParseMultipartForm(10 << 20) // 10MB max
+	if err != nil {
+		utils.SendError(w, http.StatusBadRequest, "Failed to parse form data")
+		return
+	}
+
+	// Handle image upload
+	file, header, err := r.FormFile("image")
+	if err != nil {
+		utils.SendError(w, http.StatusBadRequest, "Image file is required")
+		return
+	}
+	defer file.Close()
+
+	// Validate file type
+	contentType := header.Header.Get("Content-Type")
+	if !strings.HasPrefix(contentType, "image/") {
+		utils.SendError(w, http.StatusBadRequest, "File must be an image")
+		return
+	}
+
+	// Generate unique filename
+	ext := filepath.Ext(header.Filename)
+	if ext == "" {
+		ext = ".jpg"
+	}
+	filename := fmt.Sprintf("group_%d_%d%s", groupID, time.Now().Unix(), ext)
+	filePath := filepath.Join("uploads", "groups", filename)
+
+	// Create directory if not exists
+	dirPath := filepath.Dir(filePath)
+	os.MkdirAll(dirPath, os.ModePerm)
+
+	// Save file
+	dst, err := os.Create(filePath)
+	if err != nil {
+		log.Printf("Error creating file: %v", err)
+		utils.SendError(w, http.StatusInternalServerError, "Failed to save image")
+		return
+	}
+	defer dst.Close()
+
+	if _, err := io.Copy(dst, file); err != nil {
+		log.Printf("Error saving file: %v", err)
+		utils.SendError(w, http.StatusInternalServerError, "Failed to save image")
+		return
+	}
+
+	// Delete old image if exists
+	if group.ImageURL != nil && *group.ImageURL != "" {
+		os.Remove(*group.ImageURL)
+	}
+
+	// Update group image in database
+	err = h.service.UpdateGroupImage(groupID, filePath)
+	if err != nil {
+		log.Printf("Error updating group image: %v", err)
+		utils.SendError(w, http.StatusInternalServerError, "Failed to update group image")
+		return
+	}
+
+	utils.SendJSON(w, http.StatusOK, map[string]string{
+		"message":   "Group image updated successfully",
+		"image_url": filePath,
+	})
 }
 
 // GetGroups handles GET /groups

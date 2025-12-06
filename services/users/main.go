@@ -5,6 +5,7 @@ import (
 	"log"
 	"net/http"
 	"os"
+	"strings"
 
 	_ "github.com/mattn/go-sqlite3"
 
@@ -96,10 +97,6 @@ func main() {
 		}
 	}))))
 
-	// User relationship routes (auth required)
-	mux.Handle("/followers", authMiddleware(http.HandlerFunc(userHandlers.GetFollowers)))
-	mux.Handle("/following", authMiddleware(http.HandlerFunc(userHandlers.GetFollowing)))
-
 	// Follow status route (auth required)
 	mux.Handle("/follow/status/", authMiddleware(http.HandlerFunc(userHandlers.GetFollowStatus)))
 
@@ -110,17 +107,27 @@ func main() {
 	// Search route (auth required + rate limited)
 	mux.Handle("/search", authMiddleware(rateLimiter.RateLimit(http.HandlerFunc(userHandlers.SearchUsers))))
 
+	// Search for group invites route (auth required + rate limited)
+	mux.Handle("/search/group", authMiddleware(rateLimiter.RateLimit(http.HandlerFunc(userHandlers.SearchUsersForGroup))))
+
 	// User profile by ID route (auth required)
 	// Pattern: /users/:id/profile
-	mux.Handle("/users/", authMiddleware(http.HandlerFunc(userHandlers.GetUserProfileByID)))
+	mux.Handle("/users/", authMiddleware(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		// Route requests based on path suffix
+		if strings.HasSuffix(r.URL.Path, "/followers") {
+			userHandlers.GetUserFollowers(w, r)
+		} else if strings.HasSuffix(r.URL.Path, "/following") {
+			userHandlers.GetUserFollowing(w, r)
+		} else {
+			userHandlers.GetUserProfileByID(w, r)
+		}
+	})))
 
 	// User stats route (auth required)
 	mux.Handle("/users/me/stats", authMiddleware(http.HandlerFunc(userHandlers.GetStats)))
 
 	// User "me" routes (auth required) - alias for /profile
 	mux.Handle("/users/me/privacy", authMiddleware(http.HandlerFunc(userHandlers.UpdatePrivacy)))
-	mux.Handle("/users/me/followers", authMiddleware(http.HandlerFunc(userHandlers.GetFollowers)))
-	mux.Handle("/users/me/following", authMiddleware(http.HandlerFunc(userHandlers.GetFollowing)))
 	mux.Handle("/users/me", authMiddleware(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		switch r.Method {
 		case "GET":

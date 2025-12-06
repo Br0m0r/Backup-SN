@@ -338,6 +338,76 @@ func SearchUsers(db *sql.DB, searchTerm string, currentUserID int) ([]*models.Us
 	return users, nil
 }
 
+// SearchUsersForGroup searches for users to invite to a group (excludes only current group members)
+func SearchUsersForGroup(db *sql.DB, searchTerm string, currentUserID int, groupID int) ([]*models.User, error) {
+	query := `
+		SELECT DISTINCT u.id, u.username, u.email, u.first_name, u.last_name, u.date_of_birth, u.avatar_path, 
+		       u.nickname, u.about_me, u.is_public_profile, u.created_at
+		FROM users u
+		WHERE (u.username LIKE ? OR u.first_name LIKE ? OR u.last_name LIKE ? OR u.nickname LIKE ?)
+		  AND u.id != ?
+		  AND u.id NOT IN (
+		    SELECT user_id FROM group_members 
+		    WHERE group_id = ?
+		  )
+		LIMIT 50
+	`
+
+	searchPattern := "%" + searchTerm + "%"
+	rows, err := db.Query(query, searchPattern, searchPattern, searchPattern, searchPattern, currentUserID, groupID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+
+	var users []*models.User
+	for rows.Next() {
+		var user models.User
+		var firstName, lastName, dateOfBirth, avatarPath, nickname, aboutMe sql.NullString
+
+		err := rows.Scan(
+			&user.ID,
+			&user.Username,
+			&user.Email,
+			&firstName,
+			&lastName,
+			&dateOfBirth,
+			&avatarPath,
+			&nickname,
+			&aboutMe,
+			&user.IsPublicProfile,
+			&user.CreatedAt,
+		)
+		if err != nil {
+			return nil, err
+		}
+
+		// Handle nullable fields
+		if firstName.Valid {
+			user.FirstName = &firstName.String
+		}
+		if lastName.Valid {
+			user.LastName = &lastName.String
+		}
+		if dateOfBirth.Valid {
+			user.DateOfBirth = &dateOfBirth.String
+		}
+		if avatarPath.Valid {
+			user.AvatarPath = &avatarPath.String
+		}
+		if nickname.Valid {
+			user.Nickname = &nickname.String
+		}
+		if aboutMe.Valid {
+			user.AboutMe = &aboutMe.String
+		}
+
+		users = append(users, &user)
+	}
+
+	return users, nil
+}
+
 // CheckFollowStatus checks if a follow relationship exists and its status
 func CheckFollowStatus(db *sql.DB, followerID, followingID int) (string, error) {
 	query := `SELECT status FROM follows WHERE follower_id = ? AND following_id = ?`

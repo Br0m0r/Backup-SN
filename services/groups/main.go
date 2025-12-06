@@ -52,6 +52,9 @@ func main() {
 	// Health check (no auth required)
 	mux.HandleFunc("/health", handlers.HealthHandler)
 
+	// Serve static files from uploads directory (no auth required for viewing images)
+	mux.Handle("/uploads/", http.StripPrefix("/uploads/", http.FileServer(http.Dir("./uploads"))))
+
 	// Group routes (auth required + rate limited for write operations)
 	mux.Handle("/groups", authMiddleware(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		switch r.Method {
@@ -68,7 +71,13 @@ func main() {
 		// Route based on path pattern
 		path := r.URL.Path
 
-		if strings.HasSuffix(path, "/invite") {
+		if strings.HasSuffix(path, "/image") {
+			if r.Method == "PUT" {
+				rateLimiter.RateLimit(http.HandlerFunc(groupHandlers.UpdateGroupImage)).ServeHTTP(w, r)
+			} else {
+				http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
+			}
+		} else if strings.HasSuffix(path, "/invite") {
 			rateLimiter.RateLimit(http.HandlerFunc(groupHandlers.InviteMember)).ServeHTTP(w, r)
 		} else if strings.HasSuffix(path, "/request") {
 			rateLimiter.RateLimit(http.HandlerFunc(groupHandlers.RequestToJoin)).ServeHTTP(w, r)

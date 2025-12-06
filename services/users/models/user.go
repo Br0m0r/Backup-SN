@@ -23,9 +23,9 @@ func (u *User) PublicProfile() *User {
 		ID:       u.ID,
 		Username: u.Username,
 		// Email omitted for privacy
-		// DateOfBirth omitted for privacy
 		FirstName:       u.FirstName,
 		LastName:        u.LastName,
+		DateOfBirth:     u.DateOfBirth, // Include date of birth in public profile
 		AvatarPath:      u.AvatarPath,
 		Nickname:        u.Nickname,
 		AboutMe:         u.AboutMe,

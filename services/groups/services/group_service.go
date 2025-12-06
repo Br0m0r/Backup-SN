@@ -50,6 +50,11 @@ func (s *GroupService) UpdateGroup(groupID, userID int, req *models.UpdateGroupR
 	return db.UpdateGroup(s.database, groupID, req.Name, req.Description, req.ImageURL)
 }
 
+// UpdateGroupImage updates only the group image (creator only)
+func (s *GroupService) UpdateGroupImage(groupID int, imageURL string) error {
+	return db.UpdateGroupImage(s.database, groupID, imageURL)
+}
+
 // InviteMember invites a user to join the group (members can invite)
 func (s *GroupService) InviteMember(groupID, inviterID, invitedUserID int, inviterName string) error {
 	// Check if inviter is a member

@@ -175,6 +175,13 @@ func UpdateGroup(db *sql.DB, groupID int, name, description, imageURL *string) e
 	return err
 }
 
+// UpdateGroupImage updates only the group's image URL
+func UpdateGroupImage(db *sql.DB, groupID int, imageURL string) error {
+	query := `UPDATE groups SET image_url = ? WHERE id = ?`
+	_, err := db.Exec(query, imageURL, groupID)
+	return err
+}
+
 // IsGroupCreator checks if user is the group creator
 func IsGroupCreator(db *sql.DB, groupID, userID int) (bool, error) {
 	query := `SELECT creator_id FROM groups WHERE id = ?`
@@ -200,11 +207,11 @@ func IsGroupMember(db *sql.DB, groupID, userID int) (bool, error) {
 	return count > 0, nil
 }
 
-// InviteMember invites a user to join a group
+// InviteMember invites a user to join a group (auto-accepts them)
 func InviteMember(db *sql.DB, groupID, userID int) error {
 	query := `
 		INSERT INTO group_members (group_id, user_id, role, status)
-		VALUES (?, ?, 'member', 'pending')
+		VALUES (?, ?, 'member', 'accepted')
 	`
 	_, err := db.Exec(query, groupID, userID)
 	return err

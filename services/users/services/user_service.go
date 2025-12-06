@@ -143,6 +143,15 @@ func (s *UserService) SearchUsers(searchTerm string, currentUserID int) ([]*mode
 	return db.SearchUsers(s.database, searchTerm, currentUserID)
 }
 
+// SearchUsersForGroup searches for users to invite to a group (excludes only current group members)
+func (s *UserService) SearchUsersForGroup(searchTerm string, currentUserID int, groupID int) ([]*models.User, error) {
+	if searchTerm == "" {
+		return nil, errors.New("search term cannot be empty")
+	}
+
+	return db.SearchUsersForGroup(s.database, searchTerm, currentUserID, groupID)
+}
+
 // GetFollowStatus checks the follow relationship status between two users
 func (s *UserService) GetFollowStatus(followerID, followingID int) (string, error) {
 	return db.CheckFollowStatus(s.database, followerID, followingID)

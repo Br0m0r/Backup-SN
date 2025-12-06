@@ -215,21 +215,36 @@ func (h *UserHandlers) UnfollowUser(w http.ResponseWriter, r *http.Request) {
 	})
 }
 
-// GetFollowers handles GET /followers requests
-func (h *UserHandlers) GetFollowers(w http.ResponseWriter, r *http.Request) {
+// GetUserFollowers handles GET /users/:id/followers requests
+// Returns followers for a specific user
+func (h *UserHandlers) GetUserFollowers(w http.ResponseWriter, r *http.Request) {
 	if r.Method != "GET" {
 		utils.ErrorResponse(w, "Method not allowed", http.StatusMethodNotAllowed)
 		return
 	}
 
-	// Get authenticated user ID from context
-	userID, ok := middleware.GetUserIDFromContext(r)
+	// Get authenticated viewer ID from context (to verify authorization)
+	_, ok := middleware.GetUserIDFromContext(r)
 	if !ok {
 		utils.ErrorResponse(w, "Unauthorized", http.StatusUnauthorized)
 		return
 	}
 
-	// Get followers
+	// Extract user ID from URL path
+	// Path format: /users/:id/followers
+	pathParts := strings.Split(strings.Trim(r.URL.Path, "/"), "/")
+	if len(pathParts) < 2 {
+		utils.ErrorResponse(w, "Invalid user ID", http.StatusBadRequest)
+		return
+	}
+
+	userID, err := strconv.Atoi(pathParts[1])
+	if err != nil {
+		utils.ErrorResponse(w, "Invalid user ID", http.StatusBadRequest)
+		return
+	}
+
+	// Get followers for the specified user
 	followers, err := h.userService.GetFollowers(userID)
 	if err != nil {
 		utils.ErrorResponse(w, err.Error(), http.StatusInternalServerError)
@@ -242,21 +257,36 @@ func (h *UserHandlers) GetFollowers(w http.ResponseWriter, r *http.Request) {
 	})
 }
 
-// GetFollowing handles GET /following requests
-func (h *UserHandlers) GetFollowing(w http.ResponseWriter, r *http.Request) {
+// GetUserFollowing handles GET /users/:id/following requests
+// Returns following list for a specific user
+func (h *UserHandlers) GetUserFollowing(w http.ResponseWriter, r *http.Request) {
 	if r.Method != "GET" {
 		utils.ErrorResponse(w, "Method not allowed", http.StatusMethodNotAllowed)
 		return
 	}
 
-	// Get authenticated user ID from context
-	userID, ok := middleware.GetUserIDFromContext(r)
+	// Get authenticated viewer ID from context (to verify authorization)
+	_, ok := middleware.GetUserIDFromContext(r)
 	if !ok {
 		utils.ErrorResponse(w, "Unauthorized", http.StatusUnauthorized)
 		return
 	}
 
-	// Get following
+	// Extract user ID from URL path
+	// Path format: /users/:id/following
+	pathParts := strings.Split(strings.Trim(r.URL.Path, "/"), "/")
+	if len(pathParts) < 2 {
+		utils.ErrorResponse(w, "Invalid user ID", http.StatusBadRequest)
+		return
+	}
+
+	userID, err := strconv.Atoi(pathParts[1])
+	if err != nil {
+		utils.ErrorResponse(w, "Invalid user ID", http.StatusBadRequest)
+		return
+	}
+
+	// Get following list for the specified user
 	following, err := h.userService.GetFollowing(userID)
 	if err != nil {
 		utils.ErrorResponse(w, err.Error(), http.StatusInternalServerError)
@@ -394,6 +424,53 @@ func (h *UserHandlers) SearchUsers(w http.ResponseWriter, r *http.Request) {
 
 	// Search users (excluding current user and users they already follow)
 	users, err := h.userService.SearchUsers(searchTerm, currentUserID)
+	if err != nil {
+		utils.ErrorResponse(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
+
+	utils.SuccessResponse(w, map[string]interface{}{
+		"users": users,
+		"count": len(users),
+	})
+}
+
+// SearchUsersForGroup handles GET /search/group requests
+// Searches for users to invite to a group (excludes only current group members)
+func (h *UserHandlers) SearchUsersForGroup(w http.ResponseWriter, r *http.Request) {
+	if r.Method != "GET" {
+		utils.ErrorResponse(w, "Method not allowed", http.StatusMethodNotAllowed)
+		return
+	}
+
+	// Get authenticated user ID from context
+	currentUserID, ok := middleware.GetUserIDFromContext(r)
+	if !ok {
+		utils.ErrorResponse(w, "Unauthorized", http.StatusUnauthorized)
+		return
+	}
+
+	// Get search term and group ID from query params
+	searchTerm := r.URL.Query().Get("q")
+	if searchTerm == "" {
+		utils.ErrorResponse(w, "Search term is required", http.StatusBadRequest)
+		return
+	}
+
+	groupIDStr := r.URL.Query().Get("group_id")
+	if groupIDStr == "" {
+		utils.ErrorResponse(w, "Group ID is required", http.StatusBadRequest)
+		return
+	}
+
+	groupID, err := strconv.Atoi(groupIDStr)
+	if err != nil {
+		utils.ErrorResponse(w, "Invalid group ID", http.StatusBadRequest)
+		return
+	}
+
+	// Search users excluding current user and current group members
+	users, err := h.userService.SearchUsersForGroup(searchTerm, currentUserID, groupID)
 	if err != nil {
 		utils.ErrorResponse(w, err.Error(), http.StatusInternalServerError)
 		return
