@@ -203,3 +203,19 @@ export async function getGroupPosts(groupId, token) {
 
   return unwrapResponse(response)
 }
+
+/**
+ * Get the full URL for a post image
+ * @param {string} imagePath - The image path from the API
+ * @returns {string} Full image URL or empty string
+ */
+export function getPostImageUrl(imagePath) {
+  if (!imagePath) return ''
+  
+  // If it's already a full URL, return it
+  if (imagePath.startsWith('http')) return imagePath
+  
+  // Add leading slash if path doesn't have one
+  const fullPath = imagePath.startsWith('/') ? imagePath : `/${imagePath}`
+  return `${POSTS_BASE_URL}${fullPath}`
+}

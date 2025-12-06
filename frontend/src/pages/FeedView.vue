@@ -54,7 +54,6 @@
                   <small>{{ formatTime(post.created_at) }} · {{ formatPrivacy(post.privacy_level) }}</small>
                 </div>
               </div>
-              <button class="ghost" @click.stop>•••</button>
             </header>
             <h3 v-if="post.title" class="post-title">{{ post.title }}</h3>
             <p class="post-content">{{ post.content }}</p>
@@ -80,7 +79,6 @@
               <small>{{ formatTime(post.created_at) }} · {{ formatPrivacy(post.privacy_level) }}</small>
             </div>
           </div>
-          <button class="ghost" @click.stop>•••</button>
         </header>
         <h3 v-if="post.title" class="post-title">{{ post.title }}</h3>
         <p class="post-content">{{ post.content }}</p>
@@ -97,7 +95,7 @@ import { useRouter } from 'vue-router'
 import CreatePost from '@/components/CreatePost.vue'
 import SuggestedGroups from '@/components/SuggestedGroups.vue'
 import { getToken } from '@/stores/auth'
-import { getFeedPosts, searchPosts as searchPostsService } from '@/services/postsService'
+import { getFeedPosts, searchPosts as searchPostsService, getPostImageUrl } from '@/services/postsService'
 import { useAvatar } from '@/composables/useAvatar'
 
 const { getUserAvatarUrl } = useAvatar()
@@ -177,12 +175,7 @@ function resolveUserId(target) {
 }
 
 function getImageUrl(path) {
-  if (!path) return ''
-  if (path.startsWith('http')) return path
-  const POSTS_API_URL = import.meta.env.VITE_POSTS_API_URL || 'http://localhost:8083'
-  // Add leading slash if path doesn't have one
-  const fullPath = path.startsWith('/') ? path : `/${path}`
-  return `${POSTS_API_URL}${fullPath}`
+  return getPostImageUrl(path)
 }
 
 async function searchPosts(query) {

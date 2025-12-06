@@ -11,7 +11,20 @@
       <!-- Group Header -->
       <section class="group-header">
         <div class="group-banner">
-          <div class="group-icon-large">{{ getGroupInitials(group.name) }}</div>
+          <div class="group-icon-large">
+            <img v-if="group.image_url" :src="getGroupImageUrl(group.image_url)" alt="Group avatar" />
+            <span v-else>{{ getGroupInitials(group.name) }}</span>
+            <button v-if="isCreator" class="avatar-upload-btn" @click="triggerAvatarUpload" title="Change group image">
+              📷
+            </button>
+            <input 
+              type="file" 
+              accept="image/*" 
+              ref="avatarInput" 
+              style="display: none"
+              @change="handleAvatarChange" 
+            />
+          </div>
           <div class="group-info">
             <h1>{{ group.name }}</h1>
             <p class="group-description">{{ group.description }}</p>
@@ -226,7 +239,12 @@
         <div v-if="activeTab === 'members'" class="members-tab">
           <div v-if="loadingMembers" class="loading">Loading members...</div>
           <div v-else class="members-grid">
-            <article v-for="member in members" :key="member.user_id" class="member-card">
+            <article 
+              v-for="member in members" 
+              :key="member.user_id" 
+              class="member-card"
+              @click="viewUserProfile(member.user_id)"
+            >
               <div class="member-avatar">{{ getMemberInitialsFromData(member) }}</div>
               <div class="member-info">
                 <strong>{{ getMemberNameFromData(member) }}</strong>
@@ -366,10 +384,11 @@ import {
   createEvent as createEventService,
   inviteToGroup,
   getPendingRequests,
-  respondToRequest as respondToRequestService
+  respondToRequest as respondToRequestService,
+  updateGroupImage
 } from '@/services/groupsService'
-import { getGroupPosts as fetchGroupPosts } from '@/services/postsService'
-import { searchUsers } from '@/services/usersService'
+import { getGroupPosts as fetchGroupPosts, getPostImageUrl } from '@/services/postsService'
+import { searchUsersForGroup } from '@/services/usersService'
 import { useToast } from '@/composables/useToast'
 import { useWebSocket } from '@/composables/useWebSocket'
 import { leaveGroup as leaveGroupService } from '@/services/groupsService'
@@ -420,6 +439,9 @@ const newEvent = ref({
 const creatingEvent = ref(false)
 const eventError = ref('')
 const respondingToEvent = ref(null)
+
+const avatarInput = ref(null)
+const uploadingAvatar = ref(false)
 
 const isMember = computed(() => {
   if (!group.value || !currentUser) return false
@@ -744,7 +766,7 @@ async function searchUsersToInvite() {
     if (!token) return
 
     try {
-      const { users = [] } = await searchUsers(query, token)
+      const { users = [] } = await searchUsersForGroup(query, groupId.value, token)
       searchResults.value = users
     } catch (err) {
       console.error('Failed to search users:', err)
@@ -794,13 +816,68 @@ async function leaveGroup() {
   }
 }
 
+function viewUserProfile(userId) {
+  router.push(`/profile/${userId}`)
+}
+
+function triggerAvatarUpload() {
+  if (!isCreator.value) return
+  avatarInput.value?.click()
+}
+
+async function handleAvatarChange(event) {
+  if (!isCreator.value) return
+
+  const file = event.target.files?.[0]
+  if (!file) return
+
+  // Validate file type
+  if (!file.type.startsWith('image/')) {
+    showError('Please select an image file')
+    return
+  }
+
+  // Validate file size (max 5MB)
+  if (file.size > 5 * 1024 * 1024) {
+    showError('File size must be less than 5MB')
+    return
+  }
+
+  uploadingAvatar.value = true
+  try {
+    const token = getToken()
+    const result = await updateGroupImage(groupId.value, file, token)
+    
+    // Update group with new image URL
+    if (group.value && result.image_url) {
+      group.value.image_url = result.image_url
+    }
+    
+    showSuccess('Group image updated successfully!')
+  } catch (error) {
+    console.error('Failed to upload group image:', error)
+    showError(error.message || 'Failed to upload group image')
+  } finally {
+    uploadingAvatar.value = false
+    // Reset input
+    if (avatarInput.value) {
+      avatarInput.value.value = ''
+    }
+  }
+}
+
 function getImageUrl(path) {
-  if (!path) return ''
-  if (path.startsWith('http')) return path
-  const POSTS_API_URL = import.meta.env.VITE_POSTS_API_URL || 'http://localhost:8083'
-  // Add leading slash if path doesn't have one
-  const fullPath = path.startsWith('/') ? path : `/${path}`
-  return `${POSTS_API_URL}${fullPath}`
+  return getPostImageUrl(path)
+}
+
+function getGroupImageUrl(imageUrl) {
+  if (!imageUrl) return ''
+  if (imageUrl.startsWith('http://') || imageUrl.startsWith('https://')) {
+    return imageUrl
+  }
+  // Assume it's served from the groups service
+  const GROUPS_API_URL = import.meta.env.VITE_GROUPS_API_URL || 'http://localhost:8084'
+  return `${GROUPS_API_URL}/${imageUrl}`
 }
 
 function getMemberName(senderId) {
@@ -965,6 +1042,43 @@ onUnmounted(() => {
   font-size: 2rem;
   color: #05060d;
   flex-shrink: 0;
+  position: relative;
+  overflow: hidden;
+}
+
+.group-icon-large img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+
+.group-icon-large span {
+  display: block;
+}
+
+.avatar-upload-btn {
+  position: absolute;
+  bottom: 0;
+  right: 0;
+  width: 2rem;
+  height: 2rem;
+  border-radius: 50%;
+  border: 2px solid rgba(5, 6, 13, 0.9);
+  background: rgba(0, 247, 255, 0.9);
+  color: #05060d;
+  font-size: 1rem;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: all 0.2s;
+  z-index: 2;
+}
+
+.avatar-upload-btn:hover {
+  background: var(--neon-cyan);
+  transform: scale(1.1);
+  box-shadow: 0 0 15px rgba(0, 247, 255, 0.5);
 }
 
 .group-info h1 {
@@ -1222,6 +1336,14 @@ onUnmounted(() => {
   align-items: center;
   text-align: center;
   gap: 0.75rem;
+  cursor: pointer;
+  transition: all 0.2s;
+}
+
+.member-card:hover {
+  background: rgba(8, 10, 24, 0.95);
+  border-color: rgba(0, 247, 255, 0.3);
+  transform: translateY(-2px);
 }
 
 .member-avatar,

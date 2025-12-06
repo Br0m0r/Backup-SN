@@ -121,7 +121,6 @@
                 <small>{{ formatTime(post.created_at) }} · {{ formatPrivacy(post.privacy_level) }}</small>
               </div>
             </div>
-            <button class="ghost" @click.stop>•••</button>
           </header>
           <h3 v-if="post.title" class="post-title">{{ post.title }}</h3>
           <p class="post-content">{{ post.content }}</p>
@@ -203,7 +202,7 @@
                 <strong>{{ user.name }}</strong>
                 <small>{{ user.handle }}</small>
               </div>
-              <button class="ghost mini">View profile</button>
+              <button class="ghost mini" @click="viewUserProfile(user.id)">View profile</button>
             </article>
             <p v-if="!filteredFollowers.length" class="empty-state">
               No followers match your search.
@@ -245,7 +244,7 @@
                 <strong>{{ user.name }}</strong>
                 <small>{{ user.handle }}</small>
               </div>
-              <button class="ghost mini">Message</button>
+              <button class="ghost mini" @click="viewUserProfile(user.id)">View profile</button>
             </article>
             <p v-if="!filteredFollowing.length" class="empty-state">
               No accounts match your search.
@@ -287,53 +286,10 @@
                 <small>{{ group.members }} members</small>
                 <p>{{ group.desc }}</p>
               </div>
-              <button class="ghost mini">Open</button>
+              <button class="ghost mini" @click="openGroup(group.id)">Open</button>
             </article>
             <p v-if="!filteredGroups.length" class="empty-state">
               No groups match your search.
-            </p>
-          </template>
-        </div>
-      </aside>
-    </Transition>
-
-    <Transition name="side-panel">
-      <aside v-if="eventsPanelOpen" class="side-panel events-panel">
-        <header>
-          <div>
-            <small>Events</small>
-            <h3>{{ formatStat(eventsCount, '0') }} upcoming</h3>
-          </div>
-          <button class="icon-btn close-btn" aria-label="Close events list" @click="closeEventsPanel">
-            ✕
-          </button>
-        </header>
-        <label class="panel-search">
-          <span class="sr-only">Search events</span>
-          <input
-            v-model="eventSearch"
-            type="search"
-            placeholder="Search events..."
-            autocomplete="off"
-          />
-        </label>
-        <div class="panel-list events-list">
-          <div v-if="eventsLoading" class="loading">Loading events...</div>
-          <p v-else-if="eventsError" class="empty-state">
-            Failed to load events. {{ eventsError }}
-          </p>
-          <template v-else>
-            <article v-for="event in filteredEvents" :key="event.id || event.title" class="panel-row event-row">
-              <div class="event-row__meta">
-                <strong>{{ event.title }}</strong>
-                <small>{{ event.date }}</small>
-              </div>
-              <p>{{ event.desc }}</p>
-              <span class="event-location">{{ event.location }}</span>
-              <button class="ghost mini">Details</button>
-            </article>
-            <p v-if="!filteredEvents.length" class="empty-state">
-              No events match your search.
             </p>
           </template>
         </div>
@@ -344,13 +300,17 @@
 
 <script setup>
 import { computed, onMounted, ref, watch } from 'vue';
+import { useRouter } from 'vue-router';
 import { getToken, getUser } from '../stores/auth';
 import { getFollowers, getFollowing, getUserProfile, updatePrivacy, updateProfile, uploadAvatar, followUser, unfollowUser, getFollowStatus } from '../services/usersService';
-import { getUserPosts } from '../services/postsService';
-import { getGroupEvents, getMyGroups } from '../services/groupsService';
+import { getUserPosts, getPostImageUrl } from '../services/postsService';
+import { getMyGroups } from '../services/groupsService';
 import { useToast } from '@/composables/useToast';
+import { useAvatar } from '@/composables/useAvatar';
 
 const { success, error: showError } = useToast();
+const { getUserAvatarUrl } = useAvatar();
+const router = useRouter();
 const props = defineProps({
   id: {
     type: [String, Number],
@@ -359,7 +319,6 @@ const props = defineProps({
 });
 
 const emit = defineEmits(['back']);
-const POSTS_API_URL = import.meta.env.VITE_POSTS_API_URL || 'http://localhost:8083';
 
 const isPrivate = ref(false);
 const followerCount = ref(null);
@@ -382,35 +341,28 @@ const draftValue = ref('');
 const followersPanelOpen = ref(false);
 const followingPanelOpen = ref(false);
 const groupsPanelOpen = ref(false);
-const eventsPanelOpen = ref(false);
 const followerSearch = ref('');
 const followingSearch = ref('');
 const groupSearch = ref('');
-const eventSearch = ref('');
 const editorError = ref('');
 const savingEditor = ref(false);
 const avatarInput = ref(null);
 const uploadingAvatar = ref(false);
 const myGroups = ref([]);
-const myEvents = ref([]);
 const groupsLoading = ref(false);
 const groupsError = ref('');
-const eventsLoading = ref(false);
-const eventsError = ref('');
 const followStatus = ref('none');
 const followActionLoading = ref(false);
 
 const groupsCount = computed(() => myGroups.value.length);
-const eventsCount = computed(() => myEvents.value.length);
 
 const stats = computed(() => [
   { label: 'Followers', value: formatStat(followerCount.value, '0') },
   { label: 'Following', value: formatStat(followingCount.value, '0') },
   { label: 'Groups', value: formatStat(groupsCount.value, '0') },
-  { label: 'Events', value: formatStat(eventsCount.value, '0') },
 ]);
 
-const panelStatLabels = ['Followers', 'Following', 'Groups', 'Events'];
+const panelStatLabels = ['Followers', 'Following', 'Groups'];
 
 const infoSections = ref([
   { key: 'firstName', label: 'First Name', value: 'Marina', visible: true },
@@ -463,15 +415,7 @@ const displayName = computed(() => {
 });
 
 const avatarUrl = computed(() => {
-  const avatarPath = profileUser.value?.avatar_path;
-  if (!avatarPath) return 'https://placehold.co/140x140/161832/fff?text=ME';
-  
-  // If it's already a full URL, return it
-  if (avatarPath.startsWith('http')) return avatarPath;
-  
-  // Otherwise, construct the full URL to the users service
-  const USERS_API_URL = import.meta.env.VITE_USERS_API_URL || 'http://localhost:8082';
-  return `${USERS_API_URL}${avatarPath}`;
+  return getUserAvatarUrl(profileUser.value);
 });
 
 const aboutText = computed(() => {
@@ -514,17 +458,6 @@ const filteredGroups = computed(() => {
   if (!term) return list;
   return list.filter((group) => {
     return [group.title, group.desc].some((field) => (field || '').toLowerCase().includes(term));
-  });
-});
-
-const filteredEvents = computed(() => {
-  const term = eventSearch.value.trim().toLowerCase();
-  const list = myEvents.value || [];
-  if (!term) return list;
-  return list.filter((event) => {
-    return [event.title, event.desc, event.location]
-      .filter(Boolean)
-      .some((field) => field.toLowerCase().includes(term));
   });
 });
 
@@ -593,18 +526,6 @@ function formatTime(timestamp) {
   return `${Math.floor(diff / 86400)}d ago`;
 }
 
-function formatEventDate(value) {
-  if (!value) return 'Date TBA';
-  const date = new Date(value);
-  if (Number.isNaN(date.getTime())) return 'Date TBA';
-  return date.toLocaleString(undefined, {
-    month: 'short',
-    day: 'numeric',
-    hour: '2-digit',
-    minute: '2-digit',
-  });
-}
-
 function formatDateOfBirth(value) {
   if (!value) return '';
   const plain = /^(\d{4})-(\d{2})-(\d{2})$/.exec(value);
@@ -638,25 +559,8 @@ function normalizeGroup(group) {
   };
 }
 
-function normalizeEvent(event, group) {
-  const groupTitle = group?.title || group?.name || '';
-  const dateValue = event?.event_time || event?.event_date || event?.date;
-  return {
-    id: event?.id ?? `${group?.id || 'event'}-${event?.title || 'event'}`,
-    title: event?.title || 'Event',
-    desc: event?.description || event?.desc || '',
-    date: formatEventDate(dateValue),
-    location: groupTitle ? `Group • ${groupTitle}` : 'Group event',
-    groupId: event?.group_id || group?.id,
-  };
-}
-
 function getImageUrl(path) {
-  if (!path) return '';
-  if (path.startsWith('http')) return path;
-  // Add leading slash if path doesn't have one
-  const fullPath = path.startsWith('/') ? path : `/${path}`;
-  return `${POSTS_API_URL}${fullPath}`;
+  return getPostImageUrl(path);
 }
 
 function getInitials(post) {
@@ -726,15 +630,20 @@ function applyUserProfile(user) {
   infoSections.value = infoSections.value.map((section) => {
     switch (section.key) {
       case 'firstName':
-        return { ...section, value: user?.first_name || '' };
+        return { ...section, value: user?.first_name || '', visible: !!user?.first_name };
       case 'lastName':
-        return { ...section, value: user?.last_name || '' };
+        return { ...section, value: user?.last_name || '', visible: !!user?.last_name };
       case 'nickname':
-        return { ...section, value: user?.nickname || '' };
+        return { ...section, value: user?.nickname || '', visible: !!user?.nickname };
       case 'about':
-        return { ...section, value: user?.about_me || '' };
+        return { ...section, value: user?.about_me || '', visible: !!user?.about_me };
       case 'dob':
-        return { ...section, value: user?.date_of_birth || '' };
+        // Show DOB if it exists and user has made it public (show_date_of_birth field from backend)
+        // or default to showing it if the value exists
+        const dobVisible = user?.show_date_of_birth !== undefined 
+          ? user.show_date_of_birth 
+          : !!user?.date_of_birth;
+        return { ...section, value: user?.date_of_birth || '', visible: dobVisible };
       default:
         return section;
     }
@@ -770,17 +679,13 @@ function getSectionValue(key) {
 }
 
 function shouldLoadFollowers() {
-  const currentUser = getUser();
-  if (!currentUser?.id) return false;
-  if (props.id === null || props.id === undefined) return true;
-  return String(props.id) === String(currentUser.id);
+  // Allow loading followers for any profile
+  return true;
 }
 
 function shouldLoadFollowing() {
-  const currentUser = getUser();
-  if (!currentUser?.id) return false;
-  if (props.id === null || props.id === undefined) return true;
-  return String(props.id) === String(currentUser.id);
+  // Allow loading following for any profile
+  return true;
 }
 
 function shouldLoadGroupData() {
@@ -806,7 +711,7 @@ function normalizeFollower(user) {
 async function loadFollowing() {
   if (!shouldLoadFollowing()) {
     following.value = [];
-    followingError.value = 'Following list is available only for your profile.';
+    followingError.value = 'Unable to load following.';
     return;
   }
 
@@ -817,11 +722,20 @@ async function loadFollowing() {
     return;
   }
 
+  // Use activeProfileId, props.id, or current user's ID
+  const currentUserId = getUser()?.id;
+  const targetId = activeProfileId.value || props.id || currentUserId;
+  if (!targetId) {
+    following.value = [];
+    followingError.value = 'Unable to determine profile.';
+    return;
+  }
+
   followingLoading.value = true;
   followingError.value = '';
 
   try {
-    const { following: list = [], count } = await getFollowing(token);
+    const { following: list = [], count } = await getFollowing(token, targetId);
     following.value = list.map(normalizeFollower);
     if (count !== undefined && count !== null) {
       followingCount.value = count;
@@ -862,56 +776,6 @@ async function loadGroups() {
     myGroups.value = [];
   } finally {
     groupsLoading.value = false;
-  }
-}
-
-async function loadEvents() {
-  if (!shouldLoadGroupData()) {
-    myEvents.value = [];
-    eventsError.value = 'Events are available only for your profile.';
-    return;
-  }
-
-  const token = getToken();
-  if (!token) {
-    myEvents.value = [];
-    eventsError.value = 'You need to be logged in to load events.';
-    return;
-  }
-
-  eventsLoading.value = true;
-  eventsError.value = '';
-
-  try {
-    await loadGroups();
-
-    const groupsForEvents = myGroups.value || [];
-    if (!groupsForEvents.length) {
-      if (groupsError.value) {
-        eventsError.value = groupsError.value;
-      }
-      myEvents.value = [];
-      return;
-    }
-
-    const allEvents = [];
-    for (const group of groupsForEvents) {
-      try {
-        const data = await getGroupEvents(group.id, token);
-        const eventsList = Array.isArray(data) ? data : [];
-        allEvents.push(...eventsList.map((evt) => normalizeEvent(evt, group)));
-      } catch (err) {
-        console.error(`Failed to load events for group ${group.id}:`, err);
-      }
-    }
-
-    myEvents.value = allEvents;
-  } catch (error) {
-    console.error('Failed to load events:', error);
-    eventsError.value = error?.message || 'Unable to load events';
-    myEvents.value = [];
-  } finally {
-    eventsLoading.value = false;
   }
 }
 
@@ -1028,7 +892,7 @@ async function handleFollowToggle() {
 async function loadFollowers() {
   if (!shouldLoadFollowers()) {
     followers.value = [];
-    followersError.value = 'Followers list is available only for your profile.';
+    followersError.value = 'Unable to load followers.';
     return;
   }
 
@@ -1039,11 +903,20 @@ async function loadFollowers() {
     return;
   }
 
+  // Use activeProfileId, props.id, or current user's ID
+  const currentUserId = getUser()?.id;
+  const targetId = activeProfileId.value || props.id || currentUserId;
+  if (!targetId) {
+    followers.value = [];
+    followersError.value = 'Unable to determine profile.';
+    return;
+  }
+
   followersLoading.value = true;
   followersError.value = '';
 
   try {
-    const { followers: list = [], count } = await getFollowers(token);
+    const { followers: list = [], count } = await getFollowers(token, targetId);
     followers.value = list.map(normalizeFollower);
     if (count !== undefined && count !== null) {
       followerCount.value = count;
@@ -1178,6 +1051,10 @@ function toggleInfoMode() {
 }
 
 function isPanelStat(label) {
+  // Allow Followers and Following for all profiles, Groups only for own profile
+  if (label === 'Followers' || label === 'Following') {
+    return panelStatLabels.includes(label);
+  }
   return isOwnProfile.value && panelStatLabels.includes(label);
 }
 
@@ -1189,8 +1066,6 @@ function handleStatInteraction(label) {
     followingPanelOpen.value ? closeFollowingPanel() : openFollowingPanel();
   } else if (label === 'Groups') {
     groupsPanelOpen.value ? closeGroupsPanel() : openGroupsPanel();
-  } else if (label === 'Events') {
-    eventsPanelOpen.value ? closeEventsPanel() : openEventsPanel();
   }
 }
 
@@ -1198,7 +1073,6 @@ function closeAllPanels() {
   closeFollowersPanel();
   closeFollowingPanel();
   closeGroupsPanel();
-  closeEventsPanel();
 }
 
 function openFollowersPanel() {
@@ -1218,11 +1092,6 @@ async function openGroupsPanel() {
   groupsPanelOpen.value = true;
 }
 
-async function openEventsPanel() {
-  closeAllPanels();
-  eventsPanelOpen.value = true;
-}
-
 function closeFollowersPanel() {
   followersPanelOpen.value = false;
   followerSearch.value = '';
@@ -1238,9 +1107,27 @@ function closeGroupsPanel() {
   groupSearch.value = '';
 }
 
-function closeEventsPanel() {
-  eventsPanelOpen.value = false;
-  eventSearch.value = '';
+function viewUserProfile(userId) {
+  if (!userId) {
+    showError('Unable to view profile');
+    return;
+  }
+  // Close the panel
+  closeFollowersPanel();
+  closeFollowingPanel();
+  // Navigate to the user's profile
+  router.push(`/profile/${userId}`);
+}
+
+function openGroup(groupId) {
+  if (!groupId) {
+    showError('Unable to open group');
+    return;
+  }
+  // Close the panel
+  closeGroupsPanel();
+  // Navigate to the group page
+  router.push(`/groups/${groupId}`);
 }
 
 onMounted(async () => {
@@ -1252,7 +1139,6 @@ onMounted(async () => {
   loadFollowers();
   loadFollowing();
   await loadGroups();
-  await loadEvents();
 });
 
 watch(
@@ -1269,7 +1155,6 @@ watch(
     loadFollowing();
     loadProfilePosts();
     await loadGroups();
-    await loadEvents();
     closeAllPanels();
   }
 );
@@ -1279,7 +1164,11 @@ watch(
 .profile-shell {
   display: flex;
   flex-direction: column;
+  align-items: center;
   gap: 2rem;
+  max-width: 1400px;
+  margin: 0 auto;
+  width: 100%;
 }
 
 .profile-hero {
@@ -1291,6 +1180,8 @@ watch(
   flex-wrap: wrap;
   gap: 1.5rem;
   justify-content: space-between;
+  width: 100%;
+  max-width: 1100px;
 }
 
 .hero-primary {
@@ -1483,6 +1374,8 @@ watch(
   display: grid;
   grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
   gap: 1rem;
+   width: 100%;
+  max-width: 1100px;
 }
 
 .info-grid.readonly .info-actions,
@@ -1572,6 +1465,8 @@ watch(
   display: flex;
   flex-direction: column;
   gap: 1.5rem;
+  width: 100%;
+  max-width: 900px;
 }
 
 .activity-title {

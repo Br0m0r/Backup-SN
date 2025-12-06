@@ -29,9 +29,12 @@
           class="group-card"
           @click="navigateToGroup(group.id)"
         >
-          <div class="group-icon">{{ getGroupInitials(group.title) }}</div>
+          <div class="group-icon">
+            <img v-if="group.image_url" :src="getGroupImageUrl(group.image_url)" alt="Group avatar" />
+            <span v-else>{{ getGroupInitials(group.name) }}</span>
+          </div>
           <div class="group-info">
-            <strong>{{ group.title }}</strong>
+            <strong>{{ group.name }}</strong>
             <small>{{ group.member_count || 0 }} members</small>
           </div>
         </article>
@@ -52,7 +55,10 @@
           class="group-card"
           @click="navigateToGroup(group.id)"
         >
-          <div class="group-icon">{{ getGroupInitials(group.name) }}</div>
+          <div class="group-icon">
+            <img v-if="group.image_url" :src="getGroupImageUrl(group.image_url)" alt="Group avatar" />
+            <span v-else>{{ getGroupInitials(group.name) }}</span>
+          </div>
           <div class="group-info">
             <strong>{{ group.name }}</strong>
             <small>{{ group.member_count || 0 }} members</small>
@@ -92,6 +98,20 @@
                 maxlength="500"
               />
             </div>
+            <div class="form-field">
+              <label for="group-image">Group Image (optional)</label>
+              <input
+                id="group-image"
+                type="file"
+                accept="image/*"
+                @change="handleImageChange"
+                ref="imageInput"
+              />
+              <div v-if="imagePreview" class="image-preview">
+                <img :src="imagePreview" alt="Preview" />
+                <button type="button" class="remove-image" @click="removeImage">✕</button>
+              </div>
+            </div>
             <p v-if="createError" class="error-message">{{ createError }}</p>
             <div class="modal-actions">
               <button type="button" class="ghost" @click="closeCreateModal">Cancel</button>
@@ -125,6 +145,10 @@ const newGroup = ref({
   name: '',
   description: ''
 })
+
+const imagePreview = ref('')
+const imageFile = ref(null)
+const imageInput = ref(null)
 
 let searchTimeout = null
 
@@ -200,6 +224,37 @@ function handleSearch() {
   }, 300)
 }
 
+function handleImageChange(event) {
+  const file = event.target.files?.[0]
+  if (!file) return
+
+  if (!file.type.startsWith('image/')) {
+    createError.value = 'Please select an image file'
+    return
+  }
+
+  if (file.size > 5 * 1024 * 1024) {
+    createError.value = 'Image must be less than 5MB'
+    return
+  }
+
+  imageFile.value = file
+  const reader = new FileReader()
+  reader.onload = (e) => {
+    imagePreview.value = e.target.result
+  }
+  reader.readAsDataURL(file)
+  createError.value = ''
+}
+
+function removeImage() {
+  imageFile.value = null
+  imagePreview.value = ''
+  if (imageInput.value) {
+    imageInput.value.value = ''
+  }
+}
+
 async function createGroup() {
   const token = getToken()
   if (!token) {
@@ -211,9 +266,17 @@ async function createGroup() {
   createError.value = ''
 
   try {
-    const { group } = await createGroupService(newGroup.value, token)
+    const formData = new FormData()
+    formData.append('name', newGroup.value.name)
+    formData.append('description', newGroup.value.description)
+    if (imageFile.value) {
+      formData.append('image', imageFile.value)
+    }
+
+    const { group } = await createGroupService(formData, token)
     showCreateModal.value = false
-    newGroup.value = { title: '', description: '' }
+    newGroup.value = { name: '', description: '' }
+    removeImage()
     await loadMyGroups()
     await loadSuggestedGroups()
     router.push(`/groups/${group.id}`)
@@ -228,7 +291,18 @@ async function createGroup() {
 function closeCreateModal() {
   showCreateModal.value = false
   newGroup.value = { name: '', description: '' }
+  removeImage()
   createError.value = ''
+}
+
+function getGroupImageUrl(imageUrl) {
+  if (!imageUrl) return ''
+  if (imageUrl.startsWith('http://') || imageUrl.startsWith('https://')) {
+    return imageUrl
+  }
+  // Assume it's served from the groups service
+  const GROUPS_API_URL = import.meta.env.VITE_GROUPS_API_URL || 'http://localhost:8084'
+  return `${GROUPS_API_URL}/${imageUrl}`
 }
 
 onMounted(() => {
@@ -361,6 +435,17 @@ onMounted(() => {
   font-size: 0.8rem;
   color: #05060d;
   flex-shrink: 0;
+  overflow: hidden;
+}
+
+.group-icon img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+
+.group-icon span {
+  display: block;
 }
 
 .group-info {
@@ -468,6 +553,50 @@ onMounted(() => {
   outline: none;
   border-color: var(--neon-cyan);
   box-shadow: 0 0 0 3px rgba(0, 247, 255, 0.15);
+}
+
+.form-field input[type="file"] {
+  padding: 0.5rem;
+  cursor: pointer;
+}
+
+.image-preview {
+  position: relative;
+  margin-top: 1rem;
+  border-radius: 0.75rem;
+  overflow: hidden;
+  width: 150px;
+  height: 150px;
+  border: 2px solid rgba(0, 247, 255, 0.3);
+}
+
+.image-preview img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+
+.remove-image {
+  position: absolute;
+  top: 0.5rem;
+  right: 0.5rem;
+  width: 1.5rem;
+  height: 1.5rem;
+  border-radius: 50%;
+  border: none;
+  background: rgba(255, 0, 230, 0.9);
+  color: white;
+  font-size: 0.8rem;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: all 0.2s;
+}
+
+.remove-image:hover {
+  background: var(--neon-pink);
+  transform: scale(1.1);
 }
 
 .error-message {

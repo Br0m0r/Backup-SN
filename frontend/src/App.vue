@@ -19,7 +19,7 @@
         <div class="header-icon avatar" @click="toggleProfile" role="button" tabindex="0">
           <img src="https://placehold.co/64x64/11121f/fff?text=ME" alt="profile" />
           <div v-if="profileOpen" class="dropdown profile-menu">
-            <button @click="viewProfile">View Profile</button>
+            <button class="profile-btn" @click="viewProfile">View Profile</button>
             <button class="ghost" @click="logout">Logout</button>
           </div>
         </div>
@@ -321,6 +321,23 @@ async function logout() {
 
 .profile-menu button {
   width: 100%;
+}
+
+.profile-btn {
+  background: transparent;
+  border: 1px solid rgba(0, 247, 255, 0.3);
+  color: var(--neon-cyan);
+  border-radius: 0.5rem;
+  padding: 0.6rem 1rem;
+  cursor: pointer;
+  transition: all 0.2s ease;
+  font-weight: 500;
+}
+
+.profile-btn:hover {
+  background: rgba(0, 247, 255, 0.1);
+  border-color: var(--neon-cyan);
+  box-shadow: 0 0 10px rgba(0, 247, 255, 0.2);
 }
 
 .content {

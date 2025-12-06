@@ -39,6 +39,16 @@ export async function searchUsers(searchTerm, token) {
   return unwrapResponse(response)
 }
 
+export async function searchUsersForGroup(searchTerm, groupId, token) {
+  const response = await client.get('/search/group', {
+    params: { q: searchTerm, group_id: groupId },
+    headers: {
+      Authorization: `Bearer ${token}`
+    }
+  })
+  return unwrapResponse(response)
+}
+
 export async function followUser(userID, token) {
   const response = await client.post(
     '/follow',
@@ -62,8 +72,9 @@ export async function unfollowUser(userID, token) {
   return unwrapResponse(response)
 }
 
-export async function getFollowers(token) {
-  const response = await client.get('/followers', {
+export async function getFollowers(token, userId) {
+  // userId is required - always use the user-specific endpoint
+  const response = await client.get(`/users/${userId}/followers`, {
     headers: {
       Authorization: `Bearer ${token}`
     }
@@ -71,8 +82,9 @@ export async function getFollowers(token) {
   return unwrapResponse(response)
 }
 
-export async function getFollowing(token) {
-  const response = await client.get('/following', {
+export async function getFollowing(token, userId) {
+  // userId is required - always use the user-specific endpoint
+  const response = await client.get(`/users/${userId}/following`, {
     headers: {
       Authorization: `Bearer ${token}`
     }
@@ -158,4 +170,19 @@ export async function deleteAvatar(avatarPath, token) {
     }
   })
   return unwrapResponse(response)
+}
+
+/**
+ * Get the full URL for an avatar
+ * @param {string} avatarPath - The avatar path from the API
+ * @returns {string} Full avatar URL or empty string
+ */
+export function getAvatarUrl(avatarPath) {
+  if (!avatarPath) return ''
+  
+  // If it's already a full URL, return it
+  if (avatarPath.startsWith('http')) return avatarPath
+  
+  // Otherwise, construct the full URL to the users service
+  return `${USERS_BASE_URL}${avatarPath}`
 }

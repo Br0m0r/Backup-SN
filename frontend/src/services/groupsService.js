@@ -72,6 +72,20 @@ export async function updateGroup(groupId, groupData, token) {
   return unwrapResponse(response)
 }
 
+// Update group image (owner only)
+export async function updateGroupImage(groupId, imageFile, token) {
+  const formData = new FormData()
+  formData.append('image', imageFile)
+  
+  const response = await client.put(`/groups/${groupId}/image`, formData, {
+    headers: { 
+      Authorization: `Bearer ${token}`,
+      'Content-Type': 'multipart/form-data'
+    }
+  })
+  return unwrapResponse(response)
+}
+
 // Delete group
 export async function deleteGroup(groupId, token) {
   const response = await client.delete(`/groups/${groupId}`, {

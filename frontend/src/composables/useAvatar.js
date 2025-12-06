@@ -1,9 +1,9 @@
+import { getAvatarUrl as getAvatarUrlService } from '../services/usersService'
+
 /**
  * Composable for handling avatar URLs
  */
 export function useAvatar() {
-  const USERS_API_URL = import.meta.env.VITE_USERS_API_URL || 'http://localhost:8082'
-
   /**
    * Get the full avatar URL from an avatar_path
    * @param {string} avatarPath - The avatar path from the API
@@ -15,13 +15,7 @@ export function useAvatar() {
       return `https://placehold.co/140x140/161832/fff?text=${encodeURIComponent(fallbackText)}`
     }
     
-    // If it's already a full URL, return it
-    if (avatarPath.startsWith('http')) {
-      return avatarPath
-    }
-    
-    // Otherwise, construct the full URL to the users service
-    return `${USERS_API_URL}${avatarPath}`
+    return getAvatarUrlService(avatarPath)
   }
 
   /**

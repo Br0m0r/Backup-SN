@@ -146,6 +146,7 @@ import { useRoute, useRouter } from 'vue-router'
 import { getToken, getUser } from '@/stores/auth'
 import { useToast } from '@/composables/useToast'
 import { useAvatar } from '@/composables/useAvatar'
+import { getPostImageUrl } from '@/services/postsService'
 import {
   getPost,
   getComments,
@@ -362,12 +363,7 @@ function navigateToProfile(target) {
 }
 
 function getImageUrl(path) {
-  if (!path) return ''
-  if (path.startsWith('http')) return path
-  const POSTS_API_URL = import.meta.env.VITE_POSTS_API_URL || 'http://localhost:8083'
-  // Add leading slash if path doesn't have one
-  const fullPath = path.startsWith('/') ? path : `/${path}`
-  return `${POSTS_API_URL}${fullPath}`
+  return getPostImageUrl(path)
 }
 
 // Post edit/delete functions

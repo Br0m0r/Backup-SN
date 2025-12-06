@@ -97,7 +97,7 @@
 
 <script setup>
 import { ref, computed, onMounted } from 'vue'
-import { getToken } from '../stores/auth'
+import { getToken, getUser } from '../stores/auth'
 import { useToast } from '@/composables/useToast'
 import { uploadImage, createPost } from '@/services/postsService'
 import { getFollowers } from '@/services/usersService'
@@ -148,9 +148,12 @@ async function loadFollowers() {
   const token = getToken()
   if (!token) return
 
+  const user = getUser()
+  if (!user?.id) return
+
   loadingFollowers.value = true
   try {
-    const data = await getFollowers(token)
+    const data = await getFollowers(token, user.id)
     // API returns { followers: [...], count: N }
     followers.value = data.followers || []
     console.log('Loaded followers:', followers.value)
