@@ -171,14 +171,20 @@ func (h *UserHandlers) FollowUser(w http.ResponseWriter, r *http.Request) {
 	}
 
 	// Follow user
-	err := h.userService.FollowUser(followerID, req.UserID)
+	status, err := h.userService.FollowUser(followerID, req.UserID)
 	if err != nil {
 		utils.ErrorResponse(w, err.Error(), http.StatusBadRequest)
 		return
 	}
 
+	message := "Follow request sent successfully"
+	if status == "accepted" {
+		message = "Followed successfully"
+	}
+
 	utils.SuccessResponse(w, map[string]interface{}{
-		"message": "Follow request sent successfully",
+		"message":       message,
+		"follow_status": status,
 	})
 }
 
