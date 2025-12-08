@@ -204,12 +204,15 @@ async function toggleFollow(user) {
       user.isFollowing = false
       user.isPending = false
     } else {
-      await followUser(user.id, token)
-      // After following, mark as pending (will be 'accepted' for public profiles)
-      // The backend handles this automatically
-      user.isPending = true
-      // Notify other components (like Chat) that a follow happened
-      window.dispatchEvent(new CustomEvent('follow-accepted'))
+      const result = await followUser(user.id, token)
+      const status = result?.follow_status || 'pending'
+      user.isFollowing = status === 'accepted'
+      user.isPending = status === 'pending'
+
+      if (status === 'accepted') {
+        // Notify other components (like Chat) that a follow happened
+        window.dispatchEvent(new CustomEvent('follow-accepted'))
+      }
       
       // Remove user from suggestions after following
       setTimeout(() => {
