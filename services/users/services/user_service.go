@@ -72,27 +72,27 @@ func (s *UserService) UpdateProfile(userID int, req *models.UpdateProfileRequest
 	return db.GetUserByID(s.database, userID)
 }
 
-// FollowUser creates a follow relationship
-func (s *UserService) FollowUser(followerID, followingID int) error {
+// FollowUser creates a follow relationship and returns the resulting follow status
+func (s *UserService) FollowUser(followerID, followingID int) (string, error) {
 	// Check if trying to follow self
 	if followerID == followingID {
-		return errors.New("cannot follow yourself")
+		return "", errors.New("cannot follow yourself")
 	}
 
 	// Check if already following
 	status, err := db.CheckFollowStatus(s.database, followerID, followingID)
 	if err != nil {
-		return err
+		return "", err
 	}
 
 	if status == "accepted" || status == "pending" {
-		return errors.New("already following or request pending")
+		return "", errors.New("already following or request pending")
 	}
 
 	// Get the user being followed to check if profile is public
 	targetUser, err := db.GetUserByID(s.database, followingID)
 	if err != nil {
-		return errors.New("target user not found")
+		return "", errors.New("target user not found")
 	}
 
 	// If target profile is public, accept immediately; otherwise, set to pending
@@ -103,7 +103,7 @@ func (s *UserService) FollowUser(followerID, followingID int) error {
 
 	err = db.CreateFollow(s.database, followerID, followingID, followStatus)
 	if err != nil {
-		return err
+		return "", err
 	}
 
 	// Send notification
@@ -116,7 +116,7 @@ func (s *UserService) FollowUser(followerID, followingID int) error {
 		notify.NewFollower(followingID, followerID, follower.Username)
 	}
 
-	return nil
+	return followStatus, nil
 }
 
 // UnfollowUser removes a follow relationship
