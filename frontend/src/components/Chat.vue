@@ -518,19 +518,22 @@ async function followUserFromChat(chat) {
     const token = getToken()
     if (!token) return
 
-    await followUser(chat.user_id, token)
+    const result = await followUser(chat.user_id, token)
+    const status = result?.follow_status || 'pending'
     
-    // Update chat to remove message request badge
-    chat.is_message_request = false
-    
-    // Update contact list
-    const contact = contacts.value.find(c => c.user_id === chat.user_id)
-    if (contact) {
-      contact.is_message_request = false
+    if (status === 'accepted') {
+      // Update chat to remove message request badge
+      chat.is_message_request = false
+      
+      // Update contact list
+      const contact = contacts.value.find(c => c.user_id === chat.user_id)
+      if (contact) {
+        contact.is_message_request = false
+      }
+      
+      // Notify other components
+      window.dispatchEvent(new CustomEvent('follow-accepted'))
     }
-    
-    // Notify other components
-    window.dispatchEvent(new CustomEvent('follow-accepted'))
   } catch (err) {
     console.error('Failed to follow user:', err)
     error(err.message || 'Failed to follow user')
