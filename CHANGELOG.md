@@ -4,6 +4,16 @@
 
 ---
 
+## 2025-12-08
+
+### Follow API Instant Accept
+**Follow endpoint now returns follow_status and status-aware messages, auto-accepting public profiles immediately while keeping private profiles pending.** Notifications still fire appropriately for accepted vs pending requests.
+
+### Frontend Follow Status Handling
+**Profile, suggestions, and chat follow buttons now use the returned follow_status to show accepted vs pending and only broadcast follow-accepted when applicable.** UI feedback is accurate for public auto-follows and private requests.
+
+---
+
 ## 2025-12-04
 
 ### Profile Navigation and Read-Only Viewing
