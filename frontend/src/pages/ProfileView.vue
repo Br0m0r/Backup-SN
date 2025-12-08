@@ -876,10 +876,10 @@ async function handleFollowToggle() {
       followStatus.value = 'none';
       success('Unfollowed');
     } else {
-      await followUser(targetId, token);
-      // Backend returns pending for private profiles; keep status optimistic as pending
-      followStatus.value = 'pending';
-      success('Follow requested');
+      const result = await followUser(targetId, token);
+      const nextStatus = result?.follow_status || (isPrivate.value ? 'pending' : 'accepted');
+      followStatus.value = nextStatus;
+      success(nextStatus === 'accepted' ? 'Now following' : 'Follow requested');
     }
   } catch (error) {
     console.error('Follow toggle failed:', error);
@@ -1827,4 +1827,3 @@ watch(
   }
 }
 </style>
-
