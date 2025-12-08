@@ -136,13 +136,14 @@ The Users Service manages user profiles, follow relationships, user search, and 
   {
     "success": true,
     "data": {
-      "message": "Follow request sent successfully"
+      "message": "Followed successfully",
+      "follow_status": "accepted"
     }
   }
   ```
 - **Notes**:
-  - Public profiles: Instant follow
-  - Private profiles: Creates pending request
+  - Public profiles: Instant follow (`follow_status: "accepted"`)
+  - Private profiles: Creates pending request (`follow_status: "pending"`, message reflects pending)
 
 ---
 
