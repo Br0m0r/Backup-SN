@@ -4,6 +4,16 @@
 
 ---
 
+## 2025-12-09
+
+### Profile Menu Auto-Close
+**Profile dropdown now closes when clicking outside the avatar/menu and after selecting "View Profile" to prevent it staying open unexpectedly.** Added global click listener tied to the avatar wrapper with proper cleanup on unmount.
+
+### Chat Starts Minimized
+**Chat widget opens collapsed by default so it doesn't cover the screen on first visit, while the toggle still expands it when needed.** Default `showSidebar` is now false on initial render.
+
+---
+
 ## 2025-12-08
 
 ### Follow API Instant Accept
