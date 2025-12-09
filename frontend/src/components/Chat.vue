@@ -200,7 +200,7 @@ const router = useRouter()
 
 const { connected, sendMessage: wsSendMessage, on, wsState, connect, disconnect } = useWebSocket()
 
-const showSidebar = ref(true)
+const showSidebar = ref(false)
 const contacts = ref([])
 const openChats = ref([])
 const searchQuery = ref('')
