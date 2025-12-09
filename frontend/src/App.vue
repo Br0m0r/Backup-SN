@@ -16,12 +16,18 @@
         <Notifications />
 
         <!-- Profile Menu -->
-        <div class="header-icon avatar" @click="toggleProfile" role="button" tabindex="0">
-          <img src="https://placehold.co/64x64/11121f/fff?text=ME" alt="profile" />
-          <div v-if="profileOpen" class="dropdown profile-menu">
-            <button class="profile-btn" @click="viewProfile">View Profile</button>
-            <button class="ghost" @click="logout">Logout</button>
-          </div>
+<div
+      class="header-icon avatar"
+      ref="profileWrapper"
+      @click="toggleProfile"
+      role="button"
+      tabindex="0"
+    >
+      <img src="https://placehold.co/64x64/11121f/fff?text=ME" alt="profile" />
+      <div v-if="profileOpen" class="dropdown profile-menu">
+        <button class="profile-btn" @click="viewProfile">View Profile</button>
+        <button class="ghost" @click="logout">Logout</button>
+      </div>
         </div>
       </div>
     </header>
@@ -48,7 +54,7 @@
 </template>
 
 <script setup>
-import { computed, onMounted, ref } from 'vue';
+import { computed, onMounted, onBeforeUnmount, ref } from 'vue';
 import { useRouter } from 'vue-router';
 import Chat from './components/Chat.vue';
 import SuggestedUsers from './components/SuggestedUsers.vue';
@@ -61,9 +67,15 @@ const router = useRouter();
 const profileOpen = ref(false);
 const searchOpen = ref(false);
 const isAuthenticated = computed(() => hasSession());
+const profileWrapper = ref(null);
 
 onMounted(() => {
   restoreSession();
+  document.addEventListener('click', handleClickOutsideProfile);
+});
+
+onBeforeUnmount(() => {
+  document.removeEventListener('click', handleClickOutsideProfile);
 });
 
 function toggleProfile() {
@@ -78,6 +90,14 @@ function toggleSearch() {
 
 function closeSearch() {
   searchOpen.value = false;
+}
+
+function handleClickOutsideProfile(event) {
+  if (!profileOpen.value) return;
+  const el = profileWrapper.value;
+  if (el && !el.contains(event.target)) {
+    profileOpen.value = false;
+  }
 }
 
 function goToFeed() {
