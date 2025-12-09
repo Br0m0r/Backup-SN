@@ -117,7 +117,13 @@
             <div class="author">
               <div class="avatar">{{ getInitials(post) }}</div>
               <div>
-                <strong>{{ displayName }}</strong>
+                <button
+                  class="author-link"
+                  type="button"
+                  @click.stop="viewUserProfile(getPostOwnerId(post))"
+                >
+                  {{ displayName }}
+                </button>
                 <small>{{ formatTime(post.created_at) }} · {{ formatPrivacy(post.privacy_level) }}</small>
               </div>
             </div>
@@ -561,6 +567,11 @@ function normalizeGroup(group) {
 
 function getImageUrl(path) {
   return getPostImageUrl(path);
+}
+
+function getPostOwnerId(post) {
+  if (!post) return activeProfileId.value || profileUser.value?.id || null;
+  return post.user_id ?? post.author?.id ?? activeProfileId.value ?? profileUser.value?.id ?? null;
 }
 
 function getInitials(post) {
@@ -1508,6 +1519,22 @@ watch(
   display: flex;
   gap: 0.85rem;
   align-items: center;
+}
+
+.author-link {
+  background: transparent;
+  border: none;
+  padding: 0;
+  margin: 0;
+  color: inherit;
+  font: inherit;
+  font-weight: 700;
+  cursor: pointer;
+  text-align: left;
+}
+
+.author-link:hover {
+  color: var(--neon-cyan);
 }
 
 .author .avatar {
