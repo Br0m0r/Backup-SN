@@ -6,6 +6,9 @@
 
 ## 2025-12-09
 
+### Profile/Group Clickable Names
+**Made usernames clickable across profile and group views for quick navigation.** Activity panel post authors now route to their profiles, and group member names in the members grid open the member’s profile while keeping the card click intact.
+
 ### Profile Menu Auto-Close
 **Profile dropdown now closes when clicking outside the avatar/menu and after selecting "View Profile" to prevent it staying open unexpectedly.** Added global click listener tied to the avatar wrapper with proper cleanup on unmount.
 
