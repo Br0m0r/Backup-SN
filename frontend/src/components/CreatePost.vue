@@ -1,10 +1,12 @@
 <template>
-  <div class="create-post-card">
-    <div class="post-header">
+  <div class="create-post-card" :class="{ collapsed: !isOpen }">
+    <button class="post-header" type="button" @click="toggleOpen" :aria-expanded="isOpen">
       <h3>Create Post</h3>
-    </div>
+      <span class="chevron" :class="{ open: isOpen }">▾</span>
+    </button>
 
-    <form @submit.prevent="handleSubmit" class="post-form">
+    <Transition name="slide-fade">
+      <form v-show="isOpen" @submit.prevent="handleSubmit" class="post-form">
       <!-- Title input -->
       <input
         v-model="form.title"
@@ -91,7 +93,8 @@
       </div>
 
       <p v-if="error" class="error-message">{{ error }}</p>
-    </form>
+      </form>
+    </Transition>
   </div>
 </template>
 
@@ -127,6 +130,7 @@ const followers = ref([])
 const loadingFollowers = ref(false)
 const submitting = ref(false)
 const error = ref('')
+const isOpen = ref(false)
 
 const canSubmit = computed(() => {
   if (!form.value.content.trim()) return false
@@ -143,6 +147,10 @@ onMounted(() => {
     loadFollowers()
   }
 })
+
+function toggleOpen() {
+  isOpen.value = !isOpen.value
+}
 
 async function loadFollowers() {
   const token = getToken()
@@ -317,10 +325,38 @@ function getAvatarColor(username) {
   box-shadow: 0 12px 25px rgba(0, 0, 0, 0.35);
 }
 
+.create-post-card.collapsed {
+  padding: 1rem 1.25rem;
+}
+
+.post-header {
+  width: 100%;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.5rem;
+  margin: 0 0 0.5rem;
+  background: transparent;
+  border: none;
+  color: inherit;
+  padding: 0;
+  cursor: pointer;
+  text-align: left;
+}
+
 .post-header h3 {
-  margin: 0 0 1rem;
+  margin: 0;
   font-size: 1.1rem;
   color: var(--neon-cyan);
+}
+
+.chevron {
+  transition: transform 0.2s ease;
+  font-size: 1rem;
+}
+
+.chevron.open {
+  transform: rotate(180deg);
 }
 
 .post-form {
@@ -604,5 +640,16 @@ textarea::placeholder {
 .followers-list::-webkit-scrollbar-thumb {
   background: rgba(0, 247, 255, 0.3);
   border-radius: 3px;
+}
+
+.slide-fade-enter-active,
+.slide-fade-leave-active {
+  transition: all 0.25s ease;
+}
+
+.slide-fade-enter-from,
+.slide-fade-leave-to {
+  opacity: 0;
+  transform: translateY(-6px);
 }
 </style>
