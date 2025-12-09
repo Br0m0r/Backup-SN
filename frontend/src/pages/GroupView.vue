@@ -247,7 +247,13 @@
             >
               <div class="member-avatar">{{ getMemberInitialsFromData(member) }}</div>
               <div class="member-info">
-                <strong>{{ getMemberNameFromData(member) }}</strong>
+                <button
+                  class="member-name-btn"
+                  type="button"
+                  @click.stop="viewUserProfile(member.user_id)"
+                >
+                  {{ getMemberNameFromData(member) }}
+                </button>
                 <br/>
                 <span class="member-role">{{ member.role === 'creator' ? 'Creator' : 'Member' }}</span>
               </div>
@@ -1358,6 +1364,22 @@ onUnmounted(() => {
   font-weight: 700;
   font-size: 1.1rem;
   color: #05060d;
+}
+
+.member-name-btn {
+  background: transparent;
+  border: none;
+  padding: 0;
+  margin: 0;
+  color: inherit;
+  font: inherit;
+  font-weight: 700;
+  cursor: pointer;
+  text-align: left;
+}
+
+.member-name-btn:hover {
+  color: var(--neon-cyan);
 }
 
 .member-role {
