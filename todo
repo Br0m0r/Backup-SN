@@ -14,7 +14,14 @@ profile page
     if private user (not following), show only avatr and name
 posts
     fix hide private
-    fix edit comment
-    fix delete comment
+    fix edit comment bad request 404
+    fix delete comment bad request 404
 groups
-    fix create groups
+    fix create groups bad request 400
+    fix request
+    in posts, cant see the username who submitted it
+    add emojis in group chat
+    events
+        create event - fix enter time
+chat
+    have a notification in minimized chat
