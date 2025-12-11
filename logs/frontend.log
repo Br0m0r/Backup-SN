@@ -1,0 +1,8 @@
+
+> neon-social@0.0.0 dev
+> vite --host localhost --port 5173
+
+
+  VITE v5.4.21  ready in 524 ms
+
+  ➜  Local:   http://localhost:5173/

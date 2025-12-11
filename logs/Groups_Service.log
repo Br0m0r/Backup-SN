@@ -1,3 +1,131 @@
-[13:57:23] Starting Groups Service on port 8084...
-2025/11/13 13:57:23 Connected to database: /var/home/student/Downloads/gw43gh/social-network/social_network.db
-2025/11/13 13:57:23 Group Service starting on port :8084
+2025/12/11 12:45:45 Connected to database: /var/home/student/Downloads/WERG/social-network/social_network.db
+2025/12/11 12:45:45 Using simple auth cache with 5-minute TTL
+2025/12/11 12:45:45 Group Service starting on port :8084
+2025/12/11 12:45:49 [AuthCache] Verifying token with auth service: http://localhost:8081
+2025/12/11 12:45:49 [AuthCache] Verifying token with auth service: http://localhost:8081
+2025/12/11 12:45:49 [AuthCache] Token verified successfully for user 6 (cm)
+2025/12/11 12:45:49 [AuthCache] Token verified successfully for user 6 (cm)
+2025/12/11 12:45:49 GROUP SERVICE: GET /groups 200 6.028444ms
+2025/12/11 12:45:49 GROUP SERVICE: GET /groups 200 5.592487ms
+2025/12/11 12:45:49 GROUP SERVICE: GET /uploads/groups/group_1_1765033849.jpeg 200 234.432µs
+2025/12/11 12:45:49 GROUP SERVICE: GET /uploads/groups/group_3_1765033961.webp 200 274.654µs
+2025/12/11 12:46:04 [AuthCache] Verifying token with auth service: http://localhost:8081
+2025/12/11 12:46:04 [AuthCache] Token verified successfully for user 1 (manos)
+2025/12/11 12:46:04 GROUP SERVICE: GET /groups 200 1.686524ms
+2025/12/11 12:46:04 GROUP SERVICE: GET /groups 200 314.563µs
+2025/12/11 12:46:04 GROUP SERVICE: GET /uploads/groups/group_1_1765033849.jpeg 200 199.967µs
+2025/12/11 12:46:04 GROUP SERVICE: GET /uploads/groups/group_3_1765033961.webp 200 179.154µs
+2025/12/11 12:46:11 GROUP SERVICE: GET /groups 200 308.351µs
+2025/12/11 12:46:16 GROUP SERVICE: GET /groups 200 311.695µs
+2025/12/11 12:46:16 GROUP SERVICE: GET /groups 200 237.677µs
+2025/12/11 12:46:38 GROUP SERVICE: GET /groups 200 356.491µs
+2025/12/11 12:46:38 GROUP SERVICE: GET /groups 200 370.844µs
+2025/12/11 12:46:44 GROUP SERVICE: POST /groups 400 17.064µs
+2025/12/11 12:47:45 GROUP SERVICE: GET /groups/1 200 263.065µs
+2025/12/11 12:47:45 GROUP SERVICE: GET /groups/1/members 200 398.806µs
+2025/12/11 12:47:45 GROUP SERVICE: GET /groups/1/requests 200 253.228µs
+2025/12/11 12:47:45 GROUP SERVICE: GET /groups/1/events 200 444.717µs
+2025/12/11 12:48:06 [Notify] Created notification: type=group_invite, user=2
+2025/12/11 12:48:06 GROUP SERVICE: POST /groups/1/invite 200 31.495815ms
+2025/12/11 12:48:20 GROUP SERVICE: GET /groups/1 200 317.47µs
+2025/12/11 12:48:20 GROUP SERVICE: GET /groups/1/members 200 286.467µs
+2025/12/11 12:48:20 GROUP SERVICE: GET /groups/1/events 200 346.259µs
+2025/12/11 12:48:20 GROUP SERVICE: GET /groups/1/requests 200 301.303µs
+2025/12/11 12:50:02 GROUP SERVICE: GET /groups 200 254.265µs
+2025/12/11 12:50:02 GROUP SERVICE: GET /groups 200 337.209µs
+2025/12/11 12:50:14 [AuthCache] Verifying token with auth service: http://localhost:8081
+2025/12/11 12:50:14 [AuthCache] Token verified successfully for user 6 (cm)
+2025/12/11 12:50:14 GROUP SERVICE: GET /groups 200 1.833824ms
+2025/12/11 12:50:14 GROUP SERVICE: GET /groups 200 331.702µs
+2025/12/11 12:50:14 GROUP SERVICE: GET /uploads/groups/group_3_1765033961.webp 200 308.536µs
+2025/12/11 12:50:14 GROUP SERVICE: GET /uploads/groups/group_1_1765033849.jpeg 200 248.672µs
+2025/12/11 12:50:16 GROUP SERVICE: GET /groups/1 200 249.299µs
+2025/12/11 12:50:16 GROUP SERVICE: GET /groups/1/members 200 334.674µs
+2025/12/11 12:50:16 GROUP SERVICE: GET /groups/1/events 200 668.335µs
+2025/12/11 12:50:18 GROUP SERVICE: DELETE /groups/1/leave 200 5.372612ms
+2025/12/11 12:50:18 GROUP SERVICE: GET /groups 200 481.758µs
+2025/12/11 12:50:18 GROUP SERVICE: GET /groups 200 697.728µs
+2025/12/11 12:50:21 GROUP SERVICE: GET /groups 200 255.597µs
+2025/12/11 12:50:21 GROUP SERVICE: GET /groups 200 426.703µs
+2025/12/11 12:50:24 GROUP SERVICE: GET /groups/1 200 251.324µs
+2025/12/11 12:50:24 GROUP SERVICE: GET /groups/1/events 200 325.355µs
+2025/12/11 12:50:24 GROUP SERVICE: GET /groups/1/members 200 240.801µs
+2025/12/11 12:50:24 GROUP SERVICE: GET /groups/1/requests 200 284.005µs
+2025/12/11 12:50:31 [Notify] Created notification: type=group_invite, user=6
+2025/12/11 12:50:31 GROUP SERVICE: POST /groups/1/invite 200 32.335811ms
+2025/12/11 12:50:50 GROUP SERVICE: GET /groups 200 303.885µs
+2025/12/11 12:53:31 GROUP SERVICE: GET /groups 200 425.988µs
+2025/12/11 12:53:31 GROUP SERVICE: GET /groups 200 741.221µs
+2025/12/11 12:53:32 GROUP SERVICE: GET /groups/1 200 276.813µs
+2025/12/11 12:53:32 GROUP SERVICE: GET /groups/1/members 200 335.157µs
+2025/12/11 12:53:32 GROUP SERVICE: GET /groups/1/events 200 311.217µs
+2025/12/11 12:53:55 [AuthCache] Verifying token with auth service: http://localhost:8081
+2025/12/11 12:53:55 [AuthCache] Token verified successfully for user 1 (manos)
+2025/12/11 12:53:55 GROUP SERVICE: GET /groups/1 200 1.953002ms
+2025/12/11 12:53:55 GROUP SERVICE: GET /uploads/groups/group_1_1765033849.jpeg 304 74.609µs
+2025/12/11 12:53:55 GROUP SERVICE: GET /groups/1/members 200 352.62µs
+2025/12/11 12:53:55 GROUP SERVICE: GET /groups/1/events 200 547.224µs
+2025/12/11 12:53:55 GROUP SERVICE: GET /groups/1/requests 200 528.789µs
+2025/12/11 12:54:14 [Notify] Created notification: type=group_invite, user=7
+2025/12/11 12:54:14 GROUP SERVICE: POST /groups/1/invite 200 30.672635ms
+2025/12/11 12:54:17 GROUP SERVICE: GET /groups/1 200 852.259µs
+2025/12/11 12:54:17 GROUP SERVICE: GET /groups/1/members 200 479.496µs
+2025/12/11 12:54:17 GROUP SERVICE: GET /groups/1/events 200 446.632µs
+2025/12/11 12:54:17 GROUP SERVICE: GET /groups/1/requests 200 218.223µs
+2025/12/11 12:54:41 GROUP SERVICE: DELETE /groups/1/leave 200 5.674009ms
+2025/12/11 12:54:42 GROUP SERVICE: GET /groups 200 394.553µs
+2025/12/11 12:54:42 GROUP SERVICE: GET /groups 200 394.128µs
+2025/12/11 12:54:43 GROUP SERVICE: GET /groups/1 200 221.451µs
+2025/12/11 12:54:44 [Notify] Created notification: type=group_request, user=1
+2025/12/11 12:54:44 GROUP SERVICE: POST /groups/1/request 200 33.903873ms
+2025/12/11 12:54:44 GROUP SERVICE: GET /groups/1 200 264.028µs
+2025/12/11 12:54:53 GROUP SERVICE: GET /groups/1 200 265.169µs
+2025/12/11 12:54:54 GROUP SERVICE: GET /groups/1/events 200 315.328µs
+2025/12/11 12:54:54 GROUP SERVICE: GET /groups/1/members 200 237.723µs
+2025/12/11 12:54:54 GROUP SERVICE: GET /groups/1/requests 200 181.75µs
+2025/12/11 12:54:56 [Notify] Created notification: type=group_invite, user=6
+2025/12/11 12:54:56 [Notify] Created notification: type=group_invite, user=1
+2025/12/11 12:54:56 GROUP SERVICE: POST /groups/1/requests/respond 200 18.932287ms
+2025/12/11 12:54:56 GROUP SERVICE: GET /groups/1/requests 200 258.509µs
+2025/12/11 12:54:56 GROUP SERVICE: GET /groups/1/members 200 771.722µs
+2025/12/11 12:55:02 GROUP SERVICE: GET /groups/1 200 485.878µs
+2025/12/11 12:55:02 GROUP SERVICE: GET /groups/1/members 200 394.303µs
+2025/12/11 12:55:02 GROUP SERVICE: GET /groups/1/events 200 380.57µs
+2025/12/11 12:55:28 [AuthCache] Verifying token with auth service: http://localhost:8081
+2025/12/11 12:55:28 [AuthCache] Token verified successfully for user 6 (cm)
+2025/12/11 12:55:28 GROUP SERVICE: GET /groups/1 200 1.825586ms
+2025/12/11 12:55:28 GROUP SERVICE: GET /groups/1/members 200 457.364µs
+2025/12/11 12:55:28 GROUP SERVICE: GET /groups/1/events 200 1.014555ms
+2025/12/11 12:55:39 GROUP SERVICE: GET /groups 200 289.211µs
+2025/12/11 12:55:39 GROUP SERVICE: GET /groups 200 204.954µs
+2025/12/11 12:56:15 GROUP SERVICE: GET /groups/1 200 384.747µs
+2025/12/11 12:56:15 GROUP SERVICE: GET /groups/1/members 200 377.067µs
+2025/12/11 12:56:15 GROUP SERVICE: GET /groups/1/events 200 283.5µs
+2025/12/11 12:56:15 GROUP SERVICE: GET /groups/1/requests 200 312.111µs
+2025/12/11 12:58:30 GROUP SERVICE: GET /groups/1 200 262.519µs
+2025/12/11 12:58:30 GROUP SERVICE: GET /uploads/groups/group_1_1765033849.jpeg 304 69.008µs
+2025/12/11 12:58:30 GROUP SERVICE: GET /groups/1/members 200 417.334µs
+2025/12/11 12:58:30 GROUP SERVICE: GET /groups/1/events 200 308.059µs
+2025/12/11 12:58:33 [Notify] Created notification: type=event, user=1
+2025/12/11 12:58:33 GROUP SERVICE: POST /events/respond 200 33.862442ms
+2025/12/11 12:58:33 GROUP SERVICE: GET /groups/1/events 200 260.904µs
+2025/12/11 13:00:04 GROUP SERVICE: GET /groups 200 515.1µs
+2025/12/11 13:00:14 [AuthCache] Verifying token with auth service: http://localhost:8081
+2025/12/11 13:00:14 [AuthCache] Token verified successfully for user 1 (manos)
+2025/12/11 13:00:14 GROUP SERVICE: GET /groups 200 2.314784ms
+2025/12/11 13:02:03 [AuthCache] Verifying token with auth service: http://localhost:8081
+2025/12/11 13:02:03 [AuthCache] Verifying token with auth service: http://localhost:8081
+2025/12/11 13:02:03 [AuthCache] Token verified successfully for user 6 (cm)
+2025/12/11 13:02:03 [AuthCache] Token verified successfully for user 6 (cm)
+2025/12/11 13:02:03 GROUP SERVICE: GET /groups 200 3.602888ms
+2025/12/11 13:02:03 GROUP SERVICE: GET /groups 200 3.245529ms
+2025/12/11 13:02:03 GROUP SERVICE: GET /uploads/groups/group_3_1765033961.webp 200 302.336µs
+2025/12/11 13:02:15 GROUP SERVICE: GET /groups 200 262.755µs
+2025/12/11 13:02:15 GROUP SERVICE: GET /groups 200 211.265µs
+2025/12/11 13:02:33 [AuthCache] Verifying token with auth service: http://localhost:8081
+2025/12/11 13:02:33 [AuthCache] Token verified successfully for user 6 (cm)
+2025/12/11 13:02:33 [AuthCache] Verifying token with auth service: http://localhost:8081
+2025/12/11 13:02:33 GROUP SERVICE: GET /groups 200 1.427682ms
+2025/12/11 13:02:33 [AuthCache] Token verified successfully for user 6 (cm)
+2025/12/11 13:02:33 GROUP SERVICE: GET /groups 200 1.730439ms
+signal: interrupt

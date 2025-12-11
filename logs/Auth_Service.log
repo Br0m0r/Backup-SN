@@ -1,3 +1,53 @@
-[13:57:23] Starting Auth Service on port 8081...
-2025/11/13 13:57:24 Connected to database: /var/home/student/Downloads/gw43gh/social-network/social_network.db
-2025/11/13 13:57:24 Auth Service starting on port :8081
+2025/12/11 12:45:44 Connected to database: /var/home/student/Downloads/WERG/social-network/social_network.db
+2025/12/11 12:45:44 Auth Service starting on port :8081
+2025/12/11 12:45:49 AUTH SERVICE: GET /internal/verify-token 200 648.454µs
+2025/12/11 12:45:49 AUTH SERVICE: GET /internal/verify-token 200 397.969µs
+2025/12/11 12:45:49 AUTH SERVICE: GET /internal/verify-token 200 994.371µs
+2025/12/11 12:45:49 AUTH SERVICE: GET /internal/verify-token 200 369.369µs
+2025/12/11 12:45:49 AUTH SERVICE: GET /internal/verify-token 200 1.074821ms
+2025/12/11 12:45:49 AUTH SERVICE: GET /internal/verify-token 200 369.484µs
+2025/12/11 12:45:52 AUTH SERVICE: POST /logout 200 5.832098ms
+2025/12/11 12:46:03 AUTH SERVICE: POST /login 200 79.342811ms
+2025/12/11 12:46:03 AUTH SERVICE: GET /internal/verify-token 200 353.558µs
+2025/12/11 12:46:03 AUTH SERVICE: GET /internal/verify-token 200 255.229µs
+2025/12/11 12:46:04 AUTH SERVICE: GET /internal/verify-token 200 209.901µs
+2025/12/11 12:46:04 AUTH SERVICE: GET /internal/verify-token 200 165.797µs
+2025/12/11 12:46:04 AUTH SERVICE: GET /internal/verify-token 200 284.482µs
+2025/12/11 12:49:41 AUTH SERVICE: POST /login 401 73.726686ms
+2025/12/11 12:49:48 AUTH SERVICE: POST /login 401 73.219785ms
+2025/12/11 12:50:14 AUTH SERVICE: POST /login 200 82.756826ms
+2025/12/11 12:50:14 AUTH SERVICE: GET /internal/verify-token 200 331.336µs
+2025/12/11 12:50:14 AUTH SERVICE: GET /internal/verify-token 200 342.425µs
+2025/12/11 12:50:14 AUTH SERVICE: GET /internal/verify-token 200 455.961µs
+2025/12/11 12:50:14 AUTH SERVICE: GET /internal/verify-token 200 303.251µs
+2025/12/11 12:50:14 AUTH SERVICE: GET /internal/verify-token 200 269.707µs
+2025/12/11 12:53:20 AUTH SERVICE: GET /internal/verify-token 200 334.361µs
+2025/12/11 12:53:55 AUTH SERVICE: GET /internal/verify-token 200 237.45µs
+2025/12/11 12:53:55 AUTH SERVICE: GET /internal/verify-token 200 239.33µs
+2025/12/11 12:53:55 AUTH SERVICE: GET /internal/verify-token 200 274.657µs
+2025/12/11 12:53:55 AUTH SERVICE: GET /internal/verify-token 200 261.36µs
+2025/12/11 12:55:28 AUTH SERVICE: GET /internal/verify-token 200 442.468µs
+2025/12/11 12:55:28 AUTH SERVICE: GET /internal/verify-token 200 211.884µs
+2025/12/11 12:55:28 AUTH SERVICE: GET /internal/verify-token 200 296.723µs
+2025/12/11 12:55:28 AUTH SERVICE: GET /internal/verify-token 200 258.242µs
+2025/12/11 12:55:39 AUTH SERVICE: GET /internal/verify-token 200 238.235µs
+2025/12/11 12:58:53 AUTH SERVICE: GET /internal/verify-token 200 262.537µs
+2025/12/11 12:58:57 AUTH SERVICE: GET /internal/verify-token 200 287.315µs
+2025/12/11 13:00:10 AUTH SERVICE: GET /internal/verify-token 200 262.219µs
+2025/12/11 13:00:10 AUTH SERVICE: GET /internal/verify-token 200 275.169µs
+2025/12/11 13:00:14 AUTH SERVICE: GET /internal/verify-token 200 299.049µs
+2025/12/11 13:00:33 AUTH SERVICE: GET /internal/verify-token 200 213.735µs
+2025/12/11 13:00:33 AUTH SERVICE: GET /internal/verify-token 200 289.984µs
+2025/12/11 13:00:33 AUTH SERVICE: GET /internal/verify-token 200 338.165µs
+2025/12/11 13:00:40 AUTH SERVICE: GET /internal/verify-token 200 233.864µs
+2025/12/11 13:02:03 AUTH SERVICE: GET /internal/verify-token 200 257.788µs
+2025/12/11 13:02:03 AUTH SERVICE: GET /internal/verify-token 200 146.067µs
+2025/12/11 13:02:16 AUTH SERVICE: POST /logout 200 5.044303ms
+2025/12/11 13:02:32 AUTH SERVICE: POST /login 200 79.951875ms
+2025/12/11 13:02:32 AUTH SERVICE: GET /internal/verify-token 200 325.366µs
+2025/12/11 13:02:32 AUTH SERVICE: GET /internal/verify-token 200 238.053µs
+2025/12/11 13:02:33 AUTH SERVICE: GET /internal/verify-token 200 436.991µs
+2025/12/11 13:02:33 AUTH SERVICE: GET /internal/verify-token 200 443.232µs
+2025/12/11 13:02:33 AUTH SERVICE: GET /internal/verify-token 200 278.624µs
+2025/12/11 13:02:33 AUTH SERVICE: GET /internal/verify-token 200 385.408µs
+signal: interrupt

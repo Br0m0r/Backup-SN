@@ -36,6 +36,7 @@ services:
       - AUTH_SERVICE_URL=http://auth-service:8081  # How user service finds auth service
     volumes:
       - ./social_network.db:/app/social_network.db:rw
+      - ./services/users/uploads:/root/uploads:rw
 
   # Post Service - services/posts/main.go runs on port 8083
   post-service:
@@ -55,6 +56,7 @@ services:
       - PORT=8083
     volumes:
       - ./social_network.db:/app/social_network.db:rw
+      - ./services/posts/uploads:/app/uploads:rw
 
   # Group Service - services/groups/main.go runs on port 8084
   group-service:
@@ -73,6 +75,7 @@ services:
       - AUTH_SERVICE_URL=http://auth-service:8081  # How group service finds auth service
     volumes:
       - ./social_network.db:/app/social_network.db:rw
+      - ./services/groups/uploads:/app/uploads:rw
 
   # Chat Service - services/chat/main.go runs on port 8085
   chat-service:
@@ -91,6 +94,7 @@ services:
       - AUTH_SERVICE_URL=http://auth-service:8081  # How chat service finds auth service
     volumes:
       - ./social_network.db:/app/social_network.db:rw
+      - ./services/chat/uploads:/app/uploads:rw
 
   # Notification Service - services/notifications/main.go runs on port 8086
   notification-service:

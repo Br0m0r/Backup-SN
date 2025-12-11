@@ -1,3 +1,105 @@
-[13:57:23] Starting Users Service on port 8082...
-2025/11/13 13:57:23 Connected to database: /var/home/student/Downloads/gw43gh/social-network/social_network.db
-2025/11/13 13:57:23 User Service starting on port :8082
+2025/12/11 12:45:44 Connected to database: /var/home/student/Downloads/WERG/social-network/social_network.db
+2025/12/11 12:45:44 Using simple auth cache with 5-minute TTL
+2025/12/11 12:45:44 User Service starting on port :8082
+2025/12/11 12:45:49 [AuthCache] Verifying token with auth service: http://localhost:8081
+2025/12/11 12:45:49 [AuthCache] Token verified successfully for user 6 (cm)
+2025/12/11 12:45:49 USER SERVICE: GET /users/6/followers 200 4.617177ms
+2025/12/11 12:45:49 USER SERVICE: GET /uploads/avatars/avatar_1_1764328453.jpeg 200 493.779µs
+2025/12/11 12:46:04 [AuthCache] Verifying token with auth service: http://localhost:8081
+2025/12/11 12:46:04 [AuthCache] Token verified successfully for user 1 (manos)
+2025/12/11 12:46:04 USER SERVICE: GET /users/1/followers 200 785.832µs
+2025/12/11 12:46:04 USER SERVICE: GET /uploads/avatars/avatar_1_1764328453.jpeg 200 211.127µs
+2025/12/11 12:46:11 GetUserProfileByID: viewer=1 requesting profile of user=1
+2025/12/11 12:46:11 GetUserProfileByID: Returning profile for user=1 with 9 posts, 2 followers, 5 following
+2025/12/11 12:46:11 USER SERVICE: GET /users/1/profile 200 1.002864ms
+2025/12/11 12:46:11 USER SERVICE: GET /users/1/followers 200 273.307µs
+2025/12/11 12:46:11 USER SERVICE: GET /users/1/following 200 419.995µs
+2025/12/11 12:46:12 USER SERVICE: GET /users/1/followers 200 257.199µs
+2025/12/11 12:46:13 USER SERVICE: GET /users/1/following 200 286.759µs
+2025/12/11 12:46:16 USER SERVICE: GET /users/1/followers 200 197.166µs
+2025/12/11 12:46:38 USER SERVICE: GET /users/1/followers 200 327.734µs
+2025/12/11 12:47:48 USER SERVICE: GET /search/group 200 262.952µs
+2025/12/11 12:47:50 USER SERVICE: GET /uploads/avatars/avatar_8_1764329769.jpg 200 7.853863ms
+2025/12/11 12:48:04 USER SERVICE: GET /search/group 200 1.207748ms
+2025/12/11 12:48:04 USER SERVICE: GET /search/group 200 493.451µs
+2025/12/11 12:49:58 GetUserProfileByID: viewer=1 requesting profile of user=6
+2025/12/11 12:49:58 GetUserProfileByID: Access denied for viewer=1 to user=6 profile (private)
+2025/12/11 12:49:58 USER SERVICE: GET /users/6/profile 200 547.849µs
+2025/12/11 12:49:58 USER SERVICE: GET /follow/status/6 200 157.22µs
+2025/12/11 12:49:58 USER SERVICE: GET /users/6/followers 200 234.685µs
+2025/12/11 12:49:58 USER SERVICE: GET /users/6/following 200 129.185µs
+2025/12/11 12:50:02 USER SERVICE: GET /users/1/followers 200 199.412µs
+2025/12/11 12:50:14 [AuthCache] Verifying token with auth service: http://localhost:8081
+2025/12/11 12:50:14 [AuthCache] Token verified successfully for user 6 (cm)
+2025/12/11 12:50:14 USER SERVICE: GET /users/6/followers 200 2.092074ms
+2025/12/11 12:50:14 USER SERVICE: GET /uploads/avatars/avatar_1_1764328453.jpeg 200 268.06µs
+2025/12/11 12:50:18 USER SERVICE: GET /users/6/followers 200 1.491416ms
+2025/12/11 12:50:21 USER SERVICE: GET /users/1/followers 200 232.188µs
+2025/12/11 12:50:28 USER SERVICE: GET /search/group 200 373.665µs
+2025/12/11 12:50:50 GetUserProfileByID: viewer=6 requesting profile of user=6
+2025/12/11 12:50:50 GetUserProfileByID: Returning profile for user=6 with 4 posts, 1 followers, 0 following
+2025/12/11 12:50:50 USER SERVICE: GET /users/6/profile 200 590.494µs
+2025/12/11 12:50:50 USER SERVICE: GET /users/6/followers 200 254.767µs
+2025/12/11 12:50:50 USER SERVICE: GET /users/6/following 200 239.54µs
+2025/12/11 12:53:20 [AuthCache] Verifying token with auth service: http://localhost:8081
+2025/12/11 12:53:20 [AuthCache] Token verified successfully for user 1 (manos)
+2025/12/11 12:53:20 USER SERVICE: GET /search/group 200 2.811087ms
+2025/12/11 12:53:31 USER SERVICE: GET /users/6/followers 200 198.23µs
+2025/12/11 12:53:36 USER SERVICE: GET /search/group 200 365.64µs
+2025/12/11 12:54:12 USER SERVICE: GET /search/group 200 349.548µs
+2025/12/11 12:54:12 USER SERVICE: GET /search/group 200 339.286µs
+2025/12/11 12:54:42 USER SERVICE: GET /users/6/followers 200 268.694µs
+2025/12/11 12:55:39 [AuthCache] Verifying token with auth service: http://localhost:8081
+2025/12/11 12:55:39 [AuthCache] Token verified successfully for user 6 (cm)
+2025/12/11 12:55:39 USER SERVICE: GET /users/6/followers 200 2.546117ms
+2025/12/11 12:58:52 USER SERVICE: GET /uploads/avatars/avatar_8_1764329769.jpg 304 99.119µs
+2025/12/11 12:58:53 [AuthCache] Verifying token with auth service: http://localhost:8081
+2025/12/11 12:58:53 [AuthCache] Token verified successfully for user 1 (manos)
+2025/12/11 12:58:53 GetUserProfileByID: viewer=1 requesting profile of user=6
+2025/12/11 12:58:53 GetUserProfileByID: Access denied for viewer=1 to user=6 profile (private)
+2025/12/11 12:58:53 USER SERVICE: GET /users/6/profile 200 1.784634ms
+2025/12/11 12:58:53 USER SERVICE: GET /follow/status/6 200 296.08µs
+2025/12/11 12:58:53 USER SERVICE: GET /users/6/followers 200 781.159µs
+2025/12/11 12:58:53 USER SERVICE: GET /users/6/following 200 10.24421ms
+2025/12/11 12:59:00 USER SERVICE: GET /uploads/avatars/avatar_1_1764328453.jpeg 200 219.068µs
+2025/12/11 13:00:04 GetUserProfileByID: viewer=6 requesting profile of user=6
+2025/12/11 13:00:04 GetUserProfileByID: Returning profile for user=6 with 4 posts, 1 followers, 0 following
+2025/12/11 13:00:04 USER SERVICE: GET /users/6/profile 200 743.137µs
+2025/12/11 13:00:04 USER SERVICE: GET /users/6/following 200 243.872µs
+2025/12/11 13:00:04 USER SERVICE: GET /users/6/followers 200 326.648µs
+2025/12/11 13:00:07 GetUserProfileByID: viewer=6 requesting profile of user=6
+2025/12/11 13:00:07 GetUserProfileByID: Returning profile for user=6 with 4 posts, 1 followers, 0 following
+2025/12/11 13:00:07 USER SERVICE: GET /users/6/profile 200 484.803µs
+2025/12/11 13:00:07 USER SERVICE: GET /users/6/followers 200 379.74µs
+2025/12/11 13:00:07 USER SERVICE: GET /users/6/following 200 354.564µs
+2025/12/11 13:00:10 GetUserProfileByID: viewer=1 requesting profile of user=6
+2025/12/11 13:00:10 GetUserProfileByID: Access denied for viewer=1 to user=6 profile (private)
+2025/12/11 13:00:10 USER SERVICE: GET /users/6/profile 200 353.721µs
+2025/12/11 13:00:10 USER SERVICE: GET /follow/status/6 200 121.035µs
+2025/12/11 13:00:10 USER SERVICE: GET /users/6/followers 200 227.848µs
+2025/12/11 13:00:10 USER SERVICE: GET /users/6/following 200 185.936µs
+2025/12/11 13:00:14 GetUserProfileByID: viewer=1 requesting profile of user=1
+2025/12/11 13:00:14 GetUserProfileByID: Returning profile for user=1 with 10 posts, 2 followers, 5 following
+2025/12/11 13:00:14 USER SERVICE: GET /users/1/profile 200 1.057857ms
+2025/12/11 13:00:14 USER SERVICE: GET /uploads/avatars/avatar_1_1764328453.jpeg 304 166.019µs
+2025/12/11 13:00:14 USER SERVICE: GET /users/1/followers 200 260.03µs
+2025/12/11 13:00:14 USER SERVICE: GET /users/1/following 200 299.34µs
+2025/12/11 13:00:23 USER SERVICE: GET /users/1/followers 200 247.349µs
+2025/12/11 13:00:24 USER SERVICE: GET /users/1/following 200 651.361µs
+2025/12/11 13:00:29 USER SERVICE: GET /users/6/following 200 298.658µs
+2025/12/11 13:00:33 GetUserProfileByID: viewer=6 requesting profile of user=6
+2025/12/11 13:00:33 GetUserProfileByID: Returning profile for user=6 with 4 posts, 1 followers, 0 following
+2025/12/11 13:00:33 USER SERVICE: GET /users/6/profile 200 511.638µs
+2025/12/11 13:00:33 USER SERVICE: GET /users/6/following 200 262.685µs
+2025/12/11 13:00:33 USER SERVICE: GET /users/6/followers 200 440.017µs
+2025/12/11 13:00:35 USER SERVICE: GET /uploads/avatars/avatar_1_1764328453.jpeg 200 240.564µs
+2025/12/11 13:00:38 USER SERVICE: GET /users/6/followers 200 196.054µs
+2025/12/11 13:00:40 [AuthCache] Verifying token with auth service: http://localhost:8081
+2025/12/11 13:00:40 [AuthCache] Token verified successfully for user 6 (cm)
+2025/12/11 13:00:40 USER SERVICE: GET /users/6/following 200 1.651498ms
+2025/12/11 13:02:03 USER SERVICE: GET /users/6/followers 200 316.798µs
+2025/12/11 13:02:15 USER SERVICE: GET /users/6/followers 200 305.091µs
+2025/12/11 13:02:33 [AuthCache] Verifying token with auth service: http://localhost:8081
+2025/12/11 13:02:33 [AuthCache] Token verified successfully for user 6 (cm)
+2025/12/11 13:02:33 USER SERVICE: GET /users/6/followers 200 2.376569ms
+signal: interrupt

@@ -1,1 +1,20 @@
-fix request for private/public profiles --------- [DONE]
+create posts
+    add user filter
+container for front
+Are the migrations being applied by the migration system?
+notifications
+    click out - close pop-up
+left side panel
+    click out
+friend request
+    notifications might keep the previous user session??? wtf???
+profile page
+    remove eye toggle button
+    add throttle/confirm to public/private
+    if private user (not following), show only avatr and name
+posts
+    fix hide private
+    fix edit comment
+    fix delete comment
+groups
+    fix create groups
