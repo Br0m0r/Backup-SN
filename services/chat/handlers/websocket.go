@@ -259,8 +259,9 @@ func (c *Client) writePump() {
 
 // handleChatMessage processes incoming chat messages
 func (c *Client) handleChatMessage(wsMsg *models.WebSocketMessage) {
-	// Validate message content
-	sanitizedContent, err := utils.ValidateMessageContent(wsMsg.Content, false)
+	// Validate message content (allow empty if image is provided)
+	allowEmpty := wsMsg.ImagePath != nil && *wsMsg.ImagePath != ""
+	sanitizedContent, err := utils.ValidateMessageContent(wsMsg.Content, allowEmpty)
 	if err != nil {
 		log.Printf("Message validation failed: %v", err)
 		c.sendError(err.Error())
@@ -347,8 +348,9 @@ func (c *Client) sendError(errMsg string) {
 
 // handleGroupChatMessage processes incoming group chat messages
 func (c *Client) handleGroupChatMessage(wsMsg *models.WebSocketMessage) {
-	// Validate message content
-	sanitizedContent, err := utils.ValidateMessageContent(wsMsg.Content, false)
+	// Validate message content (allow empty if image is provided)
+	allowEmpty := wsMsg.ImagePath != nil && *wsMsg.ImagePath != ""
+	sanitizedContent, err := utils.ValidateMessageContent(wsMsg.Content, allowEmpty)
 	if err != nil {
 		log.Printf("Message validation failed: %v", err)
 		c.sendError(err.Error())
