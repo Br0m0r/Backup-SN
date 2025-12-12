@@ -124,14 +124,14 @@
               @click="navigateToPost(post.id)"
             >
               <div class="post-header">
-                <div class="avatar" v-if="post.author_avatar">
-                  <img :src="getImageUrl(post.author_avatar)" alt="Avatar" />
+                <div class="avatar" v-if="post.author?.avatar_path">
+                  <img :src="getUserAvatarUrl(post.author, 48)" alt="Avatar" />
                 </div>
                 <div class="avatar" v-else>
-                  <span class="initials">{{ getInitials(post.author_name) }}</span>
+                  <span class="initials">{{ getAuthorInitials(post.author) }}</span>
                 </div>
                 <div class="author-info">
-                  <h3>{{ post.author_name }}</h3>
+                  <h3>{{ getAuthorName(post.author) }}</h3>
                   <p class="meta">
                     {{ formatTime(post.created_at) }}
                   </p>
@@ -182,9 +182,19 @@
                 maxlength="1000"
                 @keydown.enter.prevent="sendChatMessage"
               />
-              <button class="cta" @click="sendChatMessage" :disabled="!newChatMessage.trim() || sendingChat">
-                {{ sendingChat ? 'Sending...' : 'Send' }}
-              </button>
+              <div class="chat-input-buttons">
+                <button class="emoji-btn" @click="showEmojiPicker = !showEmojiPicker" type="button" title="Add emoji">
+                  😊
+                </button>
+                <button class="cta" @click="sendChatMessage" :disabled="!newChatMessage.trim() || sendingChat">
+                  {{ sendingChat ? 'Sending...' : 'Send' }}
+                </button>
+              </div>
+              <EmojiPicker 
+                :isOpen="showEmojiPicker" 
+                @select="selectEmoji" 
+                @close="showEmojiPicker = false" 
+              />
             </div>
           </div>
         </div>
@@ -357,6 +367,7 @@
                 id="event-date"
                 v-model="newEvent.event_time"
                 type="datetime-local"
+                :min="minEventDateTime"
                 required
               />
             </div>
@@ -379,6 +390,7 @@ import { ref, computed, onMounted, onUnmounted, nextTick, watch } from 'vue'
 import { useRouter, useRoute } from 'vue-router'
 import { getToken, getUser } from '@/stores/auth'
 import CreatePost from '@/components/CreatePost.vue'
+import EmojiPicker from '@/components/EmojiPicker.vue'
 import {
   getGroup,
   getGroupMembers,
@@ -391,7 +403,8 @@ import {
   inviteToGroup,
   getPendingRequests,
   respondToRequest as respondToRequestService,
-  updateGroupImage
+  updateGroupImage,
+  getGroupImageUrl
 } from '@/services/groupsService'
 import { getGroupPosts as fetchGroupPosts, getPostImageUrl } from '@/services/postsService'
 import { searchUsersForGroup } from '@/services/usersService'
@@ -402,7 +415,7 @@ import { useAvatar } from '@/composables/useAvatar'
 
 const router = useRouter()
 const route = useRoute()
-const { getUserAvatarUrl } = useAvatar()
+const { getUserAvatarUrl, getAvatarUrl } = useAvatar()
 
 // WebSocket connection for live chat
 const { connected: wsConnected, sendGroupMessage, on: wsOn, off: wsOff } = useWebSocket()
@@ -430,6 +443,7 @@ const activeTab = ref('posts')
 const newChatMessage = ref('')
 const sendingChat = ref(false)
 const chatMessagesEl = ref(null)
+const showEmojiPicker = ref(false)
 
 const showInviteModal = ref(false)
 const inviteSearchQuery = ref('')
@@ -448,6 +462,18 @@ const respondingToEvent = ref(null)
 
 const avatarInput = ref(null)
 const uploadingAvatar = ref(false)
+
+// Minimum datetime for event creation (now)
+const minEventDateTime = computed(() => {
+  const now = new Date()
+  // Format as YYYY-MM-DDTHH:mm for datetime-local input
+  const year = now.getFullYear()
+  const month = String(now.getMonth() + 1).padStart(2, '0')
+  const day = String(now.getDate()).padStart(2, '0')
+  const hours = String(now.getHours()).padStart(2, '0')
+  const minutes = String(now.getMinutes()).padStart(2, '0')
+  return `${year}-${month}-${day}T${hours}:${minutes}`
+})
 
 const isMember = computed(() => {
   if (!group.value || !currentUser) return false
@@ -480,6 +506,25 @@ function getInitials(name) {
     return (parts[0][0] + parts[parts.length - 1][0]).toUpperCase()
   }
   return name.substring(0, 2).toUpperCase()
+}
+
+function getAuthorName(author) {
+  if (!author) return 'Unknown'
+  if (author.first_name && author.last_name) {
+    return `${author.first_name} ${author.last_name}`
+  }
+  if (author.first_name) return author.first_name
+  return author.username || 'Unknown'
+}
+
+function getAuthorInitials(author) {
+  if (!author) return '?'
+  if (author.first_name && author.last_name) {
+    return `${author.first_name[0]}${author.last_name[0]}`.toUpperCase()
+  }
+  if (author.first_name) return author.first_name.substring(0, 2).toUpperCase()
+  if (author.username) return author.username.substring(0, 2).toUpperCase()
+  return '?'
 }
 
 function formatDate(dateString) {
@@ -667,6 +712,11 @@ function scrollChatToBottom() {
   if (chatMessagesEl.value) {
     chatMessagesEl.value.scrollTop = chatMessagesEl.value.scrollHeight
   }
+}
+
+function selectEmoji(emoji) {
+  newChatMessage.value += emoji
+  showEmojiPicker.value = false
 }
 
 async function loadRequests() {
@@ -873,17 +923,8 @@ async function handleAvatarChange(event) {
 }
 
 function getImageUrl(path) {
+  // For post images, use post service
   return getPostImageUrl(path)
-}
-
-function getGroupImageUrl(imageUrl) {
-  if (!imageUrl) return ''
-  if (imageUrl.startsWith('http://') || imageUrl.startsWith('https://')) {
-    return imageUrl
-  }
-  // Assume it's served from the groups service
-  const GROUPS_API_URL = import.meta.env.VITE_GROUPS_API_URL || 'http://localhost:8084'
-  return `${GROUPS_API_URL}/${imageUrl}`
 }
 
 function getMemberName(senderId) {
@@ -1544,6 +1585,10 @@ onUnmounted(() => {
   resize: vertical;
 }
 
+.form-field input[type="datetime-local"] {
+  color-scheme: dark;
+}
+
 .form-field input:focus,
 .form-field textarea:focus {
   outline: none;
@@ -1708,6 +1753,7 @@ onUnmounted(() => {
   display: flex;
   gap: 0.75rem;
   align-items: flex-end;
+  position: relative;
 }
 
 .chat-input-area textarea {
@@ -1725,6 +1771,37 @@ onUnmounted(() => {
   outline: none;
   border-color: var(--neon-cyan);
   box-shadow: 0 0 0 3px rgba(0, 247, 255, 0.15);
+}
+
+.chat-input-buttons {
+  display: flex;
+  gap: 0.5rem;
+  align-items: center;
+}
+
+.emoji-btn {
+  background: rgba(255, 255, 255, 0.05);
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  font-size: 18px;
+  cursor: pointer;
+  width: 36px;
+  height: 36px;
+  border-radius: 0.75rem;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: all 0.2s ease;
+}
+
+.emoji-btn:hover {
+  background: rgba(0, 247, 255, 0.15);
+  border-color: var(--border-glow);
+  box-shadow: 0 0 12px rgba(0, 247, 255, 0.3);
+}
+
+.chat-input-area .emoji-picker {
+  bottom: 60px;
+  right: 60px;
 }
 
 .posts-feed {

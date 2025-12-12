@@ -57,9 +57,12 @@ export async function getGroup(groupId, token) {
 }
 
 // Create new group
-export async function createGroup(groupData, token) {
-  const response = await client.post('/groups', groupData, {
-    headers: { Authorization: `Bearer ${token}` }
+export async function createGroup(formData, token) {
+  const response = await client.post('/groups', formData, {
+    headers: { 
+      Authorization: `Bearer ${token}`,
+      'Content-Type': 'multipart/form-data'
+    }
   })
   return unwrapResponse(response)
 }
@@ -157,7 +160,7 @@ export async function getGroupEvents(groupId, token) {
   return unwrapResponse(response)
 }
 
-// Create event
+
 export async function createEvent(groupId, eventData, token) {
   const response = await client.post('/events', 
     { ...eventData, group_id: groupId },
@@ -166,7 +169,6 @@ export async function createEvent(groupId, eventData, token) {
   return unwrapResponse(response)
 }
 
-// Respond to event (going/not going)
 export async function respondToEvent(eventId, responseStatus, token) {
   const res = await client.post('/events/respond', 
     { event_id: eventId, response: responseStatus },
@@ -175,7 +177,7 @@ export async function respondToEvent(eventId, responseStatus, token) {
   return unwrapResponse(res)
 }
 
-// Get pending join requests for a group (creator only)
+
 export async function getPendingRequests(groupId, token) {
   const response = await client.get(`/groups/${groupId}/requests`, {
     headers: { Authorization: `Bearer ${token}` }
@@ -215,4 +217,14 @@ export async function leaveGroup(groupId, token) {
     headers: { Authorization: `Bearer ${token}` }
   })
   return unwrapResponse(response)
+}
+
+// Helper to construct group image URLs
+export function getGroupImageUrl(imageUrl) {
+  if (!imageUrl) return ''
+  if (imageUrl.startsWith('http://') || imageUrl.startsWith('https://')) {
+    return imageUrl
+  }
+  // Relative path, prepend groups service base URL
+  return `${GROUPS_API_URL}/${imageUrl}`
 }
