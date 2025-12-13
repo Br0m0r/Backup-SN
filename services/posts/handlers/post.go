@@ -317,6 +317,93 @@ func (h *PostHandlers) GetComments(w http.ResponseWriter, r *http.Request) {
 	})
 }
 
+// UpdateComment handles PUT /comments/:id requests
+func (h *PostHandlers) UpdateComment(w http.ResponseWriter, r *http.Request) {
+	if r.Method != "PUT" {
+		utils.ErrorResponse(w, "Method not allowed", http.StatusMethodNotAllowed)
+		return
+	}
+
+	// Get authenticated user ID from context
+	userID, ok := middleware.GetUserIDFromContext(r)
+	if !ok {
+		utils.ErrorResponse(w, "Unauthorized", http.StatusUnauthorized)
+		return
+	}
+
+	// Extract comment ID from URL path
+	path := strings.TrimPrefix(r.URL.Path, "/comments/")
+	commentID, err := strconv.Atoi(path)
+	if err != nil {
+		utils.ErrorResponse(w, "Invalid comment ID", http.StatusBadRequest)
+		return
+	}
+
+	// Parse request body
+	var req models.UpdateCommentRequest
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		utils.ErrorResponse(w, "Invalid JSON payload", http.StatusBadRequest)
+		return
+	}
+
+	// Update comment
+	comment, err := h.postService.UpdateComment(commentID, userID, req.Content, req.ImagePath)
+	if err != nil {
+		if strings.Contains(err.Error(), "unauthorized") {
+			utils.ErrorResponse(w, err.Error(), http.StatusForbidden)
+		} else if strings.Contains(err.Error(), "not found") {
+			utils.ErrorResponse(w, err.Error(), http.StatusNotFound)
+		} else {
+			utils.ErrorResponse(w, err.Error(), http.StatusBadRequest)
+		}
+		return
+	}
+
+	utils.SuccessResponse(w, map[string]interface{}{
+		"comment": comment,
+	})
+}
+
+// DeleteComment handles DELETE /comments/:id requests
+func (h *PostHandlers) DeleteComment(w http.ResponseWriter, r *http.Request) {
+	if r.Method != "DELETE" {
+		utils.ErrorResponse(w, "Method not allowed", http.StatusMethodNotAllowed)
+		return
+	}
+
+	// Get authenticated user ID from context
+	userID, ok := middleware.GetUserIDFromContext(r)
+	if !ok {
+		utils.ErrorResponse(w, "Unauthorized", http.StatusUnauthorized)
+		return
+	}
+
+	// Extract comment ID from URL path
+	path := strings.TrimPrefix(r.URL.Path, "/comments/")
+	commentID, err := strconv.Atoi(path)
+	if err != nil {
+		utils.ErrorResponse(w, "Invalid comment ID", http.StatusBadRequest)
+		return
+	}
+
+	// Delete comment
+	err = h.postService.DeleteComment(commentID, userID)
+	if err != nil {
+		if strings.Contains(err.Error(), "unauthorized") {
+			utils.ErrorResponse(w, err.Error(), http.StatusForbidden)
+		} else if strings.Contains(err.Error(), "not found") {
+			utils.ErrorResponse(w, err.Error(), http.StatusNotFound)
+		} else {
+			utils.ErrorResponse(w, err.Error(), http.StatusInternalServerError)
+		}
+		return
+	}
+
+	utils.SuccessResponse(w, map[string]interface{}{
+		"message": "Comment deleted successfully",
+	})
+}
+
 // GetGroupPosts handles GET /posts/group/:id requests
 func (h *PostHandlers) GetGroupPosts(w http.ResponseWriter, r *http.Request) {
 	if r.Method != "GET" {

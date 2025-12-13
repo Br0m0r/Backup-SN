@@ -204,6 +204,9 @@ export function useNotifications() {
     connected.value = false
     connecting.value = false
     reconnectAttempts.value = 0
+    
+    // Clear notifications on disconnect to prevent showing old user's notifications
+    clearNotifications()
   }
 
   /**

@@ -66,7 +66,7 @@ func (s *GroupService) InviteMember(groupID, inviterID, invitedUserID int, invit
 		return errors.New("only group members can invite others")
 	}
 
-	err = db.InviteMember(s.database, groupID, invitedUserID)
+	_, err = db.InviteMember(s.database, groupID, invitedUserID)
 	if err != nil {
 		return err
 	}
@@ -152,6 +152,86 @@ func (s *GroupService) RespondToRequest(groupID, memberID, userID int, accept bo
 			}
 		} else {
 			notify.GroupRequestRejected(requesterID, groupID, group.Name)
+		}
+	}
+
+	return nil
+}
+
+// GetUserInvitations retrieves all pending invitations for a user
+func (s *GroupService) GetUserInvitations(userID int) ([]*models.GroupInvitation, error) {
+	return db.GetUserInvitations(s.database, userID)
+}
+
+// RespondToInvitation handles user response to group invitation
+func (s *GroupService) RespondToInvitation(invitationID, userID int, accept bool) error {
+	// Get invitation details BEFORE responding (for notification)
+	invitations, err := db.GetUserInvitations(s.database, userID)
+	if err != nil {
+		return err
+	}
+
+	var groupID int
+	var groupName string
+	var creatorID int
+	for _, inv := range invitations {
+		if inv.ID == invitationID {
+			groupID = inv.GroupID
+			groupName = inv.GroupName
+			// Get group to find creator
+			group, err := db.GetGroupByID(s.database, inv.GroupID)
+			if err != nil {
+				return err
+			}
+			creatorID = group.CreatorID
+			break
+		}
+	}
+
+	if groupID == 0 {
+		return errors.New("invitation not found")
+	}
+
+	// Respond to invitation (db function verifies ownership)
+	err = db.RespondToInvitation(s.database, invitationID, userID, accept)
+	if err != nil {
+		return err
+	}
+
+	// Send notification to group creator
+	username, err := db.GetUsernameByID(s.database, userID)
+	if err == nil {
+		if accept {
+			notify.GroupInvitationAccepted(creatorID, groupID, username, groupName)
+		} else {
+			notify.GroupInvitationDeclined(creatorID, groupID, username, groupName)
+		}
+	}
+
+	return nil
+}
+
+// RespondToInvitationByGroupID handles response using groupID from notification
+func (s *GroupService) RespondToInvitationByGroupID(groupID, userID int, accept bool) error {
+	// Get group details for notification
+	group, err := db.GetGroupByID(s.database, groupID)
+	if err != nil {
+		return err
+	}
+
+	// Respond using group ID lookup
+	err = db.RespondToInvitationByGroupID(s.database, groupID, userID, accept)
+	if err != nil {
+		return err
+	}
+
+	// Send notification to group creator
+	username, err := db.GetUsernameByID(s.database, userID)
+	if err == nil {
+		if accept {
+			notify.GroupInvitationAccepted(group.CreatorID, groupID, username, group.Name)
+		} else {
+			notify.GroupInvitationDeclined(group.CreatorID, groupID, username, group.Name)
 		}
 	}
 

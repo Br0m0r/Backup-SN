@@ -114,7 +114,24 @@ export async function requestJoinGroup(groupId, token) {
   return unwrapResponse(response)
 }
 
-// Respond to group invitation or join request
+// Get user's pending invitations
+export async function getMyInvitations(token) {
+  const response = await client.get('/invitations', {
+    headers: { Authorization: `Bearer ${token}` }
+  })
+  return unwrapResponse(response)
+}
+
+// Respond to group invitation
+export async function respondToInvitation(invitationId, accept, token) {
+  const response = await client.post(`/invitations/${invitationId}/respond`,
+    { accept },
+    { headers: { Authorization: `Bearer ${token}` } }
+  )
+  return unwrapResponse(response)
+}
+
+// Respond to group invitation or join request (DEPRECATED - kept for backward compatibility)
 export async function respondToGroupInvite(groupId, accept, token) {
   const response = await client.post(
     `${GROUPS_API_URL}/groups/${groupId}/respond`,

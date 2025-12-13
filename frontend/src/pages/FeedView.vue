@@ -97,6 +97,7 @@ import SuggestedGroups from '@/components/SuggestedGroups.vue'
 import { getToken } from '@/stores/auth'
 import { getFeedPosts, searchPosts as searchPostsService, getPostImageUrl } from '@/services/postsService'
 import { useAvatar } from '@/composables/useAvatar'
+import { throttle, debounce } from '@/utils/timing'
 
 const { getUserAvatarUrl } = useAvatar()
 const router = useRouter()
@@ -106,7 +107,14 @@ const posts = ref([])
 const searchResults = ref([])
 const loading = ref(false)
 const searchingPosts = ref(false)
-let searchTimeout = null
+
+const debouncedSearch = debounce(() => {
+  searchPosts(searchQuery.value)
+}, 400)
+
+function handleSearch() {
+  debouncedSearch()
+}
 
 async function loadPosts() {
   loading.value = true
@@ -202,14 +210,6 @@ async function searchPosts(query) {
   } finally {
     searchingPosts.value = false
   }
-}
-
-function handleSearch() {
-  // Debounce search to avoid too many API calls
-  if (searchTimeout) clearTimeout(searchTimeout)
-  searchTimeout = setTimeout(() => {
-    searchPosts(searchQuery.value)
-  }, 300)
 }
 
 function navigateToPost(postId) {

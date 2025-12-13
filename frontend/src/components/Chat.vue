@@ -3,7 +3,12 @@
     <!-- Chat Sidebar (Contact List) -->
     <div class="chat-sidebar" :class="{ 'sidebar-collapsed': !showSidebar }">
       <div class="sidebar-header">
-        <h3>Chat</h3>
+        <div class="sidebar-header-left">
+          <h3>Chat</h3>
+          <div v-if="totalUnreadCount > 0" class="sidebar-unread-badge" :title="`${totalUnreadCount} unread message${totalUnreadCount > 1 ? 's' : ''}`">
+            {{ totalUnreadCount > 99 ? '99+' : totalUnreadCount }}
+          </div>
+        </div>
         <button @click="toggleSidebar" class="toggle-btn">
           {{ showSidebar ? '−' : '+' }}
         </button>
@@ -83,6 +88,10 @@
               <div class="chat-avatar">
                 <img :src="getUserAvatarUrl(chat, 40)" :alt="getDisplayName(chat)" class="avatar-circle small" />
                 <div v-if="chat.is_online" class="online-indicator small"></div>
+                <!-- Unread notification badge -->
+                <div v-if="chat.minimized && chat.unreadCount > 0" class="chat-unread-indicator" :title="`${chat.unreadCount} new message${chat.unreadCount > 1 ? 's' : ''}`">
+                  {{ chat.unreadCount > 9 ? '9+' : chat.unreadCount }}
+                </div>
               </div>
               <div class="chat-title">
                 <button class="chat-name profile-link" type="button" @click.stop="goToProfile(chat)">
@@ -185,6 +194,7 @@ import { getUser, getToken } from '../stores/auth'
 import EmojiPicker from './EmojiPicker.vue'
 import { useToast } from '@/composables/useToast'
 import { useAvatar } from '@/composables/useAvatar'
+import { throttle, debounce } from '@/utils/timing'
 import {
   getContacts as getContactsService,
   getChatHistory,
@@ -223,6 +233,15 @@ const filteredContacts = computed(() => {
   })
 })
 
+// Total unread messages across all contacts and open chats
+const totalUnreadCount = computed(() => {
+  // Count unread from contacts list
+  const contactUnread = contacts.value.reduce((sum, contact) => sum + (contact.unread_count || 0), 0)
+  // Count unread from minimized open chats
+  const chatUnread = openChats.value.reduce((sum, chat) => sum + (chat.minimized ? (chat.unreadCount || 0) : 0), 0)
+  return contactUnread + chatUnread
+})
+
 // Methods
 async function loadContacts() {
   const token = getToken()
@@ -244,9 +263,9 @@ async function loadContacts() {
   }
 }
 
-function toggleSidebar() {
+const toggleSidebar = throttle(() => {
   showSidebar.value = !showSidebar.value
-}
+}, 300)
 
 function isContactActive(userId) {
   return openChats.value.some(chat => chat.user_id === userId)
@@ -279,7 +298,8 @@ async function openChat(contact) {
     messages: [],
     messageInput: '',
     minimized: false,
-    loadingHistory: true
+    loadingHistory: true,
+    unreadCount: 0
   })
 
   openChats.value.push(newChat)
@@ -320,15 +340,18 @@ function closeChat(userId) {
   }
 }
 
-function toggleMinimize(userId) {
+const toggleMinimize = throttle((userId) => {
   const chat = openChats.value.find(c => c.user_id === userId)
   if (chat) {
     chat.minimized = !chat.minimized
     if (!chat.minimized) {
+      // Clear unread count and mark as read when expanding
+      chat.unreadCount = 0
+      markAsRead(userId)
       nextTick(() => scrollToBottom(userId))
     }
   }
-}
+}, 300)
 
 function toggleEmojiPicker(userId) {
   showEmojiPicker.value[userId] = !showEmojiPicker.value[userId]
@@ -397,7 +420,7 @@ async function uploadImage(userId) {
   return null
 }
 
-async function sendMessage(chat) {
+const sendMessage = throttle(async (chat) => {
   const hasImage = selectedImage.value[chat.user_id]
   const hasText = chat.messageInput.trim()
   
@@ -436,7 +459,7 @@ async function sendMessage(chat) {
     await nextTick()
     scrollToBottom(chat.user_id)
   }
-}
+}, 500)
 
 function handleTyping(chat) {
   // TODO: Implement typing indicator
@@ -565,8 +588,16 @@ onMounted(() => {
           is_read: false
         })
         nextTick(() => scrollToBottom(data.sender_id))
+        
+        // Increment unread count if chat is minimized
+        if (chat.minimized) {
+          chat.unreadCount = (chat.unreadCount || 0) + 1
+        }
       }
-      markAsRead(data.sender_id)
+      // Only mark as read if chat is not minimized
+      if (!chat.minimized) {
+        markAsRead(data.sender_id)
+      }
     } else {
       // Message from someone not in open chats
       const contact = contacts.value.find(c => c.user_id === data.sender_id)
@@ -635,6 +666,11 @@ watch(() => wsState.onlineUsers, () => {
 
 .chat-sidebar.sidebar-collapsed {
   height: 48px;
+  overflow: visible; /* Allow badge to show outside */
+}
+
+.chat-sidebar.sidebar-collapsed .sidebar-header-left {
+  position: relative; /* For badge positioning */
 }
 
 .sidebar-header {
@@ -647,12 +683,34 @@ watch(() => wsState.onlineUsers, () => {
   border-radius: 1.25rem 1.25rem 0 0;
 }
 
+.sidebar-header-left {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
 .sidebar-header h3 {
   margin: 0;
   font-size: 16px;
   font-weight: 700;
   color: #f8f9ff;
   letter-spacing: 0.05em;
+}
+
+.sidebar-unread-badge {
+  min-width: 22px;
+  height: 22px;
+  background: linear-gradient(135deg, #ff0066, #ff3366);
+  color: white;
+  border-radius: 11px;
+  font-size: 11px;
+  font-weight: 700;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 0 6px;
+  box-shadow: 0 0 15px rgba(255, 0, 102, 0.7);
+  animation: pulse 2s ease-in-out infinite;
 }
 
 .toggle-btn {
@@ -814,6 +872,36 @@ watch(() => wsState.onlineUsers, () => {
 .online-indicator.small {
   width: 10px;
   height: 10px;
+}
+
+.chat-unread-indicator {
+  position: absolute;
+  top: -6px;
+  right: -6px;
+  min-width: 20px;
+  height: 20px;
+  background: linear-gradient(135deg, #ff0066, #ff3366);
+  color: white;
+  border: 2px solid rgba(5, 6, 13, 0.95);
+  border-radius: 10px;
+  font-size: 11px;
+  font-weight: 700;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 0 5px;
+  box-shadow: 0 0 15px rgba(255, 0, 102, 0.6);
+  animation: pulse 2s ease-in-out infinite;
+  z-index: 10;
+}
+
+@keyframes pulse {
+  0%, 100% {
+    box-shadow: 0 0 15px rgba(255, 0, 102, 0.6);
+  }
+  50% {
+    box-shadow: 0 0 25px rgba(255, 0, 102, 0.9);
+  }
 }
 
 .contact-info {

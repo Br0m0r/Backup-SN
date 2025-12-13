@@ -102,19 +102,31 @@ func GroupJoinRequest(creatorID, groupID int, requesterName, groupName string) {
 // GroupRequestAccepted notifies user their join request was accepted
 func GroupRequestAccepted(requesterID, groupID int, groupName string) {
 	content := fmt.Sprintf("Your request to join %s was accepted", groupName)
-	createNotification(requesterID, "group_invite", content, groupID)
+	createNotification(requesterID, "group_activity", content, groupID)
 }
 
 // GroupRequestRejected notifies user their join request was rejected
 func GroupRequestRejected(requesterID, groupID int, groupName string) {
 	content := fmt.Sprintf("Your request to join %s was declined", groupName)
-	createNotification(requesterID, "group_invite", content, groupID)
+	createNotification(requesterID, "group_activity", content, groupID)
 }
 
 // NewGroupMember notifies creator when someone joins group
 func NewGroupMember(creatorID, groupID int, memberName, groupName string) {
 	content := fmt.Sprintf("%s joined your group %s", memberName, groupName)
-	createNotification(creatorID, "group_invite", content, groupID)
+	createNotification(creatorID, "group_activity", content, groupID)
+}
+
+// GroupInvitationAccepted notifies group creator when someone accepts invitation
+func GroupInvitationAccepted(creatorID, groupID int, memberName, groupName string) {
+	content := fmt.Sprintf("%s accepted your invitation to %s", memberName, groupName)
+	createNotification(creatorID, "group_activity", content, groupID)
+}
+
+// GroupInvitationDeclined notifies group creator when someone declines invitation
+func GroupInvitationDeclined(creatorID, groupID int, memberName, groupName string) {
+	content := fmt.Sprintf("%s declined your invitation to %s", memberName, groupName)
+	createNotification(creatorID, "group_activity", content, groupID)
 }
 
 // GroupPost notifies members about new group post

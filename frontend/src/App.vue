@@ -62,12 +62,18 @@ import Notifications from './components/Notifications.vue';
 import ToastContainer from './components/ToastContainer.vue';
 import { clearUser, getToken, isAuthenticated as hasSession, restoreSession } from './stores/auth';
 import { logoutUser } from './services/authService';
+import { useWebSocket } from './composables/useWebSocket';
+import { useNotifications } from './composables/useNotifications';
 
 const router = useRouter();
 const profileOpen = ref(false);
 const searchOpen = ref(false);
 const isAuthenticated = computed(() => hasSession());
 const profileWrapper = ref(null);
+
+// Get WebSocket disconnect functions
+const { disconnect: disconnectChat } = useWebSocket();
+const { disconnect: disconnectNotifications, clearNotifications } = useNotifications();
 
 onMounted(() => {
   restoreSession();
@@ -119,7 +125,16 @@ async function logout() {
   } catch (error) {
     console.error('Failed to logout:', error);
   } finally {
+    // Disconnect WebSocket connections
+    disconnectChat();
+    disconnectNotifications();
+    
+    // Clear notification state
+    clearNotifications();
+    
+    // Clear user session
     clearUser();
+    
     profileOpen.value = false;
     router.push({ name: 'Auth' });
   }

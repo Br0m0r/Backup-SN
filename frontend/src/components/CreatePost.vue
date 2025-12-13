@@ -44,12 +44,19 @@
         <div v-else-if="followers.length === 0" class="no-followers">
           You don't have any followers yet
         </div>
-        <div v-else class="followers-list">
-          <label
-            v-for="follower in followers"
-            :key="follower.id"
-            class="follower-item"
-          >
+        <div v-else>
+          <input
+            v-model="followerSearch"
+            type="text"
+            placeholder="Search followers..."
+            class="follower-search"
+          />
+          <div class="followers-list">
+            <label
+              v-for="follower in filteredFollowers"
+              :key="follower.id"
+              class="follower-item"
+            >
             <input
               type="checkbox"
               :value="follower.id"
@@ -67,6 +74,7 @@
           </label>
         </div>
       </div>
+    </div>
 
       <!-- Image preview -->
       <div v-if="imagePreview" class="image-preview">
@@ -104,6 +112,7 @@ import { getToken, getUser } from '../stores/auth'
 import { useToast } from '@/composables/useToast'
 import { uploadImage, createPost } from '@/services/postsService'
 import { getFollowers } from '@/services/usersService'
+import { throttle, debounce } from '@/utils/timing'
 
 const { success, error: showError } = useToast()
 
@@ -127,10 +136,24 @@ const form = ref({
 const imagePreview = ref(null)
 const fileInput = ref(null)
 const followers = ref([])
+const followerSearch = ref('')
 const loadingFollowers = ref(false)
 const submitting = ref(false)
 const error = ref('')
 const isOpen = ref(false)
+
+const filteredFollowers = computed(() => {
+  if (!followerSearch.value.trim()) {
+    return followers.value
+  }
+  
+  const search = followerSearch.value.toLowerCase()
+  return followers.value.filter(follower => {
+    const displayName = getDisplayName(follower).toLowerCase()
+    const username = follower.username.toLowerCase()
+    return displayName.includes(search) || username.includes(search)
+  })
+})
 
 const canSubmit = computed(() => {
   if (!form.value.content.trim()) return false
@@ -217,7 +240,7 @@ function removeImage() {
   }
 }
 
-async function handleSubmit() {
+const handleSubmit = throttle(async () => {
   if (!canSubmit.value || submitting.value) return
 
   const token = getToken()
@@ -286,7 +309,7 @@ async function handleSubmit() {
   } finally {
     submitting.value = false
   }
-}
+}, 1000)
 
 function getDisplayName(user) {
   if (user.nickname) return user.nickname
@@ -452,6 +475,28 @@ textarea::placeholder {
   font-size: 0.9rem;
   color: var(--neon-cyan);
   font-weight: 600;
+}
+
+.follower-search {
+  width: 100%;
+  padding: 0.5rem 0.75rem;
+  margin-bottom: 0.75rem;
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  border-radius: 0.5rem;
+  background: rgba(0, 0, 0, 0.45);
+  color: #f8f9ff;
+  font-size: 0.9rem;
+  transition: border-color 0.2s, box-shadow 0.2s;
+}
+
+.follower-search:focus {
+  outline: none;
+  border-color: var(--border-glow);
+  box-shadow: 0 0 8px rgba(0, 247, 255, 0.15);
+}
+
+.follower-search::placeholder {
+  color: var(--text-muted);
 }
 
 .followers-list {

@@ -1,6 +1,10 @@
-/* Group members - tracks user membership in groups */
+/* Add 'invited' status to group_members status check constraint */
 
-CREATE TABLE group_members (
+-- SQLite doesn't support ALTER TABLE for CHECK constraints
+-- We need to recreate the table with the updated constraint
+
+-- Create new table with updated constraint
+CREATE TABLE group_members_new (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
     group_id INTEGER NOT NULL,
     user_id INTEGER NOT NULL,
@@ -12,6 +16,18 @@ CREATE TABLE group_members (
     UNIQUE(group_id, user_id)
 );
 
+-- Copy data from old table
+INSERT INTO group_members_new (id, group_id, user_id, role, status, joined_at)
+SELECT id, group_id, user_id, role, status, joined_at
+FROM group_members;
+
+-- Drop old table
+DROP TABLE group_members;
+
+-- Rename new table
+ALTER TABLE group_members_new RENAME TO group_members;
+
+-- Recreate indexes
 CREATE INDEX idx_group_members_group_id ON group_members(group_id);
 CREATE INDEX idx_group_members_user_id ON group_members(user_id);
 CREATE INDEX idx_group_members_role ON group_members(role);

@@ -242,6 +242,59 @@ func (s *PostService) GetComments(postID, userID int) ([]*models.Comment, error)
 	return db.GetCommentsByPostID(s.database, postID)
 }
 
+// UpdateComment updates an existing comment
+func (s *PostService) UpdateComment(commentID, userID int, content string, imagePath *string) (*models.Comment, error) {
+	// Get existing comment
+	comment, err := db.GetCommentByID(s.database, commentID)
+	if err != nil {
+		return nil, err
+	}
+
+	// Check ownership
+	if comment.UserID != userID {
+		return nil, errors.New("unauthorized: you can only update your own comments")
+	}
+
+	// Validate and sanitize content
+	sanitizedContent, err := utils.ValidatePostContent(content, false)
+	if err != nil {
+		return nil, err
+	}
+
+	// Validate image path
+	if err := utils.ValidateImagePath(imagePath); err != nil {
+		return nil, err
+	}
+
+	// Update comment
+	comment.Content = sanitizedContent
+	comment.ImagePath = imagePath
+
+	err = db.UpdateComment(s.database, comment)
+	if err != nil {
+		return nil, err
+	}
+
+	return comment, nil
+}
+
+// DeleteComment deletes a comment
+func (s *PostService) DeleteComment(commentID, userID int) error {
+	// Get comment
+	comment, err := db.GetCommentByID(s.database, commentID)
+	if err != nil {
+		return err
+	}
+
+	// Check ownership
+	if comment.UserID != userID {
+		return errors.New("unauthorized: you can only delete your own comments")
+	}
+
+	// Delete comment
+	return db.DeleteComment(s.database, commentID)
+}
+
 // GetGroupPosts retrieves all posts for a specific group
 func (s *PostService) GetGroupPosts(groupID int) ([]*models.Post, error) {
 	return db.GetPostsByGroupID(s.database, groupID)

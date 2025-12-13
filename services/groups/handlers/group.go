@@ -424,6 +424,60 @@ func (h *GroupHandlers) RespondToRequest(w http.ResponseWriter, r *http.Request)
 	utils.SendJSON(w, http.StatusOK, map[string]string{"message": message})
 }
 
+// GetMyInvitations handles GET /invitations
+func (h *GroupHandlers) GetMyInvitations(w http.ResponseWriter, r *http.Request) {
+	userID, ok := middleware.GetUserIDFromContext(r)
+	if !ok {
+		utils.SendError(w, http.StatusUnauthorized, "User not authenticated")
+		return
+	}
+
+	invitations, err := h.service.GetUserInvitations(userID)
+	if err != nil {
+		log.Printf("Error fetching invitations: %v", err)
+		utils.SendError(w, http.StatusInternalServerError, "Failed to fetch invitations")
+		return
+	}
+
+	utils.SendJSON(w, http.StatusOK, invitations)
+}
+
+// RespondToInvitation handles POST /invitations/:id/respond
+func (h *GroupHandlers) RespondToInvitation(w http.ResponseWriter, r *http.Request) {
+	userID, ok := middleware.GetUserIDFromContext(r)
+	if !ok {
+		utils.SendError(w, http.StatusUnauthorized, "User not authenticated")
+		return
+	}
+
+	// Extract invitation ID from path
+	path := strings.TrimPrefix(r.URL.Path, "/invitations/")
+	path = strings.TrimSuffix(path, "/respond")
+	invitationID, err := strconv.Atoi(path)
+	if err != nil {
+		utils.SendError(w, http.StatusBadRequest, "Invalid invitation ID")
+		return
+	}
+
+	var req models.RespondToInvitationRequest
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		utils.SendError(w, http.StatusBadRequest, "Invalid request body")
+		return
+	}
+
+	if err := h.service.RespondToInvitation(invitationID, userID, req.Accept); err != nil {
+		log.Printf("Error responding to invitation: %v", err)
+		utils.SendError(w, http.StatusForbidden, err.Error())
+		return
+	}
+
+	message := "Invitation declined"
+	if req.Accept {
+		message = "Invitation accepted"
+	}
+	utils.SendJSON(w, http.StatusOK, map[string]string{"message": message})
+}
+
 // GetMembers handles GET /groups/:id/members
 func (h *GroupHandlers) GetMembers(w http.ResponseWriter, r *http.Request) {
 	userID, ok := middleware.GetUserIDFromContext(r)

@@ -131,6 +131,7 @@ import { ref, computed, onMounted } from 'vue'
 import { useRouter } from 'vue-router'
 import { getToken } from '@/stores/auth'
 import { getAllGroups, getMyGroups, createGroup as createGroupService, searchGroups } from '@/services/groupsService'
+import { throttle, debounce } from '@/utils/timing'
 
 const router = useRouter()
 const searchQuery = ref('')
@@ -150,7 +151,26 @@ const imagePreview = ref('')
 const imageFile = ref(null)
 const imageInput = ref(null)
 
-let searchTimeout = null
+const debouncedGroupSearch = debounce(async () => {
+  const query = searchQuery.value.trim()
+  if (!query) {
+    loadSuggestedGroups()
+    return
+  }
+
+  const token = getToken()
+  if (!token) return
+
+  loading.value = true
+  try {
+    const { groups = [] } = await searchGroups(query, token)
+    suggestedGroups.value = groups
+  } catch (error) {
+    console.error('Failed to search groups:', error)
+  } finally {
+    loading.value = false
+  }
+}, 300)
 
 const displayedGroups = computed(() => {
   if (searchQuery.value.trim()) {
@@ -201,27 +221,7 @@ async function loadSuggestedGroups() {
 }
 
 function handleSearch() {
-  clearTimeout(searchTimeout)
-  searchTimeout = setTimeout(async () => {
-    const query = searchQuery.value.trim()
-    if (!query) {
-      loadSuggestedGroups()
-      return
-    }
-
-    const token = getToken()
-    if (!token) return
-
-    loading.value = true
-    try {
-      const { groups = [] } = await searchGroups(query, token)
-      suggestedGroups.value = groups
-    } catch (error) {
-      console.error('Failed to search groups:', error)
-    } finally {
-      loading.value = false
-    }
-  }, 300)
+  debouncedGroupSearch()
 }
 
 function handleImageChange(event) {
@@ -255,7 +255,7 @@ function removeImage() {
   }
 }
 
-async function createGroup() {
+const createGroup = throttle(async () => {
   const token = getToken()
   if (!token) {
     createError.value = 'You must be logged in to create a group'
@@ -286,7 +286,7 @@ async function createGroup() {
   } finally {
     creating.value = false
   }
-}
+}, 1000)
 
 function closeCreateModal() {
   showCreateModal.value = false

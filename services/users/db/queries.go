@@ -272,19 +272,17 @@ func GetFollowing(db *sql.DB, userID int) ([]*models.User, error) {
 func SearchUsers(db *sql.DB, searchTerm string, currentUserID int) ([]*models.User, error) {
 	query := `
 		SELECT DISTINCT u.id, u.username, u.email, u.first_name, u.last_name, u.date_of_birth, u.avatar_path, 
-		       u.nickname, u.about_me, u.is_public_profile, u.created_at
+		       u.nickname, u.about_me, u.is_public_profile, u.created_at,
+		       COALESCE(f.status, '') as follow_status
 		FROM users u
+		LEFT JOIN follows f ON f.following_id = u.id AND f.follower_id = ?
 		WHERE (u.username LIKE ? OR u.first_name LIKE ? OR u.last_name LIKE ? OR u.nickname LIKE ?)
 		  AND u.id != ?
-		  AND u.id NOT IN (
-		    SELECT following_id FROM follows 
-		    WHERE follower_id = ? AND status IN ('accepted', 'pending')
-		  )
 		LIMIT 50
 	`
 
 	searchPattern := "%" + searchTerm + "%"
-	rows, err := db.Query(query, searchPattern, searchPattern, searchPattern, searchPattern, currentUserID, currentUserID)
+	rows, err := db.Query(query, currentUserID, searchPattern, searchPattern, searchPattern, searchPattern, currentUserID)
 	if err != nil {
 		return nil, err
 	}
@@ -293,7 +291,7 @@ func SearchUsers(db *sql.DB, searchTerm string, currentUserID int) ([]*models.Us
 	var users []*models.User
 	for rows.Next() {
 		var user models.User
-		var firstName, lastName, dateOfBirth, avatarPath, nickname, aboutMe sql.NullString
+		var firstName, lastName, dateOfBirth, avatarPath, nickname, aboutMe, followStatus sql.NullString
 
 		err := rows.Scan(
 			&user.ID,
@@ -307,6 +305,7 @@ func SearchUsers(db *sql.DB, searchTerm string, currentUserID int) ([]*models.Us
 			&aboutMe,
 			&user.IsPublicProfile,
 			&user.CreatedAt,
+			&followStatus,
 		)
 		if err != nil {
 			return nil, err
@@ -330,6 +329,9 @@ func SearchUsers(db *sql.DB, searchTerm string, currentUserID int) ([]*models.Us
 		}
 		if aboutMe.Valid {
 			user.AboutMe = &aboutMe.String
+		}
+		if followStatus.Valid {
+			user.FollowStatus = &followStatus.String
 		}
 
 		users = append(users, &user)

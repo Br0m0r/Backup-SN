@@ -251,9 +251,10 @@ function handleImageSelect(event) {
   const file = event.target.files[0]
   if (!file) return
 
-  // Validate file type
-  if (!file.type.startsWith('image/')) {
-    showError('Please select an image file')
+  // Validate file type (only jpg, jpeg, png, gif)
+  const allowedTypes = ['image/jpeg', 'image/jpg', 'image/png', 'image/gif']
+  if (!allowedTypes.includes(file.type.toLowerCase())) {
+    showError('Only JPG, PNG, and GIF images are allowed')
     return
   }
 

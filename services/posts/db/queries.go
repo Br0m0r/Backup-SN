@@ -207,11 +207,11 @@ func GetFeedPosts(db *sql.DB, userID int) ([]*models.Post, error) {
 
 		// Add author information
 		post.Author = &models.Author{
-			ID:        post.UserID,
-			Username:  username.String,
-			FirstName: firstName.String,
-			LastName:  lastName.String,
-			AvatarPath:    avatar.String,
+			ID:         post.UserID,
+			Username:   username.String,
+			FirstName:  firstName.String,
+			LastName:   lastName.String,
+			AvatarPath: avatar.String,
 		}
 
 		posts = append(posts, post)
@@ -274,11 +274,11 @@ func GetPostsByGroupID(db *sql.DB, groupID int) ([]*models.Post, error) {
 
 		// Add author information
 		post.Author = &models.Author{
-			ID:        post.UserID,
-			Username:  username.String,
-			FirstName: firstName.String,
-			LastName:  lastName.String,
-			AvatarPath:    avatar.String,
+			ID:         post.UserID,
+			Username:   username.String,
+			FirstName:  firstName.String,
+			LastName:   lastName.String,
+			AvatarPath: avatar.String,
 		}
 
 		posts = append(posts, post)
@@ -349,11 +349,11 @@ func SearchPosts(db *sql.DB, userID int, searchQuery string) ([]*models.Post, er
 
 		// Add author information
 		post.Author = &models.Author{
-			ID:        post.UserID,
-			Username:  username.String,
-			FirstName: firstName.String,
-			LastName:  lastName.String,
-			AvatarPath:    avatar.String,
+			ID:         post.UserID,
+			Username:   username.String,
+			FirstName:  firstName.String,
+			LastName:   lastName.String,
+			AvatarPath: avatar.String,
 		}
 
 		posts = append(posts, post)
@@ -368,10 +368,10 @@ func CheckPostAccess(db *sql.DB, postID, userID int) (bool, error) {
 			CASE 
 				WHEN p.user_id = ? THEN 1
 				WHEN p.privacy_level = 'public' THEN 1
-				WHEN p.privacy_level = 'private' AND EXISTS (
+				WHEN p.privacy_level = 'almost_private' AND EXISTS (
 					SELECT 1 FROM follows WHERE follower_id = ? AND following_id = p.user_id AND status = 'accepted'
 				) THEN 1
-				WHEN p.privacy_level = 'almost_private' AND EXISTS (
+				WHEN p.privacy_level = 'private' AND EXISTS (
 					SELECT 1 FROM post_viewers WHERE post_id = ? AND user_id = ?
 				) THEN 1
 				ELSE 0
@@ -387,7 +387,7 @@ func CheckPostAccess(db *sql.DB, postID, userID int) (bool, error) {
 	return hasAccess == 1, nil
 }
 
-// AddPostViewers adds users who can view an "almost_private" post
+// AddPostViewers adds users who can view a "private" post
 func AddPostViewers(db *sql.DB, postID int, userIDs []int) error {
 	// First, clear existing viewers
 	_, err := db.Exec(`DELETE FROM post_viewers WHERE post_id = ?`, postID)
@@ -479,14 +479,78 @@ func GetCommentsByPostID(db *sql.DB, postID int) ([]*models.Comment, error) {
 
 		// Add author information
 		comment.Author = &models.Author{
-			ID:        comment.UserID,
-			Username:  username.String,
-			FirstName: firstName.String,
-			LastName:  lastName.String,
-			AvatarPath:    avatar.String,
+			ID:         comment.UserID,
+			Username:   username.String,
+			FirstName:  firstName.String,
+			LastName:   lastName.String,
+			AvatarPath: avatar.String,
 		}
 
 		comments = append(comments, comment)
 	}
 	return comments, nil
+}
+
+// GetCommentByID retrieves a comment by its ID
+func GetCommentByID(db *sql.DB, commentID int) (*models.Comment, error) {
+	query := `
+		SELECT 
+			c.id, c.post_id, c.user_id, c.content, c.image_path, c.created_at,
+			u.username, u.first_name, u.last_name, u.avatar_path
+		FROM comments c
+		INNER JOIN users u ON c.user_id = u.id
+		WHERE c.id = ?
+	`
+	comment := &models.Comment{}
+	var imagePath, username, firstName, lastName, avatar sql.NullString
+
+	err := db.QueryRow(query, commentID).Scan(
+		&comment.ID,
+		&comment.PostID,
+		&comment.UserID,
+		&comment.Content,
+		&imagePath,
+		&comment.CreatedAt,
+		&username,
+		&firstName,
+		&lastName,
+		&avatar,
+	)
+	if err != nil {
+		return nil, err
+	}
+
+	// Handle nullable fields
+	if imagePath.Valid {
+		comment.ImagePath = &imagePath.String
+	}
+
+	// Add author information
+	comment.Author = &models.Author{
+		ID:         comment.UserID,
+		Username:   username.String,
+		FirstName:  firstName.String,
+		LastName:   lastName.String,
+		AvatarPath: avatar.String,
+	}
+
+	return comment, nil
+}
+
+// UpdateComment updates an existing comment
+func UpdateComment(db *sql.DB, comment *models.Comment) error {
+	query := `
+		UPDATE comments
+		SET content = ?, image_path = ?
+		WHERE id = ?
+	`
+	_, err := db.Exec(query, comment.Content, comment.ImagePath, comment.ID)
+	return err
+}
+
+// DeleteComment deletes a comment by ID
+func DeleteComment(db *sql.DB, commentID int) error {
+	query := `DELETE FROM comments WHERE id = ?`
+	_, err := db.Exec(query, commentID)
+	return err
 }

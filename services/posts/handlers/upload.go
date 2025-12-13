@@ -45,7 +45,11 @@ func (h *UploadHandlers) UploadImage(w http.ResponseWriter, r *http.Request) {
 	// Parse multipart form
 	r.Body = http.MaxBytesReader(w, r.Body, maxUploadSize)
 	if err := r.ParseMultipartForm(maxUploadSize); err != nil {
-		utils.ErrorResponse(w, "File too large (max 5MB)", http.StatusBadRequest)
+		if err.Error() == "http: request body too large" {
+			utils.ErrorResponse(w, "File too large (max 5MB)", http.StatusBadRequest)
+		} else {
+			utils.ErrorResponse(w, fmt.Sprintf("Failed to parse form: %v", err), http.StatusBadRequest)
+		}
 		return
 	}
 

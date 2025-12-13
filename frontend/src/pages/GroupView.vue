@@ -412,6 +412,7 @@ import { useToast } from '@/composables/useToast'
 import { useWebSocket } from '@/composables/useWebSocket'
 import { leaveGroup as leaveGroupService } from '@/services/groupsService'
 import { useAvatar } from '@/composables/useAvatar'
+import { throttle, debounce } from '@/utils/timing'
 
 const router = useRouter()
 const route = useRoute()
@@ -648,7 +649,7 @@ async function loadChatMessages() {
   }
 }
 
-function sendChatMessage() {
+const sendChatMessage = throttle(() => {
   if (!newChatMessage.value.trim() || sendingChat.value) return
   
   const user = getUser()
@@ -662,7 +663,7 @@ function sendChatMessage() {
   } else {
     sendViaHTTP()
   }
-}
+}, 500)
 
 function sendViaWebSocket() {
   const user = getUser()
@@ -751,7 +752,7 @@ async function requestToJoin() {
   }
 }
 
-async function createEvent() {
+const createEvent = throttle(async () => {
   const token = getToken()
   if (!token) return
 
@@ -777,9 +778,9 @@ async function createEvent() {
   } finally {
     creatingEvent.value = false
   }
-}
+}, 1000)
 
-async function respondToEvent(eventId, response) {
+const respondToEvent = throttle(async (eventId, response) => {
   const token = getToken()
   if (!token) return
 
@@ -794,7 +795,7 @@ async function respondToEvent(eventId, response) {
   } finally {
     respondingToEvent.value = null
   }
-}
+}, 1000)
 
 function closeInviteModal() {
   showInviteModal.value = false
@@ -808,29 +809,29 @@ function closeCreateEventModal() {
   eventError.value = ''
 }
 
-async function searchUsersToInvite() {
-  clearTimeout(searchTimeout.value)
-  
+const debouncedUserSearch = debounce(async () => {
   const query = inviteSearchQuery.value.trim()
   if (!query) {
     searchResults.value = []
     return
   }
 
-  searchTimeout.value = setTimeout(async () => {
-    const token = getToken()
-    if (!token) return
+  const token = getToken()
+  if (!token) return
 
-    try {
-      const { users = [] } = await searchUsersForGroup(query, groupId.value, token)
-      searchResults.value = users
-    } catch (err) {
-      console.error('Failed to search users:', err)
-    }
-  }, 300)
+  try {
+    const { users = [] } = await searchUsersForGroup(query, groupId.value, token)
+    searchResults.value = users
+  } catch (err) {
+    console.error('Failed to search users:', err)
+  }
+}, 300)
+
+function searchUsersToInvite() {
+  debouncedUserSearch()
 }
 
-async function inviteUser(userId) {
+const inviteUser = throttle(async (userId) => {
   const token = getToken()
   if (!token) return
 
@@ -842,9 +843,9 @@ async function inviteUser(userId) {
     console.error('Failed to invite user:', err)
     showError(err.message || 'Failed to send invitation')
   }
-}
+}, 1000)
 
-async function respondToRequest(memberId, accept) {
+const respondToRequest = throttle(async (memberId, accept) => {
   const token = getToken()
   if (!token) return
 
@@ -857,7 +858,7 @@ async function respondToRequest(memberId, accept) {
     console.error('Failed to respond to request:', err)
     showError(err.message || 'Failed to process request')
   }
-}
+}, 1000)
 
 async function leaveGroup() {
   const token = getToken()

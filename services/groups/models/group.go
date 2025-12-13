@@ -86,6 +86,24 @@ type RespondToRequestRequest struct {
 	Accept   bool `json:"accept"`
 }
 
+// GroupInvitation represents a group invitation
+type GroupInvitation struct {
+	ID               int       `json:"id"`
+	GroupID          int       `json:"group_id"`
+	UserID           int       `json:"user_id"`
+	Role             string    `json:"role,omitempty"`
+	Status           string    `json:"status,omitempty"`
+	InvitedAt        time.Time `json:"invited_at"`
+	GroupName        string    `json:"group_name"`
+	GroupDescription *string   `json:"group_description,omitempty"`
+	GroupImageURL    *string   `json:"group_image_url,omitempty"`
+}
+
+// RespondToInvitationRequest represents user response to group invitation
+type RespondToInvitationRequest struct {
+	Accept bool `json:"accept"`
+}
+
 // CreateEventRequest represents a request to create an event
 type CreateEventRequest struct {
 	GroupID     int     `json:"group_id"`

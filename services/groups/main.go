@@ -121,6 +121,23 @@ func main() {
 		}
 	})))
 
+	// Invitation routes (auth required)
+	mux.Handle("/invitations", authMiddleware(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.Method == "GET" {
+			groupHandlers.GetMyInvitations(w, r)
+		} else {
+			http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
+		}
+	})))
+
+	mux.Handle("/invitations/", authMiddleware(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if strings.HasSuffix(r.URL.Path, "/respond") {
+			rateLimiter.RateLimit(http.HandlerFunc(groupHandlers.RespondToInvitation)).ServeHTTP(w, r)
+		} else {
+			http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
+		}
+	})))
+
 	// Event routes (auth required + rate limited for writes)
 	mux.Handle("/events", authMiddleware(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.Method == "POST" {

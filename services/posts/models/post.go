@@ -68,3 +68,9 @@ type CreateCommentRequest struct {
 	Content   string  `json:"content"`
 	ImagePath *string `json:"image_path,omitempty"`
 }
+
+// UpdateCommentRequest represents the request to update a comment
+type UpdateCommentRequest struct {
+	Content   string  `json:"content"`
+	ImagePath *string `json:"image_path,omitempty"`
+}

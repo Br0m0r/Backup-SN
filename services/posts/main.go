@@ -101,6 +101,18 @@ func main() {
 		}
 	}))))
 
+	// Comment by ID endpoints (update, delete)
+	mux.Handle("/comments/", authMiddleware(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		switch r.Method {
+		case "PUT":
+			postHandlers.UpdateComment(w, r)
+		case "DELETE":
+			postHandlers.DeleteComment(w, r)
+		default:
+			http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
+		}
+	})))
+
 	// Upload endpoints
 	mux.Handle("/upload/image", authMiddleware(rateLimiter.RateLimit(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		switch r.Method {

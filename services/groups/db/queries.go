@@ -2,6 +2,7 @@ package db
 
 import (
 	"database/sql"
+	"errors"
 	"social-network/services/groups/models"
 	"time"
 )
@@ -208,13 +209,22 @@ func IsGroupMember(db *sql.DB, groupID, userID int) (bool, error) {
 }
 
 // InviteMember invites a user to join a group (auto-accepts them)
-func InviteMember(db *sql.DB, groupID, userID int) error {
+func InviteMember(db *sql.DB, groupID, userID int) (int, error) {
 	query := `
 		INSERT INTO group_members (group_id, user_id, role, status)
-		VALUES (?, ?, 'member', 'accepted')
+		VALUES (?, ?, 'member', 'invited')
 	`
-	_, err := db.Exec(query, groupID, userID)
-	return err
+	result, err := db.Exec(query, groupID, userID)
+	if err != nil {
+		return 0, err
+	}
+
+	invitationID, err := result.LastInsertId()
+	if err != nil {
+		return 0, err
+	}
+
+	return int(invitationID), nil
 }
 
 // RequestToJoinGroup creates a pending membership request
@@ -289,6 +299,93 @@ func RespondToJoinRequest(db *sql.DB, memberID int, accept bool) error {
 		_, err := db.Exec(query, memberID)
 		return err
 	}
+}
+
+// GetUserInvitations retrieves all pending invitations for a user
+func GetUserInvitations(db *sql.DB, userID int) ([]*models.GroupInvitation, error) {
+	query := `
+		SELECT 
+			gm.id, gm.group_id, gm.user_id, gm.joined_at,
+			g.name, g.description, g.image_url
+		FROM group_members gm
+		JOIN groups g ON gm.group_id = g.id
+		WHERE gm.user_id = ? AND gm.status = 'invited'
+		ORDER BY gm.joined_at DESC
+	`
+
+	rows, err := db.Query(query, userID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+
+	var invitations []*models.GroupInvitation
+	for rows.Next() {
+		inv := &models.GroupInvitation{}
+		var description, imageURL *string
+		err := rows.Scan(
+			&inv.ID,
+			&inv.GroupID,
+			&inv.UserID,
+			&inv.InvitedAt,
+			&inv.GroupName,
+			&description,
+			&imageURL,
+		)
+		if err != nil {
+			return nil, err
+		}
+		inv.GroupDescription = description
+		inv.GroupImageURL = imageURL
+		invitations = append(invitations, inv)
+	}
+
+	return invitations, rows.Err()
+}
+
+// RespondToInvitation accepts or rejects an invitation
+func RespondToInvitation(db *sql.DB, invitationID, userID int, accept bool) error {
+	// First verify the invitation belongs to this user
+	var count int
+	checkQuery := `SELECT COUNT(*) FROM group_members WHERE id = ? AND user_id = ? AND status = 'invited'`
+	err := db.QueryRow(checkQuery, invitationID, userID).Scan(&count)
+	if err != nil {
+		return err
+	}
+	if count == 0 {
+		return errors.New("invitation not found or already responded")
+	}
+
+	if accept {
+		query := `
+			UPDATE group_members
+			SET status = 'accepted'
+			WHERE id = ?
+		`
+		_, err := db.Exec(query, invitationID)
+		return err
+	} else {
+		query := `DELETE FROM group_members WHERE id = ?`
+		_, err := db.Exec(query, invitationID)
+		return err
+	}
+}
+
+// RespondToInvitationByGroupID responds to invitation using group_id instead of invitation_id
+func RespondToInvitationByGroupID(db *sql.DB, groupID, userID int, accept bool) error {
+	// Find the invitation ID first
+	var invitationID int
+	query := `SELECT id FROM group_members WHERE group_id = ? AND user_id = ? AND status = 'invited'`
+	err := db.QueryRow(query, groupID, userID).Scan(&invitationID)
+	if err != nil {
+		if err == sql.ErrNoRows {
+			return errors.New("invitation not found or already responded")
+		}
+		return err
+	}
+
+	// Use the existing function
+	return RespondToInvitation(db, invitationID, userID, accept)
 }
 
 // GetGroupMembers retrieves all accepted members of a group with user details

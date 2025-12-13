@@ -74,6 +74,24 @@
                   {{ processingNotif === notif.id ? '...' : '✗ Reject' }}
                 </button>
               </div>
+
+              <!-- Action Buttons for Group Invitations -->
+              <div v-if="notif.type === 'group_invite' && !notif.is_read" class="notif-actions">
+                <button
+                  @click="respondToGroupInvitation(notif, true)"
+                  class="accept-btn"
+                  :disabled="processingNotif === notif.id"
+                >
+                  {{ processingNotif === notif.id ? '...' : '✓ Accept' }}
+                </button>
+                <button
+                  @click="respondToGroupInvitation(notif, false)"
+                  class="reject-btn"
+                  :disabled="processingNotif === notif.id"
+                >
+                  {{ processingNotif === notif.id ? '...' : '✗ Decline' }}
+                </button>
+              </div>
             </div>
 
             <!-- Mark as Read / Delete -->
@@ -107,6 +125,8 @@ import { useNotifications } from '../composables/useNotifications'
 import { getToken } from '../stores/auth'
 import { useToast } from '@/composables/useToast'
 import { respondToFollowRequest as respondToFollowRequestService } from '@/services/usersService'
+import { respondToInvitation, getMyInvitations } from '@/services/groupsService'
+import { throttle } from '@/utils/timing'
 
 const { error, success } = useToast()
 
@@ -147,7 +167,7 @@ function deleteNotification(notifId) {
   deleteNotif(notifId)
 }
 
-async function respondToFollowRequest(notif, accept) {
+const respondToFollowRequest = throttle(async (notif, accept) => {
   processingNotif.value = notif.id
   
   try {
@@ -170,7 +190,43 @@ async function respondToFollowRequest(notif, accept) {
   } finally {
     processingNotif.value = null
   }
-}
+}, 1000)
+
+const respondToGroupInvitation = throttle(async (notif, accept) => {
+  processingNotif.value = notif.id
+  
+  try {
+    const token = getToken()
+    
+    // notif.related_id is the group_id, we need to find the invitation_id
+    // Get all invitations and find the one for this group
+    const invitations = await getMyInvitations(token)
+    const invitation = invitations.find(inv => inv.group_id === notif.related_id)
+    
+    if (!invitation) {
+      throw new Error('Invitation not found or already responded')
+    }
+    
+    // Now respond with the correct invitation ID
+    await respondToInvitation(invitation.id, accept, token)
+
+    // Mark notification as read
+    markAsRead(notif.id)
+    
+    // Emit event for groups page to refresh
+    if (accept) {
+      window.dispatchEvent(new CustomEvent('group-joined'))
+    }
+    
+    // Show feedback
+    success(accept ? 'Group invitation accepted' : 'Group invitation declined')
+  } catch (err) {
+    console.error('Error responding to group invitation:', err.message)
+    error(err.message || 'Failed to respond to invitation. Please try again.')
+  } finally {
+    processingNotif.value = null
+  }
+}, 1000)
 
 function getNotificationIcon(type) {
   const icons = {
@@ -178,6 +234,7 @@ function getNotificationIcon(type) {
     'follow': '✅',
     'group_invite': '👥',
     'group_request': '📝',
+    'group_activity': '🔔',
     'event': '📅',
     'message': '💬',
     'comment': '💭',

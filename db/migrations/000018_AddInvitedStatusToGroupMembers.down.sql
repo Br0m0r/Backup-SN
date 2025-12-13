@@ -1,17 +1,31 @@
-/* Group members - tracks user membership in groups */
+/* Revert group_members to original status check constraint */
 
-CREATE TABLE group_members (
+-- Recreate table with original constraint
+CREATE TABLE group_members_new (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
     group_id INTEGER NOT NULL,
     user_id INTEGER NOT NULL,
     role TEXT CHECK (role IN ('admin', 'member')) NOT NULL DEFAULT 'member',
-    status TEXT CHECK (status IN ('pending', 'accepted', 'invited')) NOT NULL DEFAULT 'accepted',
+    status TEXT CHECK (status IN ('pending', 'accepted')) NOT NULL DEFAULT 'accepted',
     joined_at DATETIME NOT NULL DEFAULT (datetime('now')),
     FOREIGN KEY (group_id) REFERENCES groups(id) ON DELETE CASCADE,
     FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE,
     UNIQUE(group_id, user_id)
 );
 
+-- Copy data (excluding 'invited' status entries)
+INSERT INTO group_members_new (id, group_id, user_id, role, status, joined_at)
+SELECT id, group_id, user_id, role, status, joined_at
+FROM group_members
+WHERE status IN ('pending', 'accepted');
+
+-- Drop old table
+DROP TABLE group_members;
+
+-- Rename new table
+ALTER TABLE group_members_new RENAME TO group_members;
+
+-- Recreate indexes
 CREATE INDEX idx_group_members_group_id ON group_members(group_id);
 CREATE INDEX idx_group_members_user_id ON group_members(user_id);
 CREATE INDEX idx_group_members_role ON group_members(role);

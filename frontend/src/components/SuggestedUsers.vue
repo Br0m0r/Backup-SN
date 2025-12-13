@@ -47,18 +47,15 @@
           </div>
         </div>
         <button
+          v-if="!user.isFollowing"
           class="follow-btn"
-          :class="{ 
-            following: user.isFollowing,
-            pending: user.isPending
-          }"
+          :class="{ pending: user.isPending }"
           @click="toggleFollow(user)"
           :disabled="user.actionLoading || user.isPending"
         >
           {{ 
             user.actionLoading ? '...' : 
             user.isPending ? 'Pending' :
-            user.isFollowing ? 'Following' : 
             'Follow' 
           }}
         </button>
@@ -77,6 +74,7 @@ import { useRouter } from 'vue-router'
 import { getToken } from '../stores/auth'
 import { searchUsers, followUser, unfollowUser } from '../services/usersService'
 import { useAvatar } from '../composables/useAvatar'
+import { throttle, debounce } from '@/utils/timing'
 
 const { getUserAvatarUrl } = useAvatar()
 const router = useRouter()
@@ -84,19 +82,17 @@ const suggestedUsers = ref([])
 const loading = ref(false)
 const error = ref('')
 const searchQuery = ref('')
-let searchTimeout = null
 
 onMounted(() => {
   loadSuggestions()
 })
 
 // Debounced search (waits 400ms after user stops typing)
-function onSearchInput() {
-  // Clear previous timeout
-  if (searchTimeout) {
-    clearTimeout(searchTimeout)
-  }
+const debouncedSearch = debounce(() => {
+  performSearch()
+}, 400)
 
+function onSearchInput() {
   // If search is empty, show suggestions
   if (!searchQuery.value.trim()) {
     loadSuggestions()
@@ -104,9 +100,7 @@ function onSearchInput() {
   }
 
   // Wait 400ms before searching
-  searchTimeout = setTimeout(() => {
-    performSearch()
-  }, 400)
+  debouncedSearch()
 }
 
 function clearSearch() {
@@ -131,14 +125,13 @@ async function performSearch() {
     const response = await searchUsers(query, token)
     const allUsers = response.users || []
     
-    // Backend already filters out accepted and pending follows
-    // Just add UI state properties
+    // Map backend follow_status to frontend state
     suggestedUsers.value = allUsers
       .slice(0, 10)
       .map(user => ({
         ...user,
-        isFollowing: false,
-        isPending: false,
+        isFollowing: user.follow_status === 'accepted',
+        isPending: user.follow_status === 'pending',
         actionLoading: false
       }))
   } catch (err) {
@@ -166,8 +159,7 @@ async function loadSuggestions() {
     const randomLetter = searchLetters[Math.floor(Math.random() * searchLetters.length)]
     const response = await searchUsers(randomLetter, token)
     
-    // Backend already filters out accepted and pending follows
-    // Filter and limit to 5 users, randomize order
+    // Map backend follow_status to frontend state
     const allUsers = response.users || []
     const shuffled = allUsers.sort(() => 0.5 - Math.random())
     
@@ -175,8 +167,8 @@ async function loadSuggestions() {
       .slice(0, 5)
       .map(user => ({
         ...user,
-        isFollowing: false,
-        isPending: false,
+        isFollowing: user.follow_status === 'accepted',
+        isPending: user.follow_status === 'pending',
         actionLoading: false
       }))
   } catch (err) {
@@ -192,7 +184,7 @@ function openProfile(user) {
   router.push({ name: 'Profile', params: { id: user.id } })
 }
 
-async function toggleFollow(user) {
+const toggleFollow = throttle(async (user) => {
   const token = getToken()
   if (!token || user.actionLoading || user.isPending) return
 
@@ -231,7 +223,7 @@ async function toggleFollow(user) {
   } finally {
     user.actionLoading = false
   }
-}
+}, 1000)
 </script>
 
 <style scoped>

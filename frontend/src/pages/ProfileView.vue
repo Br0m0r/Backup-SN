@@ -21,10 +21,10 @@
           <p class="about">
             {{ aboutText }}
           </p>
-          <p v-if="dateOfBirthDisplay" class="dob-line">
+          <p v-if="dateOfBirthDisplay && canViewFullProfile" class="dob-line">
             Born {{ dateOfBirthDisplay }}
           </p>
-          <div class="hero-stats">
+          <div v-if="canViewFullProfile" class="hero-stats">
             <div
               v-for="stat in stats"
               :key="stat.label"
@@ -60,7 +60,10 @@
         </template>
         <template v-else>
           <div class="viewer-note">
-            <p>You are viewing {{ displayName }}'s profile.</p>
+            <p v-if="!canViewFullProfile" class="private-notice">
+              🔒 This account is private. Follow to see their posts and profile.
+            </p>
+            <p v-else>You are viewing {{ displayName }}'s profile.</p>
             <button
               class="follow-btn"
               :disabled="followActionLoading || isFollowPending"
@@ -77,7 +80,7 @@
     </section>
 
     <Transition name="info-fade">
-      <section v-if="showInfoGrid" class="info-grid" :class="{ readonly: !isOwnProfile }">
+      <section v-if="showInfoGrid && canViewFullProfile" class="info-grid" :class="{ readonly: !isOwnProfile }">
         <article v-for="section in infoSections" :key="section.key">
           <header>
             <div>
@@ -85,24 +88,14 @@
               <h3>{{ displaySectionValue(section) }}</h3>
             </div>
             <div v-if="isOwnProfile" class="info-actions">
-              <button
-                class="icon-btn"
-                @click="toggleVisibility(section.key)"
-                :title="section.visible ? 'Hide' : 'Show'"
-              >
-                <span :class="['icon-eye', section.visible ? 'visible' : 'hidden']"></span>
-              </button>
               <button class="ghost mini" @click="openEditor(section.key)">Edit</button>
             </div>
           </header>
-          <span :class="['visibility-pill', section.visible ? 'pill-visible' : 'pill-hidden']">
-            {{ section.visible ? 'Displayed' : 'Hidden' }}
-          </span>
         </article>
       </section>
     </Transition>
 
-    <section class="activity-panel">
+    <section v-if="canViewFullProfile" class="activity-panel">
       <h2 class="activity-title">Posts</h2>
       <div class="post-stack">
         <div v-if="postsLoading" class="loading">Loading posts...</div>
@@ -313,6 +306,7 @@ import { getUserPosts, getPostImageUrl } from '../services/postsService';
 import { getMyGroups } from '../services/groupsService';
 import { useToast } from '@/composables/useToast';
 import { useAvatar } from '@/composables/useAvatar';
+import { throttle } from '@/utils/timing';
 
 const { success, error: showError } = useToast();
 const { getUserAvatarUrl } = useAvatar();
@@ -440,6 +434,13 @@ const isFollowing = computed(() => followStatus.value === 'accepted');
 const isFollowPending = computed(() => followStatus.value === 'pending');
 const isOtherProfile = computed(() => !isOwnProfile.value && !!activeProfileId.value);
 
+// Allow viewing full profile if: own profile, public profile, or following a private profile
+const canViewFullProfile = computed(() => {
+  if (isOwnProfile.value) return true; // Own profile - show everything
+  if (!isPrivate.value) return true; // Public profile - show everything
+  return isFollowing.value; // Private profile - only show if following
+});
+
 const filteredFollowers = computed(() => {
   const term = followerSearch.value.trim().toLowerCase();
   const list = followers.value || [];
@@ -482,7 +483,7 @@ const isOwnProfile = computed(() => {
 });
 const showInfoGrid = computed(() => infoMode.value && isOwnProfile.value);
 
-async function togglePrivacy() {
+const togglePrivacy = throttle(async () => {
   if (!isOwnProfile.value) {
     showError('You can only update privacy on your own profile.');
     return;
@@ -507,7 +508,7 @@ async function togglePrivacy() {
     console.error('Failed to update privacy:', error);
     alert('Failed to update privacy settings. Please try again.');
   }
-}
+}, 2000)
 
 function formatCount(value) {
   if (value === null || value === undefined) return '0';
@@ -871,7 +872,7 @@ async function loadFollowStatus() {
   }
 }
 
-async function handleFollowToggle() {
+const handleFollowToggle = throttle(async () => {
   const token = getToken();
   const targetId = activeProfileId.value || props.id;
   if (!token || !targetId) {
@@ -898,7 +899,7 @@ async function handleFollowToggle() {
   } finally {
     followActionLoading.value = false;
   }
-}
+}, 1000)
 
 async function loadFollowers() {
   if (!shouldLoadFollowers()) {
@@ -942,12 +943,6 @@ async function loadFollowers() {
   }
 }
 
-function toggleVisibility(key) {
-  infoSections.value = infoSections.value.map((section) =>
-    section.key === key ? { ...section, visible: !section.visible } : section
-  );
-}
-
 function openEditor(key) {
   if (!infoMode.value || !isOwnProfile.value) return;
   // Toggle panel closed if clicking the same section while it's already open
@@ -967,7 +962,7 @@ function closeEditor() {
   savingEditor.value = false;
 }
 
-async function saveEditor() {
+const saveEditor = throttle(async () => {
   if (!editingSection.value || savingEditor.value) return;
 
   const token = getToken();
@@ -1042,7 +1037,7 @@ async function saveEditor() {
     editorError.value = error?.response?.data?.error || error?.message || 'Unable to update profile right now.';
     savingEditor.value = false;
   }
-}
+}, 1000)
 
 watch(
   () => editingSection.value,
@@ -1314,6 +1309,12 @@ watch(
   max-width: 32ch;
 }
 
+.private-notice {
+  color: var(--neon-pink);
+  font-weight: 500;
+  text-align: center;
+}
+
 .follow-btn {
   border: 1px solid rgba(255, 255, 255, 0.2);
   background: linear-gradient(120deg, var(--neon-cyan), var(--neon-pink));
@@ -1389,8 +1390,7 @@ watch(
   max-width: 1100px;
 }
 
-.info-grid.readonly .info-actions,
-.info-grid.readonly .visibility-pill {
+.info-grid.readonly .info-actions {
   display: none;
 }
 
@@ -1447,25 +1447,6 @@ watch(
 
 .ghost.mini {
   padding: 0.3rem 0.9rem;
-}
-
-.visibility-pill {
-  width: fit-content;
-  padding: 0.2rem 0.75rem;
-  border-radius: 999px;
-  font-size: 0.7rem;
-  letter-spacing: 0.06em;
-  text-transform: uppercase;
-}
-
-.pill-visible {
-  background: rgba(0, 247, 255, 0.18);
-  color: var(--neon-cyan);
-}
-
-.pill-hidden {
-  background: rgba(255, 0, 230, 0.18);
-  color: var(--neon-pink);
 }
 
 .activity-panel {
@@ -1629,24 +1610,6 @@ watch(
   gap: 0.75rem;
   justify-content: flex-end;
   margin-top: 1rem;
-}
-
-.icon-eye {
-  display: inline-block;
-  width: 1.15rem;
-  height: 1.15rem;
-  mask: url('data:image/svg+xml,<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path fill="white" d="M12 5c-7.633 0-11 7-11 7s3.367 7 11 7 11-7 11-7-3.367-7-11-7zm0 11a4 4 0 1 1 .001-8.001A4 4 0 0 1 12 16zm0-6a2 2 0 1 0 .001 3.999A2 2 0 0 0 12 10z"/></svg>')
-    center/contain no-repeat;
-}
-
-.icon-eye.visible {
-  background: var(--neon-cyan);
-}
-
-.icon-eye.hidden {
-  background: var(--neon-pink);
-  mask: url('data:image/svg+xml,<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path fill="white" d="M12 5c-1.48 0-2.834.249-4.063.642L5.707 3.413 4.293 4.827l14.88 14.88 1.414-1.414-3.07-3.07C20.181 12.9 23 12 23 12s-3.367-7-11-7zm-4.95 3.536a14.63 14.63 0 0 1 4.95-.82c4.904 0 7.875 2.397 9.163 3.864-.41.454-1.17 1.17-2.24 1.907l-2.78-2.78a5 5 0 0 0-8.308-2.171l-0.785-.785zm8.528 8.528A14.63 14.63 0 0 1 12 18.18c-4.904 0-7.875-2.397-9.163-3.864a27.09 27.09 0 0 1 2.167-1.774l-1.56-1.56L2 12s3.367 7 11 7c1.683 0 3.193-.285 4.578-.936z"/></svg>')
-    center/contain no-repeat;
 }
 
 .side-panel {
