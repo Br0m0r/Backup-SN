@@ -105,12 +105,13 @@
 </template>
 
 <script setup>
-import { reactive, ref, watch } from 'vue'
-import { useRouter } from 'vue-router'
+import { reactive, ref, watch, onMounted } from 'vue'
+import { useRouter, useRoute } from 'vue-router'
 import { loginUser, registerUser } from '../services/authService'
 import { setUser } from '../stores/auth'
 
 const router = useRouter()
+const route = useRoute()
 const activeTab = ref('login')
 const loginLoading = ref(false)
 const registerLoading = ref(false)
@@ -136,6 +137,13 @@ const registerForm = reactive({
   avatar: null,
   nickname: '',
   aboutMe: ''
+})
+
+// Check if user was redirected due to expired session
+onMounted(() => {
+  if (route.query.expired === 'true') {
+    setFeedback('Your session has expired. Please login again.', 'error')
+  }
 })
 
 function setFeedback(message = '', variant = 'info') {

@@ -43,9 +43,9 @@ func (ts *TokenService) GenerateToken(userID int, username, email string) (strin
 	}
 	token := hex.EncodeToString(bytes)
 
-	// Calculate expiration (24 hours from now)
+	// Calculate expiration (30 days from now)
 	now := time.Now()
-	expiresAt := now.Add(24 * time.Hour)
+	expiresAt := now.Add(30 * 24 * time.Hour)
 
 	// Store session in database
 	query := `INSERT INTO sessions (user_id, token, created_at, expires_at) VALUES (?, ?, ?, ?)`
