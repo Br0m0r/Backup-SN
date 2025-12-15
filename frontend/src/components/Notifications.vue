@@ -120,7 +120,7 @@
 </template>
 
 <script setup>
-import { ref, onMounted, watch } from 'vue'
+import { ref, onMounted, watch, onBeforeUnmount } from 'vue'
 import { useNotifications } from '../composables/useNotifications'
 import { getToken } from '../stores/auth'
 import { useToast } from '@/composables/useToast'
@@ -271,19 +271,24 @@ onMounted(() => {
 
 // Close panel when clicking outside
 const handleClickOutside = (event) => {
-  if (showPanel.value && !event.target.closest('.notifications-widget')) {
+  if (!showPanel.value) return
+
+  const target = event.target
+  if (target instanceof Element && !target.closest('.notifications-widget')) {
     closePanel()
   }
 }
 
-onMounted(() => {
-  document.addEventListener('click', handleClickOutside)
-})
-
-watch(() => showPanel.value, (isOpen) => {
-  if (!isOpen) {
+watch(showPanel, (isOpen) => {
+  if (isOpen) {
+    document.addEventListener('click', handleClickOutside)
+  } else {
     document.removeEventListener('click', handleClickOutside)
   }
+})
+
+onBeforeUnmount(() => {
+  document.removeEventListener('click', handleClickOutside)
 })
 </script>
 
