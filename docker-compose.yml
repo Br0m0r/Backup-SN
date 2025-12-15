@@ -114,6 +114,24 @@ services:
     volumes:
       - ./social_network.db:/app/social_network.db:rw
 
+  # Frontend Service - Vue.js with Vite, served by 'serve' on port 3000
+  frontend:
+    build:
+      context: .  # Build from root
+      dockerfile: ./frontend/Dockerfile
+    container_name: frontend
+    ports:
+      - "3000:3000"
+    depends_on:
+      - auth-service
+      - user-service
+      - post-service
+      - group-service
+      - chat-service
+      - notification-service
+    networks:
+      - social-network
+
 # To run:
 # docker-compose up --build
 # 
@@ -124,6 +142,7 @@ services:
 # curl http://localhost:8084/health  (group service)
 # curl http://localhost:8085/health  (chat service)
 # curl http://localhost:8086/health  (notification service)
+# http://localhost:3000              (frontend - open in browser)
 #
 # Database: SQLite file shared via volume mount
 # Each service connects directly to ./social_network.db
