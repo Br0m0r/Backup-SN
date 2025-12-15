@@ -105,7 +105,13 @@
         <p v-else-if="!posts.length" class="empty-state">
           No posts yet.
         </p>
-        <article v-else v-for="post in posts" :key="post.id" class="post-card">
+        <article
+          v-else
+          v-for="post in posts"
+          :key="post.id"
+          class="post-card"
+          @click="navigateToPost(post.id)"
+        >
           <header>
             <div class="author">
               <div class="avatar">{{ getInitials(post) }}</div>
@@ -298,7 +304,7 @@
 </template>
 
 <script setup>
-import { computed, onMounted, ref, watch } from 'vue';
+import { computed, onBeforeUnmount, onMounted, ref, watch } from 'vue';
 import { useRouter } from 'vue-router';
 import { getToken, getUser } from '../stores/auth';
 import { getFollowers, getFollowing, getUserProfile, updatePrivacy, updateProfile, uploadAvatar, followUser, unfollowUser, getFollowStatus } from '../services/usersService';
@@ -355,6 +361,7 @@ const followStatus = ref('none');
 const followActionLoading = ref(false);
 
 const groupsCount = computed(() => myGroups.value.length);
+const socialPanelsOpen = computed(() => followersPanelOpen.value || followingPanelOpen.value || groupsPanelOpen.value);
 
 const stats = computed(() => [
   { label: 'Followers', value: formatStat(followerCount.value, '0') },
@@ -1113,6 +1120,30 @@ function closeGroupsPanel() {
   groupSearch.value = '';
 }
 
+function navigateToPost(postId) {
+  if (!postId) return;
+  router.push(`/post/${postId}`);
+}
+
+const handleSidePanelClickOutside = (event) => {
+  if (!socialPanelsOpen.value) return;
+
+  const target = event.target;
+  if (!(target instanceof Element)) return;
+  if (target.closest('.side-panel')) return;
+  if (target.closest('.hero-stats')) return;
+
+  closeAllPanels();
+};
+
+watch(socialPanelsOpen, (isOpen) => {
+  if (isOpen) {
+    document.addEventListener('click', handleSidePanelClickOutside);
+  } else {
+    document.removeEventListener('click', handleSidePanelClickOutside);
+  }
+});
+
 function viewUserProfile(userId) {
   if (!userId) {
     showError('Unable to view profile');
@@ -1135,6 +1166,10 @@ function openGroup(groupId) {
   // Navigate to the group page
   router.push(`/groups/${groupId}`);
 }
+
+onBeforeUnmount(() => {
+  document.removeEventListener('click', handleSidePanelClickOutside);
+});
 
 onMounted(async () => {
   if (!props.id) {
