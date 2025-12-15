@@ -4,6 +4,19 @@
 
 ---
 
+## 2025-12-15
+
+### Notifications Dropdown Outside Close
+**Notification popover now closes when clicking outside and removes the document listener on unmount to avoid leaks.** Listener only attaches while the panel is open for consistent hide behavior.
+
+### Profile Side Panels Outside Close
+**Followers, Following, and Groups drawers now auto-close on outside clicks while keeping stat blocks usable as triggers.** Shared listener attaches only when a panel is open and cleans up on unmount to prevent stuck panels.
+
+### Profile Posts Deep-Link to PostView
+**Profile post cards now open the dedicated PostView page when clicked, matching feed behavior.** Aligns profile activity cards with the feed’s navigation for full post context.
+
+---
+
 ## 2025-12-09
 
 ### Profile/Group Clickable Names
