@@ -1,6 +1,6 @@
 import axios from 'axios'
 
-const GROUPS_API_URL = import.meta.env.VITE_GROUPS_API_URL || 'http://localhost:8084'
+const GROUPS_API_URL = import.meta.env.VITE_GROUPS_API_URL
 
 const client = axios.create({
   baseURL: GROUPS_API_URL,

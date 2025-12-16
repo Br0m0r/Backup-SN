@@ -1,6 +1,6 @@
 import axios from 'axios'
 
-const USERS_BASE_URL = import.meta.env.VITE_USERS_API_URL || 'http://localhost:8082'
+const USERS_BASE_URL = import.meta.env.VITE_USERS_API_URL 
 
 const client = axios.create({
   baseURL: USERS_BASE_URL,

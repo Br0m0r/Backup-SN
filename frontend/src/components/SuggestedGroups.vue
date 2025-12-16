@@ -130,7 +130,7 @@
 import { ref, computed, onMounted } from 'vue'
 import { useRouter } from 'vue-router'
 import { getToken } from '@/stores/auth'
-import { getAllGroups, getMyGroups, createGroup as createGroupService, searchGroups } from '@/services/groupsService'
+import { getAllGroups, getMyGroups, createGroup as createGroupService, searchGroups,getGroupImageUrl } from '@/services/groupsService'
 import { throttle, debounce } from '@/utils/timing'
 
 const router = useRouter()
@@ -163,10 +163,11 @@ const debouncedGroupSearch = debounce(async () => {
 
   loading.value = true
   try {
-    const { groups = [] } = await searchGroups(query, token)
-    suggestedGroups.value = groups
+    const response = await searchGroups(query, token)
+    suggestedGroups.value = response?.groups ?? []
   } catch (error) {
     console.error('Failed to search groups:', error)
+    suggestedGroups.value = []
   } finally {
     loading.value = false
   }
@@ -198,10 +199,11 @@ async function loadMyGroups() {
   if (!token) return
 
   try {
-    const { groups = [] } = await getMyGroups(token)
-    myGroups.value = groups
+    const response = await getMyGroups(token)
+    myGroups.value = response?.groups ?? []
   } catch (error) {
     console.error('Failed to load my groups:', error)
+    myGroups.value = []
   }
 }
 
@@ -211,10 +213,11 @@ async function loadSuggestedGroups() {
 
   loading.value = true
   try {
-    const { groups = [] } = await getAllGroups(token)
-    suggestedGroups.value = groups.slice(0, 8) // Show top 8 suggested
+    const response = await getAllGroups(token)
+    suggestedGroups.value = (response?.groups ?? []).slice(0, 8) // Show top 8 suggested
   } catch (error) {
     console.error('Failed to load suggested groups:', error)
+    suggestedGroups.value = []
   } finally {
     loading.value = false
   }
@@ -293,16 +296,6 @@ function closeCreateModal() {
   newGroup.value = { name: '', description: '' }
   removeImage()
   createError.value = ''
-}
-
-function getGroupImageUrl(imageUrl) {
-  if (!imageUrl) return ''
-  if (imageUrl.startsWith('http://') || imageUrl.startsWith('https://')) {
-    return imageUrl
-  }
-  // Assume it's served from the groups service
-  const GROUPS_API_URL = import.meta.env.VITE_GROUPS_API_URL || 'http://localhost:8084'
-  return `${GROUPS_API_URL}/${imageUrl}`
 }
 
 onMounted(() => {

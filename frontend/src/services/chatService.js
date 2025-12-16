@@ -1,6 +1,6 @@
 import axios from 'axios'
 
-const CHAT_API_URL = import.meta.env.VITE_CHAT_API_URL || 'http://localhost:8085'
+const CHAT_API_URL = import.meta.env.VITE_CHAT_API_URL 
 
 // Helper to unwrap response data
 function unwrapResponse(response) {

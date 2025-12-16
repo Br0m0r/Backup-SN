@@ -820,10 +820,12 @@ const debouncedUserSearch = debounce(async () => {
   if (!token) return
 
   try {
-    const { users = [] } = await searchUsersForGroup(query, groupId.value, token)
-    searchResults.value = users
+    const response = await searchUsersForGroup(query, groupId.value, token)
+    // Handle null/undefined users array from API
+    searchResults.value = response?.users ?? []
   } catch (err) {
     console.error('Failed to search users:', err)
+    searchResults.value = []
   }
 }, 300)
 

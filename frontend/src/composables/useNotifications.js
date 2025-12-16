@@ -1,10 +1,7 @@
 /**
  * WebSocket Composable for Notifications
  * 
- * WHY SEPARATE FROM CHAT:
- * Your backend has TWO WebSocket servers:
- * 1. Chat Service (port 8085) - handled by useWebSocket.js
- * 2. Notification Service (port 8086) - THIS FILE
+
  * 
  * Notifications include:
  * - Follow requests
@@ -37,15 +34,10 @@ const eventListeners = ref(new Map())
 
 /**
  * Configuration for notifications WebSocket
- * 
- * WHY DIFFERENT PORT:
- * - Notifications service runs on :8086
- * - Chat service runs on :8085
- * - Keeps concerns separated
  */
 const config = {
-  notificationsUrl: import.meta.env.VITE_NOTIFICATIONS_WS_URL || 'ws://localhost:8086/ws',
-  notificationsApiUrl: import.meta.env.VITE_NOTIFICATIONS_API_URL || 'http://localhost:8086',
+  notificationsUrl: import.meta.env.VITE_NOTIFICATIONS_WS_URL ,
+  notificationsApiUrl: import.meta.env.VITE_NOTIFICATIONS_API_URL,
   reconnectDelay: 3000,
   maxReconnectAttempts: 5,
   heartbeatInterval: 30000 // 30 seconds

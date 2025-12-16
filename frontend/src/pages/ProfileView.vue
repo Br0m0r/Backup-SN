@@ -787,8 +787,8 @@ async function loadGroups() {
   groupsError.value = '';
 
   try {
-    const { groups = [] } = await getMyGroups(token);
-    myGroups.value = groups.map(normalizeGroup);
+    const response = await getMyGroups(token);
+    myGroups.value = (response?.groups ?? []).map(normalizeGroup);
   } catch (error) {
     console.error('Failed to load groups:', error);
     groupsError.value = error?.message || 'Unable to load groups';

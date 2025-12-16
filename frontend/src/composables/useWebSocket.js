@@ -1,10 +1,6 @@
 /**
  * WebSocket Composable for Chat
  * 
- * WHY SEPARATE CONNECTIONS:
- * Your backend has TWO separate WebSocket servers:
- * 1. Chat Service (port 8085) - handles chat messages
- * 2. Notification Service (port 8086) - handles notifications
  * 
  * This composable manages the CHAT WebSocket connection.
  * We'll create useNotifications separately for notifications.
@@ -35,7 +31,7 @@ const eventListeners = ref(new Map())
  * - Can be overridden via env variables
  */
 const config = {
-  chatUrl: import.meta.env.VITE_CHAT_WS_URL || 'ws://localhost:8085/ws',
+  chatUrl: import.meta.env.VITE_CHAT_WS_URL ,
   reconnectDelay: 3000,
   maxReconnectAttempts: 5,
   heartbeatInterval: 30000 // 30 seconds

@@ -29,11 +29,13 @@ services:
       - "8082:8082"
     depends_on:
       - auth-service  # User service needs auth service for token verification
+      - notification-service  # User service sends notifications on follow
     networks:
       - social-network
     environment:
       - DATABASE_PATH=/app/social_network.db
       - AUTH_SERVICE_URL=http://auth-service:8081  # How user service finds auth service
+      - NOTIFICATION_SERVICE_URL=http://notification-service:8086  # For sending follow notifications
     volumes:
       - ./social_network.db:/app/social_network.db:rw
       - ./services/users/uploads:/root/uploads:rw
@@ -48,11 +50,13 @@ services:
       - "8083:8083"
     depends_on:
       - auth-service  # Post service needs auth service for token verification
+      - notification-service  # Post service sends notifications on comments
     networks:
       - social-network
     environment:
       - DATABASE_PATH=/app/social_network.db
       - AUTH_SERVICE_URL=http://auth-service:8081  # How post service finds auth service
+      - NOTIFICATION_SERVICE_URL=http://notification-service:8086  # For sending comment notifications
       - PORT=8083
     volumes:
       - ./social_network.db:/app/social_network.db:rw
@@ -68,11 +72,13 @@ services:
       - "8084:8084"
     depends_on:
       - auth-service  # Group service needs auth service for token verification
+      - notification-service  # Group service sends notifications on invites/events
     networks:
       - social-network
     environment:
       - DATABASE_PATH=/app/social_network.db
       - AUTH_SERVICE_URL=http://auth-service:8081  # How group service finds auth service
+      - NOTIFICATION_SERVICE_URL=http://notification-service:8086  # For sending group notifications
     volumes:
       - ./social_network.db:/app/social_network.db:rw
       - ./services/groups/uploads:/app/uploads:rw
@@ -87,11 +93,13 @@ services:
       - "8085:8085"
     depends_on:
       - auth-service  # Chat service needs auth service for token verification
+      - notification-service  # Chat service sends notifications for offline messages
     networks:
       - social-network
     environment:
       - DATABASE_PATH=/app/social_network.db
       - AUTH_SERVICE_URL=http://auth-service:8081  # How chat service finds auth service
+      - NOTIFICATION_SERVICE_URL=http://notification-service:8086  # For sending message notifications
     volumes:
       - ./social_network.db:/app/social_network.db:rw
       - ./services/chat/uploads:/app/uploads:rw
