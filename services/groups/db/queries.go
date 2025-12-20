@@ -524,11 +524,13 @@ func GetGroupEvents(db *sql.DB, groupID, userID int) ([]*models.EventWithRespons
 	query := `
 		SELECT 
 			e.id, e.group_id, e.creator_id, e.title, e.description, e.event_time, e.created_at,
+			u.first_name, u.last_name,
 			COUNT(CASE WHEN er.response = 'going' THEN 1 END) as going_count,
 			COUNT(CASE WHEN er.response = 'not_going' THEN 1 END) as not_going_count,
 			COUNT(CASE WHEN er.response = 'interested' THEN 1 END) as interested_count,
 			(SELECT response FROM event_responses WHERE event_id = e.id AND user_id = ?) as user_response
 		FROM events e
+		LEFT JOIN users u ON e.creator_id = u.id
 		LEFT JOIN event_responses er ON e.id = er.event_id
 		WHERE e.group_id = ?
 		GROUP BY e.id
@@ -545,6 +547,7 @@ func GetGroupEvents(db *sql.DB, groupID, userID int) ([]*models.EventWithRespons
 	for rows.Next() {
 		event := &models.EventWithResponses{}
 		var userResponse sql.NullString
+		var firstName, lastName sql.NullString
 
 		err := rows.Scan(
 			&event.ID,
@@ -554,6 +557,8 @@ func GetGroupEvents(db *sql.DB, groupID, userID int) ([]*models.EventWithRespons
 			&event.Description,
 			&event.EventTime,
 			&event.CreatedAt,
+			&firstName,
+			&lastName,
 			&event.GoingCount,
 			&event.NotGoingCount,
 			&event.InterestedCount,
@@ -565,6 +570,15 @@ func GetGroupEvents(db *sql.DB, groupID, userID int) ([]*models.EventWithRespons
 
 		if userResponse.Valid {
 			event.UserResponse = userResponse.String
+		}
+
+		// Construct creator name from first and last name
+		if firstName.Valid && lastName.Valid {
+			event.CreatorName = firstName.String + " " + lastName.String
+		} else if firstName.Valid {
+			event.CreatorName = firstName.String
+		} else {
+			event.CreatorName = "Unknown"
 		}
 
 		events = append(events, event)

@@ -69,7 +69,7 @@
 </template>
 
 <script setup>
-import { onMounted, ref, watch } from 'vue'
+import { onMounted, ref, watch, onBeforeUnmount } from 'vue'
 import { useRouter } from 'vue-router'
 import { getToken } from '../stores/auth'
 import { searchUsers, followUser, unfollowUser } from '../services/usersService'
@@ -83,8 +83,15 @@ const loading = ref(false)
 const error = ref('')
 const searchQuery = ref('')
 
+const emit = defineEmits(['close'])
+
 onMounted(() => {
   loadSuggestions()
+  
+  // Add click outside listener after a small delay to prevent immediate close
+  setTimeout(() => {
+    document.addEventListener('click', handleClickOutside)
+  }, 100)
 })
 
 // Debounced search (waits 400ms after user stops typing)
@@ -224,6 +231,18 @@ const toggleFollow = throttle(async (user) => {
     user.actionLoading = false
   }
 }, 1000)
+
+// Handle clicking outside to close dropdown
+const handleClickOutside = (event) => {
+  const target = event.target
+  if (target instanceof Element && !target.closest('.suggested-users-dropdown')) {
+    emit('close')
+  }
+}
+
+onBeforeUnmount(() => {
+  document.removeEventListener('click', handleClickOutside)
+})
 </script>
 
 <style scoped>

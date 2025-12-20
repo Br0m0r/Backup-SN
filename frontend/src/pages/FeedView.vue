@@ -383,9 +383,10 @@ onMounted(() => {
 .post-image {
   width: 100%;
   max-height: 500px;
-  object-fit: cover;
+  object-fit: contain;
   border-radius: 0.75rem;
   margin-top: 1rem;
+  background: rgba(0, 0, 0, 0.2);
 }
 
 .loading,

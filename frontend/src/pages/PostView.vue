@@ -19,13 +19,13 @@
     <div v-if="loading" class="loading">Loading post...</div>
     <div v-else-if="errorMessage" class="error-state">
       <p>{{ errorMessage }}</p>
-      <button @click="$router.push('/feed')">Back to Feed</button>
+      <button @click="$router.back()">Go Back</button>
     </div>
     <div v-else-if="post" class="post-container">
       <!-- Post Header -->
       <header class="post-header">
-        <button class="back-button" @click="$router.push('/feed')">
-          <span>←</span> Back to Feed
+        <button class="back-button" @click="$router.back()">
+          <span>←</span> Go Back
         </button>
       </header>
 
@@ -720,10 +720,13 @@ onMounted(() => {
 
 .post-image {
   width: 100%;
+  max-height: 600px;
+  object-fit: contain;
   border-radius: 12px;
   margin-top: 16px;
   box-shadow: 0 8px 20px rgba(0, 0, 0, 0.3);
   transition: transform 0.3s;
+  background: rgba(0, 0, 0, 0.2);
 }
 
 .post-image:hover {
@@ -1061,10 +1064,13 @@ onMounted(() => {
 
 .comment-image {
   max-width: 100%;
+  max-height: 400px;
+  object-fit: contain;
   border-radius: 10px;
   margin-top: 10px;
   border: 1px solid rgba(255, 255, 255, 0.1);
   box-shadow: 0 4px 12px rgba(0, 0, 0, 0.3);
+  background: rgba(0, 0, 0, 0.2);
 }
 
 /* Custom Delete Modal */

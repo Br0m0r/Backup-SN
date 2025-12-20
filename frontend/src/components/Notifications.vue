@@ -151,7 +151,7 @@ function togglePanel() {
   showPanel.value = !showPanel.value
 }
 
-function closePanel() {
+function Panel() {close
   showPanel.value = false
 }
 

@@ -130,6 +130,7 @@ type GroupWithDetails struct {
 // EventWithResponses includes event with response counts
 type EventWithResponses struct {
 	Event
+	CreatorName     string `json:"creator_name,omitempty"`
 	GoingCount      int    `json:"going_count"`
 	NotGoingCount   int    `json:"not_going_count"`
 	InterestedCount int    `json:"interested_count"`
