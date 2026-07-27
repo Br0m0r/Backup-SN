@@ -1,6 +1,7 @@
 package handlers
 
 import (
+	"context"
 	"database/sql"
 	"encoding/json"
 	"log"
@@ -11,6 +12,7 @@ import (
 	"social-network/services/notifications/utils"
 	"strconv"
 	"strings"
+	"time"
 )
 
 // NotificationHandlers handles notification-related HTTP requests
@@ -46,6 +48,7 @@ func (h *NotificationHandlers) CreateNotification(w http.ResponseWriter, r *http
 		models.TypeFollowRequest: true,
 		models.TypeGroupInvite:   true,
 		models.TypeGroupRequest:  true,
+		models.TypeGroupActivity: true,
 		models.TypeEvent:         true,
 		models.TypeMessage:       true,
 		models.TypeComment:       true,
@@ -245,6 +248,13 @@ func (h *NotificationHandlers) DeleteNotification(w http.ResponseWriter, r *http
 
 // HealthCheck returns service health status
 func (h *NotificationHandlers) HealthCheck(w http.ResponseWriter, r *http.Request) {
+	ctx, cancel := context.WithTimeout(r.Context(), 2*time.Second)
+	defer cancel()
+	if err := h.database.PingContext(ctx); err != nil {
+		log.Printf("Notification database health check failed: %v", err)
+		utils.SendError(w, http.StatusServiceUnavailable, "Notification database unavailable")
+		return
+	}
 	utils.SendSuccess(w, map[string]string{
 		"status":  "healthy",
 		"service": "notifications",

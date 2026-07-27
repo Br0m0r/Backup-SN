@@ -9,29 +9,29 @@ import (
 func CreateNotification(database *sql.DB, notif *models.CreateNotificationRequest) (*models.Notification, error) {
 	query := `
 		INSERT INTO notifications (user_id, type, related_id, content)
-		VALUES (?, ?, ?, ?)
+		VALUES ($1, $2, $3, $4)
+		RETURNING id, user_id, type, COALESCE(related_id, 0), content, is_read, created_at
 	`
 
-	result, err := database.Exec(query, notif.UserID, notif.Type, notif.RelatedID, notif.Content)
-	if err != nil {
-		return nil, err
-	}
-
-	id, err := result.LastInsertId()
-	if err != nil {
-		return nil, err
-	}
-
-	// Get the created notification
-	return GetNotificationByID(database, int(id))
+	var created models.Notification
+	err := database.QueryRow(query, notif.UserID, notif.Type, notif.RelatedID, notif.Content).Scan(
+		&created.ID,
+		&created.UserID,
+		&created.Type,
+		&created.RelatedID,
+		&created.Content,
+		&created.IsRead,
+		&created.CreatedAt,
+	)
+	return &created, err
 }
 
 // GetNotificationByID retrieves a notification by ID
 func GetNotificationByID(database *sql.DB, id int) (*models.Notification, error) {
 	query := `
-		SELECT id, user_id, type, related_id, content, is_read, created_at
+		SELECT id, user_id, type, COALESCE(related_id, 0), content, is_read, created_at
 		FROM notifications
-		WHERE id = ?
+		WHERE id = $1
 	`
 
 	var notif models.Notification
@@ -55,11 +55,11 @@ func GetNotificationByID(database *sql.DB, id int) (*models.Notification, error)
 // GetUserNotifications retrieves all notifications for a user
 func GetUserNotifications(database *sql.DB, userID int, limit, offset int) ([]models.Notification, error) {
 	query := `
-		SELECT id, user_id, type, related_id, content, is_read, created_at
+		SELECT id, user_id, type, COALESCE(related_id, 0), content, is_read, created_at
 		FROM notifications
-		WHERE user_id = ?
+		WHERE user_id = $1
 		ORDER BY created_at DESC
-		LIMIT ? OFFSET ?
+		LIMIT $2 OFFSET $3
 	`
 
 	rows, err := database.Query(query, userID, limit, offset)
@@ -86,15 +86,15 @@ func GetUserNotifications(database *sql.DB, userID int, limit, offset int) ([]mo
 		notifications = append(notifications, notif)
 	}
 
-	return notifications, nil
+	return notifications, rows.Err()
 }
 
 // GetUnreadNotifications retrieves unread notifications for a user
 func GetUnreadNotifications(database *sql.DB, userID int) ([]models.Notification, error) {
 	query := `
-		SELECT id, user_id, type, related_id, content, is_read, created_at
+		SELECT id, user_id, type, COALESCE(related_id, 0), content, is_read, created_at
 		FROM notifications
-		WHERE user_id = ? AND is_read = 0
+		WHERE user_id = $1 AND is_read = FALSE
 		ORDER BY created_at DESC
 	`
 
@@ -122,14 +122,14 @@ func GetUnreadNotifications(database *sql.DB, userID int) ([]models.Notification
 		notifications = append(notifications, notif)
 	}
 
-	return notifications, nil
+	return notifications, rows.Err()
 }
 
 // GetUnreadCount returns the count of unread notifications for a user
 func GetUnreadCount(database *sql.DB, userID int) (int, error) {
 	query := `
 		SELECT COUNT(*) FROM notifications
-		WHERE user_id = ? AND is_read = 0
+		WHERE user_id = $1 AND is_read = FALSE
 	`
 
 	var count int
@@ -145,8 +145,8 @@ func GetUnreadCount(database *sql.DB, userID int) (int, error) {
 func MarkAsRead(database *sql.DB, notificationID, userID int) error {
 	query := `
 		UPDATE notifications
-		SET is_read = 1
-		WHERE id = ? AND user_id = ?
+		SET is_read = TRUE
+		WHERE id = $1 AND user_id = $2
 	`
 
 	_, err := database.Exec(query, notificationID, userID)
@@ -157,8 +157,8 @@ func MarkAsRead(database *sql.DB, notificationID, userID int) error {
 func MarkAllAsRead(database *sql.DB, userID int) error {
 	query := `
 		UPDATE notifications
-		SET is_read = 1
-		WHERE user_id = ? AND is_read = 0
+		SET is_read = TRUE
+		WHERE user_id = $1 AND is_read = FALSE
 	`
 
 	_, err := database.Exec(query, userID)
@@ -169,7 +169,7 @@ func MarkAllAsRead(database *sql.DB, userID int) error {
 func DeleteNotification(database *sql.DB, notificationID, userID int) error {
 	query := `
 		DELETE FROM notifications
-		WHERE id = ? AND user_id = ?
+		WHERE id = $1 AND user_id = $2
 	`
 
 	_, err := database.Exec(query, notificationID, userID)
@@ -180,7 +180,7 @@ func DeleteNotification(database *sql.DB, notificationID, userID int) error {
 func DeleteAllRead(database *sql.DB, userID int) error {
 	query := `
 		DELETE FROM notifications
-		WHERE user_id = ? AND is_read = 1
+		WHERE user_id = $1 AND is_read = TRUE
 	`
 
 	_, err := database.Exec(query, userID)

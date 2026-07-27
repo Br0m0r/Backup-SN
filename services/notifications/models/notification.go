@@ -27,6 +27,7 @@ const (
 	TypeFollowRequest = "follow_request"
 	TypeGroupInvite   = "group_invite"
 	TypeGroupRequest  = "group_request"
+	TypeGroupActivity = "group_activity"
 	TypeEvent         = "event"
 	TypeMessage       = "message"
 	TypeComment       = "comment"
