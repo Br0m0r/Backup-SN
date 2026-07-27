@@ -3,133 +3,363 @@ networks:
   social-network:
     driver: bridge
 
+volumes:
+  shared-sqlite-data:
+  notifications-postgres-data:
+  media-data:
+
 services:
+  # Transitional release job for services that still share SQLite. This is
+  # removed as each remaining service receives its own database.
+  sqlite-migrations:
+    build:
+      context: .
+      dockerfile: ./docker/backend.Dockerfile
+      args:
+        SERVICE: auth
+        PORT: "8081"
+    init: true
+    security_opt:
+      - no-new-privileges:true
+    entrypoint: ["./migrate-sqlite", "-database", "/data/social_network.db", "-migrations", "/app/db/migrations"]
+    networks:
+      - social-network
+    volumes:
+      - shared-sqlite-data:/data
+
   # Auth Service - services/auth/main.go runs on port 8081
   auth-service:
     build:
       context: .  # Build from root, not ./services/auth
-      dockerfile: ./services/auth/Dockerfile
-    container_name: auth-service
-    ports:
-      - "8081:8081"
+      dockerfile: ./docker/backend.Dockerfile
+      args:
+        SERVICE: auth
+        PORT: "8081"
+    init: true
+    security_opt:
+      - no-new-privileges:true
+    expose:
+      - "8081"
+    depends_on:
+      sqlite-migrations:
+        condition: service_completed_successfully
     networks:
       - social-network
     environment:
-      - DATABASE_PATH=/app/social_network.db
+      - DATABASE_PATH=/data/social_network.db
     volumes:
-      - ./social_network.db:/app/social_network.db:rw
+      - shared-sqlite-data:/data
 
   # User Service - services/users/main.go runs on port 8082
   user-service:
     build:
       context: .  # Build from root, not ./services/users
-      dockerfile: ./services/users/Dockerfile
-    container_name: user-service
-    ports:
-      - "8082:8082"
+      dockerfile: ./docker/backend.Dockerfile
+      args:
+        SERVICE: users
+        PORT: "8082"
+    init: true
+    security_opt:
+      - no-new-privileges:true
+    expose:
+      - "8082"
     depends_on:
-      - auth-service  # User service needs auth service for token verification
-      - notification-service  # User service sends notifications on follow
+      auth-service:
+        condition: service_started  # User service needs auth service for token verification
+      notification-service:
+        condition: service_started  # User service sends notifications on follow
+      media-init:
+        condition: service_completed_successfully
     networks:
       - social-network
     environment:
-      - DATABASE_PATH=/app/social_network.db
+      - DATABASE_PATH=/data/social_network.db
       - AUTH_SERVICE_URL=http://auth-service:8081  # How user service finds auth service
       - NOTIFICATION_SERVICE_URL=http://notification-service:8086  # For sending follow notifications
+      - INTERNAL_SERVICE_TOKEN=${INTERNAL_SERVICE_TOKEN:?Set INTERNAL_SERVICE_TOKEN in .env}
+      - OBJECT_STORAGE_ENDPOINT=${OBJECT_STORAGE_ENDPOINT:-media:9000}
+      - OBJECT_STORAGE_ACCESS_KEY=${OBJECT_STORAGE_ACCESS_KEY:-socialnetwork}
+      - OBJECT_STORAGE_SECRET_KEY=${OBJECT_STORAGE_SECRET_KEY:-socialnetwork-dev-only}
+      - OBJECT_STORAGE_BUCKET=${OBJECT_STORAGE_BUCKET:-social-network-media}
+      - OBJECT_STORAGE_USE_TLS=${OBJECT_STORAGE_USE_TLS:-false}
+      - OBJECT_STORAGE_PUBLIC_BASE_URL=${OBJECT_STORAGE_PUBLIC_BASE_URL:-/media/social-network-media}
     volumes:
-      - ./social_network.db:/app/social_network.db:rw
-      - ./services/users/uploads:/root/uploads:rw
+      - shared-sqlite-data:/data
 
   # Post Service - services/posts/main.go runs on port 8083
   post-service:
     build:
       context: .  # Build from root
-      dockerfile: ./services/posts/Dockerfile
-    container_name: post-service
-    ports:
-      - "8083:8083"
+      dockerfile: ./docker/backend.Dockerfile
+      args:
+        SERVICE: posts
+        PORT: "8083"
+    init: true
+    security_opt:
+      - no-new-privileges:true
+    expose:
+      - "8083"
     depends_on:
-      - auth-service  # Post service needs auth service for token verification
-      - notification-service  # Post service sends notifications on comments
+      auth-service:
+        condition: service_started  # Post service needs auth service for token verification
+      notification-service:
+        condition: service_started  # Post service sends notifications on comments
+      media-init:
+        condition: service_completed_successfully
     networks:
       - social-network
     environment:
-      - DATABASE_PATH=/app/social_network.db
+      - DATABASE_PATH=/data/social_network.db
       - AUTH_SERVICE_URL=http://auth-service:8081  # How post service finds auth service
       - NOTIFICATION_SERVICE_URL=http://notification-service:8086  # For sending comment notifications
+      - INTERNAL_SERVICE_TOKEN=${INTERNAL_SERVICE_TOKEN:?Set INTERNAL_SERVICE_TOKEN in .env}
       - PORT=8083
+      - OBJECT_STORAGE_ENDPOINT=${OBJECT_STORAGE_ENDPOINT:-media:9000}
+      - OBJECT_STORAGE_ACCESS_KEY=${OBJECT_STORAGE_ACCESS_KEY:-socialnetwork}
+      - OBJECT_STORAGE_SECRET_KEY=${OBJECT_STORAGE_SECRET_KEY:-socialnetwork-dev-only}
+      - OBJECT_STORAGE_BUCKET=${OBJECT_STORAGE_BUCKET:-social-network-media}
+      - OBJECT_STORAGE_USE_TLS=${OBJECT_STORAGE_USE_TLS:-false}
+      - OBJECT_STORAGE_PUBLIC_BASE_URL=${OBJECT_STORAGE_PUBLIC_BASE_URL:-/media/social-network-media}
     volumes:
-      - ./social_network.db:/app/social_network.db:rw
-      - ./services/posts/uploads:/app/uploads:rw
+      - shared-sqlite-data:/data
 
   # Group Service - services/groups/main.go runs on port 8084
   group-service:
     build:
       context: .  # Build from root
-      dockerfile: ./services/groups/Dockerfile
-    container_name: group-service
-    ports:
-      - "8084:8084"
+      dockerfile: ./docker/backend.Dockerfile
+      args:
+        SERVICE: groups
+        PORT: "8084"
+    init: true
+    security_opt:
+      - no-new-privileges:true
+    expose:
+      - "8084"
     depends_on:
-      - auth-service  # Group service needs auth service for token verification
-      - notification-service  # Group service sends notifications on invites/events
+      auth-service:
+        condition: service_started  # Group service needs auth service for token verification
+      notification-service:
+        condition: service_started  # Group service sends notifications on invites/events
+      media-init:
+        condition: service_completed_successfully
     networks:
       - social-network
     environment:
-      - DATABASE_PATH=/app/social_network.db
+      - DATABASE_PATH=/data/social_network.db
       - AUTH_SERVICE_URL=http://auth-service:8081  # How group service finds auth service
       - NOTIFICATION_SERVICE_URL=http://notification-service:8086  # For sending group notifications
+      - INTERNAL_SERVICE_TOKEN=${INTERNAL_SERVICE_TOKEN:?Set INTERNAL_SERVICE_TOKEN in .env}
+      - OBJECT_STORAGE_ENDPOINT=${OBJECT_STORAGE_ENDPOINT:-media:9000}
+      - OBJECT_STORAGE_ACCESS_KEY=${OBJECT_STORAGE_ACCESS_KEY:-socialnetwork}
+      - OBJECT_STORAGE_SECRET_KEY=${OBJECT_STORAGE_SECRET_KEY:-socialnetwork-dev-only}
+      - OBJECT_STORAGE_BUCKET=${OBJECT_STORAGE_BUCKET:-social-network-media}
+      - OBJECT_STORAGE_USE_TLS=${OBJECT_STORAGE_USE_TLS:-false}
+      - OBJECT_STORAGE_PUBLIC_BASE_URL=${OBJECT_STORAGE_PUBLIC_BASE_URL:-/media/social-network-media}
     volumes:
-      - ./social_network.db:/app/social_network.db:rw
-      - ./services/groups/uploads:/app/uploads:rw
+      - shared-sqlite-data:/data
 
   # Chat Service - services/chat/main.go runs on port 8085
   chat-service:
     build:
       context: .  # Build from root
-      dockerfile: ./services/chat/Dockerfile
-    container_name: chat-service
-    ports:
-      - "8085:8085"
+      dockerfile: ./docker/backend.Dockerfile
+      args:
+        SERVICE: chat
+        PORT: "8085"
+    init: true
+    security_opt:
+      - no-new-privileges:true
+    expose:
+      - "8085"
     depends_on:
-      - auth-service  # Chat service needs auth service for token verification
-      - notification-service  # Chat service sends notifications for offline messages
+      auth-service:
+        condition: service_started  # Chat service needs auth service for token verification
+      notification-service:
+        condition: service_started  # Chat service sends notifications for offline messages
+      media-init:
+        condition: service_completed_successfully
+      redis:
+        condition: service_healthy
     networks:
       - social-network
     environment:
-      - DATABASE_PATH=/app/social_network.db
+      - DATABASE_PATH=/data/social_network.db
       - AUTH_SERVICE_URL=http://auth-service:8081  # How chat service finds auth service
       - NOTIFICATION_SERVICE_URL=http://notification-service:8086  # For sending message notifications
+      - INTERNAL_SERVICE_TOKEN=${INTERNAL_SERVICE_TOKEN:?Set INTERNAL_SERVICE_TOKEN in .env}
+      - WEBSOCKET_ALLOWED_ORIGINS=${WEBSOCKET_ALLOWED_ORIGINS:?Set WEBSOCKET_ALLOWED_ORIGINS in .env}
+      - REDIS_URL=${REDIS_URL:-redis://redis:6379/0}
+      - REDIS_NAMESPACE=${REDIS_NAMESPACE:-social-network}
+      - REDIS_OPERATION_TIMEOUT=${REDIS_OPERATION_TIMEOUT:-2s}
+      - REDIS_PRESENCE_TTL=${REDIS_PRESENCE_TTL:-45s}
+      - REDIS_PRESENCE_REFRESH=${REDIS_PRESENCE_REFRESH:-15s}
+      - OBJECT_STORAGE_ENDPOINT=${OBJECT_STORAGE_ENDPOINT:-media:9000}
+      - OBJECT_STORAGE_ACCESS_KEY=${OBJECT_STORAGE_ACCESS_KEY:-socialnetwork}
+      - OBJECT_STORAGE_SECRET_KEY=${OBJECT_STORAGE_SECRET_KEY:-socialnetwork-dev-only}
+      - OBJECT_STORAGE_BUCKET=${OBJECT_STORAGE_BUCKET:-social-network-media}
+      - OBJECT_STORAGE_USE_TLS=${OBJECT_STORAGE_USE_TLS:-false}
+      - OBJECT_STORAGE_PUBLIC_BASE_URL=${OBJECT_STORAGE_PUBLIC_BASE_URL:-/media/social-network-media}
     volumes:
-      - ./social_network.db:/app/social_network.db:rw
-      - ./services/chat/uploads:/app/uploads:rw
+      - shared-sqlite-data:/data
 
   # Notification Service - services/notifications/main.go runs on port 8086
   notification-service:
     build:
       context: .  # Build from root
-      dockerfile: ./services/notifications/Dockerfile
-    container_name: notification-service
-    ports:
-      - "8086:8086"
+      dockerfile: ./docker/backend.Dockerfile
+      args:
+        SERVICE: notifications
+        PORT: "8086"
+    init: true
+    security_opt:
+      - no-new-privileges:true
+    expose:
+      - "8086"
     depends_on:
-      - auth-service  # Notification service needs auth service for token verification
+      auth-service:
+        condition: service_started  # Notification service needs auth service for token verification
+      notification-migrations:
+        condition: service_completed_successfully
+      redis:
+        condition: service_healthy
     networks:
       - social-network
     environment:
-      - DATABASE_PATH=/app/social_network.db
+      - DATABASE_URL=postgres://notifications:${NOTIFICATIONS_DB_PASSWORD:-notifications-dev-only}@notifications-db:5432/notifications?sslmode=disable
+      - DB_MAX_OPEN_CONNS=${NOTIFICATIONS_DB_MAX_OPEN_CONNS:-25}
+      - DB_MAX_IDLE_CONNS=${NOTIFICATIONS_DB_MAX_IDLE_CONNS:-5}
+      - DB_CONN_MAX_LIFETIME=${NOTIFICATIONS_DB_CONN_MAX_LIFETIME:-30m}
+      - DB_CONN_MAX_IDLE_TIME=${NOTIFICATIONS_DB_CONN_MAX_IDLE_TIME:-5m}
+      - DB_CONNECT_TIMEOUT=${NOTIFICATIONS_DB_CONNECT_TIMEOUT:-10s}
       - AUTH_SERVICE_URL=http://auth-service:8081  # How notification service finds auth service
+      - INTERNAL_SERVICE_TOKEN=${INTERNAL_SERVICE_TOKEN:?Set INTERNAL_SERVICE_TOKEN in .env}
+      - WEBSOCKET_ALLOWED_ORIGINS=${WEBSOCKET_ALLOWED_ORIGINS:?Set WEBSOCKET_ALLOWED_ORIGINS in .env}
+      - REDIS_URL=${REDIS_URL:-redis://redis:6379/0}
+      - REDIS_NAMESPACE=${REDIS_NAMESPACE:-social-network}
+      - REDIS_OPERATION_TIMEOUT=${REDIS_OPERATION_TIMEOUT:-2s}
+      - REDIS_PRESENCE_TTL=${REDIS_PRESENCE_TTL:-45s}
+      - REDIS_PRESENCE_REFRESH=${REDIS_PRESENCE_REFRESH:-15s}
+
+  # The first service-owned database extraction. This database is private and
+  # deliberately has no host port.
+  notifications-db:
+    image: postgres:17.10-alpine3.23
+    init: true
+    security_opt:
+      - no-new-privileges:true
+    expose:
+      - "5432"
+    networks:
+      - social-network
+    environment:
+      - POSTGRES_DB=notifications
+      - POSTGRES_USER=notifications
+      - POSTGRES_PASSWORD=${NOTIFICATIONS_DB_PASSWORD:-notifications-dev-only}
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U notifications -d notifications"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
     volumes:
-      - ./social_network.db:/app/social_network.db:rw
+      - notifications-postgres-data:/var/lib/postgresql/data
+
+  # Migrations are a one-shot release job, separate from application startup.
+  notification-migrations:
+    build:
+      context: .
+      dockerfile: ./docker/backend.Dockerfile
+      args:
+        SERVICE: notifications
+        PORT: "8086"
+    init: true
+    security_opt:
+      - no-new-privileges:true
+    entrypoint: ["./migrate"]
+    depends_on:
+      notifications-db:
+        condition: service_healthy
+    networks:
+      - social-network
+    environment:
+      - DATABASE_URL=postgres://notifications:${NOTIFICATIONS_DB_PASSWORD:-notifications-dev-only}@notifications-db:5432/notifications?sslmode=disable
+      - DB_CONNECT_TIMEOUT=${NOTIFICATIONS_DB_CONNECT_TIMEOUT:-10s}
+
+  # Shared ephemeral coordination for distributed edge rate limits, Chat
+  # presence, and cross-replica WebSocket fan-out. It has no public port and
+  # intentionally keeps no durable application data.
+  redis:
+    image: redis:8.8.0-alpine3.23
+    init: true
+    security_opt:
+      - no-new-privileges:true
+    expose:
+      - "6379"
+    networks:
+      - social-network
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+
+  # S3-compatible local media storage. Only the gateway can serve public reads;
+  # application services access the private API with credentials.
+  media:
+    image: minio/minio:RELEASE.2025-09-07T16-13-09Z
+    init: true
+    security_opt:
+      - no-new-privileges:true
+    command: server /data --console-address ":9001"
+    expose:
+      - "9000"
+      - "9001"
+    networks:
+      - social-network
+    environment:
+      - MINIO_ROOT_USER=${OBJECT_STORAGE_ACCESS_KEY:-socialnetwork}
+      - MINIO_ROOT_PASSWORD=${OBJECT_STORAGE_SECRET_KEY:-socialnetwork-dev-only}
+    healthcheck:
+      test: ["CMD", "curl", "-fsS", "http://127.0.0.1:9000/minio/health/live"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+    volumes:
+      - media-data:/data
+
+  media-init:
+    image: minio/mc:RELEASE.2025-08-13T08-35-41Z
+    init: true
+    security_opt:
+      - no-new-privileges:true
+    depends_on:
+      media:
+        condition: service_healthy
+    networks:
+      - social-network
+    environment:
+      - MINIO_ROOT_USER=${OBJECT_STORAGE_ACCESS_KEY:-socialnetwork}
+      - MINIO_ROOT_PASSWORD=${OBJECT_STORAGE_SECRET_KEY:-socialnetwork-dev-only}
+      - OBJECT_STORAGE_BUCKET=${OBJECT_STORAGE_BUCKET:-social-network-media}
+    entrypoint:
+      - /bin/sh
+      - -c
+      - |
+        set -eu
+        until mc alias set local http://media:9000 "$${MINIO_ROOT_USER}" "$${MINIO_ROOT_PASSWORD}"; do sleep 2; done
+        mc mb --ignore-existing "local/$${OBJECT_STORAGE_BUCKET}"
+        mc anonymous set download "local/$${OBJECT_STORAGE_BUCKET}"
 
   # Frontend Service - Vue.js with Vite, served by 'serve' on port 3000
   frontend:
     build:
       context: .  # Build from root
       dockerfile: ./frontend/Dockerfile
-    container_name: frontend
-    ports:
-      - "3000:3000"
+    init: true
+    security_opt:
+      - no-new-privileges:true
+    expose:
+      - "3000"
     depends_on:
       - auth-service
       - user-service
@@ -140,17 +370,66 @@ services:
     networks:
       - social-network
 
+  # Public edge - the only host-accessible application service
+  gateway:
+    build:
+      context: .
+      dockerfile: ./services/gateway/Dockerfile
+    init: true
+    security_opt:
+      - no-new-privileges:true
+    ports:
+      - "8080:8080"
+    depends_on:
+      frontend:
+        condition: service_started
+      auth-service:
+        condition: service_started
+      user-service:
+        condition: service_started
+      post-service:
+        condition: service_started
+      group-service:
+        condition: service_started
+      chat-service:
+        condition: service_started
+      notification-service:
+        condition: service_started
+      media-init:
+        condition: service_completed_successfully
+      redis:
+        condition: service_healthy
+    networks:
+      - social-network
+    environment:
+      - PORT=8080
+      - AUTH_SERVICE_URL=http://auth-service:8081
+      - USERS_SERVICE_URL=http://user-service:8082
+      - POSTS_SERVICE_URL=http://post-service:8083
+      - GROUPS_SERVICE_URL=http://group-service:8084
+      - CHAT_SERVICE_URL=http://chat-service:8085
+      - NOTIFICATIONS_SERVICE_URL=http://notification-service:8086
+      - MEDIA_SERVICE_URL=http://media:9000
+      - FRONTEND_SERVICE_URL=http://frontend:3000
+      - GATEWAY_RATE_LIMIT_RPS=${GATEWAY_RATE_LIMIT_RPS:-20}
+      - GATEWAY_RATE_LIMIT_BURST=${GATEWAY_RATE_LIMIT_BURST:-40}
+      - GATEWAY_MAX_BODY_BYTES=${GATEWAY_MAX_BODY_BYTES:-12582912}
+      - REDIS_URL=${REDIS_URL:-redis://redis:6379/0}
+      - REDIS_NAMESPACE=${REDIS_NAMESPACE:-social-network}
+      - REDIS_OPERATION_TIMEOUT=${REDIS_OPERATION_TIMEOUT:-2s}
+
 # To run:
 # docker-compose up --build
 # 
 # To test:
-# curl http://localhost:8081/health  (auth service)
-# curl http://localhost:8082/health  (user service)
-# curl http://localhost:8083/health  (post service)
-# curl http://localhost:8084/health  (group service)
-# curl http://localhost:8085/health  (chat service)
-# curl http://localhost:8086/health  (notification service)
-# http://localhost:3000              (frontend - open in browser)
+# curl http://localhost:8080/healthz                    (gateway)
+# curl http://localhost:8080/api/auth/health            (auth service)
+# curl http://localhost:8080/api/users/health           (user service)
+# curl http://localhost:8080/api/posts/health           (post service)
+# curl http://localhost:8080/api/groups/health          (group service)
+# curl http://localhost:8080/api/chat/health            (chat service)
+# curl http://localhost:8080/api/notifications/health   (notification service)
+# http://localhost:8080                                 (frontend - open in browser)
 #
-# Database: SQLite file shared via volume mount
-# Each service connects directly to ./social_network.db
+# Databases: Notifications owns PostgreSQL; the remaining services temporarily
+# share SQLite until their domain dependencies are extracted.

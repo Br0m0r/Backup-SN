@@ -11,6 +11,7 @@ import (
 	"social-network/services/auth/handlers"
 	"social-network/services/auth/middleware"
 	"social-network/services/auth/services"
+	"social-network/services/common/httpserver"
 )
 
 func main() {
@@ -53,10 +54,8 @@ func main() {
 	// Main router
 	mainMux := http.NewServeMux()
 
-	// Apply CORS only to public routes
-	publicHandler := middleware.CORS(
-		middleware.Logging(publicMux),
-	)
+	// Browser traffic reaches this service through the same-origin gateway.
+	publicHandler := middleware.Logging(publicMux)
 
 	// No CORS for internal routes (just logging)
 	internalHandler := middleware.Logging(internalMux)
@@ -66,8 +65,11 @@ func main() {
 	mainMux.Handle("/health", internalHandler)
 	mainMux.Handle("/", publicHandler)
 
-	log.Println("Auth Service starting on port :8081")
-	log.Fatal(http.ListenAndServe(":8081", mainMux))
+	address := httpserver.Address("8081")
+	log.Printf("Auth Service starting on %s", address)
+	if err := httpserver.Run(httpserver.New(address, mainMux)); err != nil {
+		log.Fatalf("Auth Service stopped with error: %v", err)
+	}
 }
 
 // OpenDB opens a connection to the SQLite database

@@ -1,0 +1,21 @@
+# Frontend build artifacts and dependencies
+frontend/node_modules/
+frontend/dist/
+
+# Local configuration and test output
+.env
+.env.local
+.env.*.local
+coverage/
+*.out
+
+# Runtime media belongs in object storage or disposable local upload folders.
+services/*/uploads/**
+!services/*/uploads/**/
+!services/*/uploads/**/.gitkeep
+
+# Editor and operating-system files
+.idea/
+.vscode/
+.DS_Store
+Thumbs.db

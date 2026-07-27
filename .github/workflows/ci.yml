@@ -1,0 +1,147 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  backend:
+    name: Go checks
+    runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: postgres:17.10-alpine3.23
+        env:
+          POSTGRES_DB: notifications_test
+          POSTGRES_USER: notifications_test
+          POSTGRES_PASSWORD: notifications_test
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U notifications_test -d notifications_test"
+          --health-interval 5s
+          --health-timeout 3s
+          --health-retries 10
+      redis:
+        image: redis:8.8.0-alpine3.23
+        ports:
+          - 6379:6379
+        options: >-
+          --health-cmd "redis-cli ping"
+          --health-interval 5s
+          --health-timeout 3s
+          --health-retries 10
+    env:
+      NOTIFICATIONS_TEST_DATABASE_URL: postgres://notifications_test:notifications_test@127.0.0.1:5432/notifications_test?sslmode=disable
+      REDIS_TEST_URL: redis://127.0.0.1:6379/0
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+
+      - name: Set up Go
+        uses: actions/setup-go@v5
+        with:
+          go-version-file: go.mod
+          cache: true
+
+      - name: Run static analysis
+        run: go vet ./...
+
+      - name: Run tests
+        run: go test ./...
+
+  frontend:
+    name: Frontend checks
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: frontend
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+          cache-dependency-path: frontend/package-lock.json
+
+      - name: Install locked dependencies
+        run: npm ci
+
+      - name: Build production bundle
+        run: npm run build
+
+      - name: Test production static server
+        run: npm run test:server
+
+      - name: Reject critical dependency vulnerabilities
+        # Raise this to "high" after the planned Vite major-version upgrade.
+        run: npm audit --audit-level=critical
+
+  backend-images:
+    name: Backend image (${{ matrix.service }})
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - service: auth
+            port: 8081
+          - service: users
+            port: 8082
+          - service: posts
+            port: 8083
+          - service: groups
+            port: 8084
+          - service: chat
+            port: 8085
+          - service: notifications
+            port: 8086
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+
+      - name: Build service image
+        run: >-
+          docker build
+          --file docker/backend.Dockerfile
+          --build-arg SERVICE=${{ matrix.service }}
+          --build-arg PORT=${{ matrix.port }}
+          --tag social-network/${{ matrix.service }}:${{ github.sha }}
+          .
+
+  edge-images:
+    name: Edge images
+    runs-on: ubuntu-latest
+    env:
+      INTERNAL_SERVICE_TOKEN: ci-only-internal-token-at-least-32-characters
+      WEBSOCKET_ALLOWED_ORIGINS: http://localhost:8080
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+
+      - name: Validate Compose model
+        run: docker compose config --quiet
+
+      - name: Verify local object-storage initialization
+        run: docker compose run --rm media-init
+
+      - name: Build frontend image
+        run: docker build --file frontend/Dockerfile --tag social-network/frontend:${{ github.sha }} .
+
+      - name: Build gateway image
+        run: docker build --file services/gateway/Dockerfile --tag social-network/gateway:${{ github.sha }} .
+
+      - name: Clean up integration services
+        if: always()
+        run: docker compose down --volumes

@@ -1,16 +1,11 @@
-# Dockerfile for Frontend (Vue.js with Vite)
-FROM node:20-alpine
+FROM node:20.20.2-alpine3.22 AS builder
 
 WORKDIR /app
 
 # Copy package files
 COPY frontend/package.json frontend/package-lock.json* ./
 
-# Install dependencies
-RUN npm install
-
-# Install serve for static file serving
-RUN npm install -g serve
+RUN npm ci
 
 # Copy frontend source code
 COPY frontend/ ./
@@ -18,8 +13,17 @@ COPY frontend/ ./
 # Build the production bundle
 RUN npm run build
 
-# Expose port 3000
-EXPOSE 3000
+FROM node:20.20.2-alpine3.22
 
-# Serve the built files with serve (supports SPA routing with -s flag)
-CMD ["serve", "-s", "dist", "-l", "3000"]
+WORKDIR /app
+COPY --from=builder --chown=node:node /app/dist ./dist
+COPY --chown=node:node frontend/server.mjs ./server.mjs
+
+USER node
+EXPOSE 3000
+STOPSIGNAL SIGTERM
+
+HEALTHCHECK --interval=30s --timeout=3s --start-period=10s --retries=3 \
+  CMD wget -q -O /dev/null http://127.0.0.1:3000/ || exit 1
+
+ENTRYPOINT ["node", "server.mjs"]
