@@ -1,29 +1,36 @@
 package handlers
 
 import (
+	"bytes"
+	"crypto/rand"
+	"encoding/hex"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"io"
 	"log"
 	"net/http"
-	"os"
-	"path/filepath"
+	"social-network/services/common/objectstore"
 	"social-network/services/groups/middleware"
 	"social-network/services/groups/models"
 	"social-network/services/groups/services"
 	"social-network/services/groups/utils"
 	"strconv"
 	"strings"
-	"time"
 )
 
 type GroupHandlers struct {
 	service *services.GroupService
+	store   objectstore.Store
 }
 
-func NewGroupHandlers(service *services.GroupService) *GroupHandlers {
-	return &GroupHandlers{service: service}
+func NewGroupHandlers(service *services.GroupService, store objectstore.Store) *GroupHandlers {
+	return &GroupHandlers{service: service, store: store}
 }
+
+const maxGroupImageUploadSize = 5 << 20 // 5 MiB
+
+var errInvalidGroupImage = errors.New("invalid group image")
 
 // HealthHandler handles GET /health
 func HealthHandler(w http.ResponseWriter, r *http.Request) {
@@ -38,11 +45,15 @@ func (h *GroupHandlers) CreateGroup(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// Parse multipart form for image upload
-	err := r.ParseMultipartForm(10 << 20) // 10MB max
+	// Parse multipart form for image upload.
+	r.Body = http.MaxBytesReader(w, r.Body, maxGroupImageUploadSize+(1<<20))
+	err := r.ParseMultipartForm(maxGroupImageUploadSize)
 	if err != nil {
-		utils.SendError(w, http.StatusBadRequest, "Failed to parse form data")
+		utils.SendError(w, http.StatusBadRequest, "File too large or invalid form data (max 5MB)")
 		return
+	}
+	if r.MultipartForm != nil {
+		defer r.MultipartForm.RemoveAll()
 	}
 
 	name := r.FormValue("name")
@@ -59,49 +70,32 @@ func (h *GroupHandlers) CreateGroup(w http.ResponseWriter, r *http.Request) {
 	}
 
 	// Handle optional image upload
-	file, header, err := r.FormFile("image")
+	file, _, err := r.FormFile("image")
+	var uploadedKey string
 	if err == nil {
 		defer file.Close()
-
-		// Validate file type
-		contentType := header.Header.Get("Content-Type")
-		if !strings.HasPrefix(contentType, "image/") {
-			utils.SendError(w, http.StatusBadRequest, "File must be an image")
-			return
-		}
-
-		// Generate unique filename
-		ext := filepath.Ext(header.Filename)
-		if ext == "" {
-			ext = ".jpg"
-		}
-		filename := fmt.Sprintf("group_%d_%d%s", userID, time.Now().Unix(), ext)
-		filePath := filepath.Join("uploads", "groups", filename)
-
-		// Create directory if not exists
-		dirPath := filepath.Dir(filePath)
-		os.MkdirAll(dirPath, os.ModePerm)
-
-		// Save file
-		dst, err := os.Create(filePath)
+		imageURL, key, err := h.storeGroupImage(r, file, userID)
 		if err != nil {
-			log.Printf("Error creating file: %v", err)
+			if errors.Is(err, errInvalidGroupImage) {
+				utils.SendError(w, http.StatusBadRequest, "Invalid image. Only JPEG, PNG, GIF, and WebP up to 5MB are allowed")
+				return
+			}
+			log.Printf("Failed to store group image: %v", err)
 			utils.SendError(w, http.StatusInternalServerError, "Failed to save image")
 			return
 		}
-		defer dst.Close()
-
-		if _, err := io.Copy(dst, file); err != nil {
-			log.Printf("Error saving file: %v", err)
-			utils.SendError(w, http.StatusInternalServerError, "Failed to save image")
-			return
-		}
-
-		req.ImageURL = &filePath
+		uploadedKey = key
+		req.ImageURL = &imageURL
+	} else if !errors.Is(err, http.ErrMissingFile) {
+		utils.SendError(w, http.StatusBadRequest, "Invalid image upload")
+		return
 	}
 
 	group, err := h.service.CreateGroup(&req, userID)
 	if err != nil {
+		if uploadedKey != "" {
+			_ = h.store.Delete(r.Context(), uploadedKey)
+		}
 		log.Printf("Error creating group: %v", err)
 		// Check for UNIQUE constraint violation
 		if strings.Contains(err.Error(), "UNIQUE constraint failed: groups.name") {
@@ -148,72 +142,103 @@ func (h *GroupHandlers) UpdateGroupImage(w http.ResponseWriter, r *http.Request)
 		return
 	}
 
-	// Parse multipart form
-	err = r.ParseMultipartForm(10 << 20) // 10MB max
+	// Parse multipart form.
+	r.Body = http.MaxBytesReader(w, r.Body, maxGroupImageUploadSize+(1<<20))
+	err = r.ParseMultipartForm(maxGroupImageUploadSize)
 	if err != nil {
-		utils.SendError(w, http.StatusBadRequest, "Failed to parse form data")
+		utils.SendError(w, http.StatusBadRequest, "File too large or invalid form data (max 5MB)")
 		return
+	}
+	if r.MultipartForm != nil {
+		defer r.MultipartForm.RemoveAll()
 	}
 
 	// Handle image upload
-	file, header, err := r.FormFile("image")
+	file, _, err := r.FormFile("image")
 	if err != nil {
 		utils.SendError(w, http.StatusBadRequest, "Image file is required")
 		return
 	}
 	defer file.Close()
 
-	// Validate file type
-	contentType := header.Header.Get("Content-Type")
-	if !strings.HasPrefix(contentType, "image/") {
-		utils.SendError(w, http.StatusBadRequest, "File must be an image")
-		return
-	}
-
-	// Generate unique filename
-	ext := filepath.Ext(header.Filename)
-	if ext == "" {
-		ext = ".jpg"
-	}
-	filename := fmt.Sprintf("group_%d_%d%s", groupID, time.Now().Unix(), ext)
-	filePath := filepath.Join("uploads", "groups", filename)
-
-	// Create directory if not exists
-	dirPath := filepath.Dir(filePath)
-	os.MkdirAll(dirPath, os.ModePerm)
-
-	// Save file
-	dst, err := os.Create(filePath)
+	imageURL, key, err := h.storeGroupImage(r, file, userID)
 	if err != nil {
-		log.Printf("Error creating file: %v", err)
+		if errors.Is(err, errInvalidGroupImage) {
+			utils.SendError(w, http.StatusBadRequest, "Invalid image. Only JPEG, PNG, GIF, and WebP up to 5MB are allowed")
+			return
+		}
+		log.Printf("Failed to store group image: %v", err)
 		utils.SendError(w, http.StatusInternalServerError, "Failed to save image")
 		return
-	}
-	defer dst.Close()
-
-	if _, err := io.Copy(dst, file); err != nil {
-		log.Printf("Error saving file: %v", err)
-		utils.SendError(w, http.StatusInternalServerError, "Failed to save image")
-		return
-	}
-
-	// Delete old image if exists
-	if group.ImageURL != nil && *group.ImageURL != "" {
-		os.Remove(*group.ImageURL)
 	}
 
 	// Update group image in database
-	err = h.service.UpdateGroupImage(groupID, filePath)
+	err = h.service.UpdateGroupImage(groupID, imageURL)
 	if err != nil {
+		_ = h.store.Delete(r.Context(), key)
 		log.Printf("Error updating group image: %v", err)
 		utils.SendError(w, http.StatusInternalServerError, "Failed to update group image")
 		return
 	}
+	if group.ImageURL != nil && *group.ImageURL != "" {
+		if previousKey, err := h.store.KeyFromURL(*group.ImageURL); err == nil && strings.HasPrefix(previousKey, fmt.Sprintf("groups/users/%d/", userID)) {
+			if err := h.store.Delete(r.Context(), previousKey); err != nil {
+				log.Printf("Failed to remove superseded group image %q: %v", previousKey, err)
+			}
+		}
+	}
 
 	utils.SendJSON(w, http.StatusOK, map[string]string{
 		"message":   "Group image updated successfully",
-		"image_url": filePath,
+		"image_url": imageURL,
 	})
+}
+
+func (h *GroupHandlers) storeGroupImage(r *http.Request, reader io.Reader, creatorID int) (string, string, error) {
+	contents, err := io.ReadAll(io.LimitReader(reader, maxGroupImageUploadSize+1))
+	if err != nil {
+		return "", "", err
+	}
+	if len(contents) == 0 || len(contents) > maxGroupImageUploadSize {
+		return "", "", fmt.Errorf("%w: invalid size", errInvalidGroupImage)
+	}
+	contentType := http.DetectContentType(contents)
+	extension, ok := groupImageExtension(contentType)
+	if !ok {
+		return "", "", fmt.Errorf("%w: unsupported type %q", errInvalidGroupImage, contentType)
+	}
+	objectName, err := randomGroupObjectName()
+	if err != nil {
+		return "", "", err
+	}
+	key := fmt.Sprintf("groups/users/%d/%s%s", creatorID, objectName, extension)
+	if err := h.store.Put(r.Context(), key, bytes.NewReader(contents), int64(len(contents)), contentType); err != nil {
+		return "", "", err
+	}
+	return h.store.URL(key), key, nil
+}
+
+func randomGroupObjectName() (string, error) {
+	var random [16]byte
+	if _, err := rand.Read(random[:]); err != nil {
+		return "", err
+	}
+	return hex.EncodeToString(random[:]), nil
+}
+
+func groupImageExtension(contentType string) (string, bool) {
+	switch contentType {
+	case "image/jpeg":
+		return ".jpg", true
+	case "image/png":
+		return ".png", true
+	case "image/gif":
+		return ".gif", true
+	case "image/webp":
+		return ".webp", true
+	default:
+		return "", false
+	}
 }
 
 // GetGroups handles GET /groups
@@ -224,7 +249,19 @@ func (h *GroupHandlers) GetGroups(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	groups, err := h.service.GetAllGroups(userID)
+	query := strings.TrimSpace(r.URL.Query().Get("q"))
+	if len(query) > 100 {
+		utils.SendError(w, http.StatusBadRequest, "Search query must be 100 characters or fewer")
+		return
+	}
+
+	var groups []*models.GroupWithDetails
+	var err error
+	if query == "" {
+		groups, err = h.service.GetAllGroups(userID)
+	} else {
+		groups, err = h.service.SearchGroups(userID, query)
+	}
 	if err != nil {
 		log.Printf("Error fetching groups: %v", err)
 		utils.SendError(w, http.StatusInternalServerError, "Failed to fetch groups")

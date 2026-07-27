@@ -89,6 +89,7 @@ Current migrations:
 16. AddImagePathToMessages
 17. AddGroupIdToPosts
 18. AddInvitedStatusToGroupMembers
+19. AddGroupActivityNotification
 
 ## Creating New Migrations
 

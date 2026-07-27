@@ -4,6 +4,7 @@ import (
 	"database/sql"
 	"errors"
 	"social-network/services/groups/models"
+	"strings"
 	"time"
 )
 
@@ -107,6 +108,15 @@ func GetGroupWithDetails(db *sql.DB, groupID, userID int) (*models.GroupWithDeta
 
 // GetAllGroups retrieves all groups (for browsing)
 func GetAllGroups(db *sql.DB, userID int) ([]*models.GroupWithDetails, error) {
+	return queryGroups(db, userID, "")
+}
+
+// SearchGroups retrieves groups whose name or description contains searchQuery.
+func SearchGroups(db *sql.DB, userID int, searchQuery string) ([]*models.GroupWithDetails, error) {
+	return queryGroups(db, userID, strings.TrimSpace(searchQuery))
+}
+
+func queryGroups(db *sql.DB, userID int, searchQuery string) ([]*models.GroupWithDetails, error) {
 	query := `
 		SELECT 
 			g.id, g.name, g.description, g.image_url, g.creator_id, g.created_at,
@@ -122,11 +132,12 @@ func GetAllGroups(db *sql.DB, userID int) ([]*models.GroupWithDetails, error) {
 			) THEN 1 ELSE 0 END as has_pending_request
 		FROM groups g
 		LEFT JOIN group_members gm ON g.id = gm.group_id AND gm.status = 'accepted'
+		WHERE (? = '' OR instr(lower(g.name), lower(?)) > 0 OR instr(lower(COALESCE(g.description, '')), lower(?)) > 0)
 		GROUP BY g.id
 		ORDER BY g.created_at DESC
 	`
 
-	rows, err := db.Query(query, userID, userID, userID)
+	rows, err := db.Query(query, userID, userID, userID, searchQuery, searchQuery, searchQuery)
 	if err != nil {
 		return nil, err
 	}

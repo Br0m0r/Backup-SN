@@ -1,15 +1,20 @@
 package main
 
 import (
+	"context"
 	"database/sql"
 	"log"
 	"net/http"
 	"os"
 	"strings"
+	"time"
 
 	_ "github.com/mattn/go-sqlite3"
 
 	"social-network/services/common/authcache"
+	"social-network/services/common/httpserver"
+	"social-network/services/common/notify"
+	"social-network/services/common/objectstore"
 	"social-network/services/groups/handlers"
 	"social-network/services/groups/middleware"
 	"social-network/services/groups/services"
@@ -28,17 +33,30 @@ func main() {
 		log.Fatalf("Failed to connect to database: %v", err)
 	}
 	defer db.Close()
+	objectStoreConfig, err := objectstore.FromEnvironment()
+	if err != nil {
+		log.Fatalf("Invalid object storage configuration: %v", err)
+	}
+	objectStoreContext, cancelObjectStore := context.WithTimeout(context.Background(), 10*time.Second)
+	mediaStore, err := objectstore.Open(objectStoreContext, objectStoreConfig)
+	cancelObjectStore()
+	if err != nil {
+		log.Fatalf("Failed to connect to object storage: %v", err)
+	}
 
 	// Initialize services
 	groupService := services.NewGroupService(db)
 
 	// Initialize handlers
-	groupHandlers := handlers.NewGroupHandlers(groupService)
+	groupHandlers := handlers.NewGroupHandlers(groupService, mediaStore)
 
 	// Get auth service URL from environment
 	authServiceURL := os.Getenv("AUTH_SERVICE_URL")
 	if authServiceURL == "" {
 		authServiceURL = "http://auth-service:8081"
+	}
+	if err := notify.ValidateConfig(); err != nil {
+		log.Fatalf("Invalid notification client configuration: %v", err)
 	}
 
 	// Apply middleware
@@ -51,9 +69,6 @@ func main() {
 
 	// Health check (no auth required)
 	mux.HandleFunc("/health", handlers.HealthHandler)
-
-	// Serve static files from uploads directory (no auth required for viewing images)
-	mux.Handle("/uploads/", http.StripPrefix("/uploads/", http.FileServer(http.Dir("./uploads"))))
 
 	// Group routes (auth required + rate limited for write operations)
 	mux.Handle("/groups", authMiddleware(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
@@ -157,14 +172,15 @@ func main() {
 		}
 	})))
 
-	// Apply common middleware (CORS and Logging)
-	handler := middleware.CORS(
-		middleware.Logging(mux),
-	)
+	// Browser traffic reaches this private service through the gateway.
+	handler := middleware.Logging(mux)
 
 	// Start server
-	log.Println("Group Service starting on port :8084")
-	log.Fatal(http.ListenAndServe(":8084", handler))
+	address := httpserver.Address("8084")
+	log.Printf("Group Service starting on %s", address)
+	if err := httpserver.Run(httpserver.New(address, handler)); err != nil {
+		log.Fatalf("Group Service stopped with error: %v", err)
+	}
 }
 
 // OpenDB opens a connection to the SQLite database

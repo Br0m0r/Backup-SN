@@ -36,6 +36,11 @@ func (s *GroupService) GetAllGroups(userID int) ([]*models.GroupWithDetails, err
 	return db.GetAllGroups(s.database, userID)
 }
 
+// SearchGroups searches group names and descriptions for browsing.
+func (s *GroupService) SearchGroups(userID int, query string) ([]*models.GroupWithDetails, error) {
+	return db.SearchGroups(s.database, userID, query)
+}
+
 // UpdateGroup updates group details (creator only)
 func (s *GroupService) UpdateGroup(groupID, userID int, req *models.UpdateGroupRequest) error {
 	// Check if user is creator
