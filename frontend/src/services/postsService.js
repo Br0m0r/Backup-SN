@@ -1,6 +1,7 @@
 import axios from 'axios'
+import { apiEndpoints } from './endpoints'
 
-const POSTS_BASE_URL = import.meta.env.VITE_POSTS_API_URL 
+const POSTS_BASE_URL = apiEndpoints.posts
 
 const client = axios.create({
   baseURL: POSTS_BASE_URL,
@@ -214,6 +215,7 @@ export function getPostImageUrl(imagePath) {
   
   // If it's already a full URL, return it
   if (imagePath.startsWith('http')) return imagePath
+  if (imagePath.startsWith('/media/')) return imagePath
   
   // Add leading slash if path doesn't have one
   const fullPath = imagePath.startsWith('/') ? imagePath : `/${imagePath}`

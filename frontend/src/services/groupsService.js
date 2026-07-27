@@ -1,6 +1,7 @@
 import axios from 'axios'
+import { apiEndpoints } from './endpoints'
 
-const GROUPS_API_URL = import.meta.env.VITE_GROUPS_API_URL
+const GROUPS_API_URL = apiEndpoints.groups
 
 const client = axios.create({
   baseURL: GROUPS_API_URL,
@@ -41,11 +42,12 @@ export async function getMyGroups(token) {
 
 // Search groups
 export async function searchGroups(query, token) {
-  const response = await client.get('/groups/search', {
+  const response = await client.get('/groups', {
     params: { q: query },
     headers: { Authorization: `Bearer ${token}` }
   })
-  return unwrapResponse(response)
+  const groups = unwrapResponse(response)
+  return { groups: Array.isArray(groups) ? groups : [] }
 }
 
 // Get single group details
@@ -89,14 +91,6 @@ export async function updateGroupImage(groupId, imageFile, token) {
   return unwrapResponse(response)
 }
 
-// Delete group
-export async function deleteGroup(groupId, token) {
-  const response = await client.delete(`/groups/${groupId}`, {
-    headers: { Authorization: `Bearer ${token}` }
-  })
-  return unwrapResponse(response)
-}
-
 // Invite user to group
 export async function inviteToGroup(groupId, userId, token) {
   const response = await client.post(`/groups/${groupId}/invite`, 
@@ -131,39 +125,9 @@ export async function respondToInvitation(invitationId, accept, token) {
   return unwrapResponse(response)
 }
 
-// Respond to group invitation or join request (DEPRECATED - kept for backward compatibility)
-export async function respondToGroupInvite(groupId, accept, token) {
-  const response = await client.post(
-    `${GROUPS_API_URL}/groups/${groupId}/respond`,
-    { accept },
-    {
-      headers: {
-        Authorization: `Bearer ${token}`
-      }
-    }
-  )
-  return unwrapResponse(response)
-}
-
 // Get group members
 export async function getGroupMembers(groupId, token) {
   const response = await client.get(`/groups/${groupId}/members`, {
-    headers: { Authorization: `Bearer ${token}` }
-  })
-  return unwrapResponse(response)
-}
-
-// Get group posts
-export async function getGroupPosts(groupId, token) {
-  const response = await client.get(`/groups/${groupId}/posts`, {
-    headers: { Authorization: `Bearer ${token}` }
-  })
-  return unwrapResponse(response)
-}
-
-// Create group post
-export async function createGroupPost(groupId, postData, token) {
-  const response = await client.post(`/groups/${groupId}/posts`, postData, {
     headers: { Authorization: `Bearer ${token}` }
   })
   return unwrapResponse(response)
@@ -239,6 +203,7 @@ export async function leaveGroup(groupId, token) {
 // Helper to construct group image URLs
 export function getGroupImageUrl(imageUrl) {
   if (!imageUrl) return ''
+  if (imageUrl.startsWith('/media/')) return imageUrl
   if (imageUrl.startsWith('http://') || imageUrl.startsWith('https://')) {
     return imageUrl
   }

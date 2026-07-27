@@ -1,6 +1,7 @@
 import axios from 'axios'
+import { apiEndpoints } from './endpoints'
 
-const CHAT_API_URL = import.meta.env.VITE_CHAT_API_URL 
+const CHAT_API_URL = apiEndpoints.chat
 
 // Helper to unwrap response data
 function unwrapResponse(response) {
@@ -75,6 +76,7 @@ export async function markAsRead(userId, token) {
 export function getImageUrl(path) {
   if (!path) return ''
   if (path.startsWith('http')) return path
+  if (path.startsWith('/media/')) return path
   // Add leading slash if path doesn't have one
   const fullPath = path.startsWith('/') ? path : `/${path}`
   return `${CHAT_API_URL}${fullPath}`

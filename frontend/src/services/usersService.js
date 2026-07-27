@@ -1,6 +1,7 @@
 import axios from 'axios'
+import { apiEndpoints } from './endpoints'
 
-const USERS_BASE_URL = import.meta.env.VITE_USERS_API_URL 
+const USERS_BASE_URL = apiEndpoints.users
 
 const client = axios.create({
   baseURL: USERS_BASE_URL,
@@ -182,6 +183,7 @@ export function getAvatarUrl(avatarPath) {
   
   // If it's already a full URL, return it
   if (avatarPath.startsWith('http')) return avatarPath
+  if (avatarPath.startsWith('/media/')) return avatarPath
   
   // Otherwise, construct the full URL to the users service
   return `${USERS_BASE_URL}${avatarPath}`

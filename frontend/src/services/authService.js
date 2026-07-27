@@ -1,6 +1,7 @@
 import axios from 'axios'
+import { apiEndpoints } from './endpoints'
 
-const AUTH_BASE_URL = import.meta.env.VITE_AUTH_API_URL 
+const AUTH_BASE_URL = apiEndpoints.auth
 
 const client = axios.create({
   baseURL: AUTH_BASE_URL,

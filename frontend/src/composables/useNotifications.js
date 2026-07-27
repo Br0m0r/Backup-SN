@@ -16,6 +16,7 @@
 
 import { ref, computed, onUnmounted } from 'vue'
 import { getUser, getToken } from '../stores/auth'
+import { apiEndpoints, websocketEndpoint } from '../services/endpoints'
 
 // WebSocket connection instance (null when disconnected)
 const ws = ref(null)
@@ -36,8 +37,8 @@ const eventListeners = ref(new Map())
  * Configuration for notifications WebSocket
  */
 const config = {
-  notificationsUrl: import.meta.env.VITE_NOTIFICATIONS_WS_URL ,
-  notificationsApiUrl: import.meta.env.VITE_NOTIFICATIONS_API_URL,
+  notificationsUrl: websocketEndpoint(import.meta.env.VITE_NOTIFICATIONS_WS_URL, '/api/notifications/ws'),
+  notificationsApiUrl: apiEndpoints.notifications,
   reconnectDelay: 3000,
   maxReconnectAttempts: 5,
   heartbeatInterval: 30000 // 30 seconds
