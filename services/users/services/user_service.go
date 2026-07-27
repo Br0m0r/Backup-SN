@@ -324,3 +324,10 @@ func (s *UserService) UpdateUserAvatarPath(userID int, avatarPath string) error 
 	_, err := s.database.Exec(query, avatarPath, userID)
 	return err
 }
+
+// ClearUserAvatarPath removes the reference only when it still points to the
+// object requested for deletion.
+func (s *UserService) ClearUserAvatarPath(userID int, avatarPath string) error {
+	_, err := s.database.Exec(`UPDATE users SET avatar_path = NULL WHERE id = ? AND avatar_path = ?`, userID, avatarPath)
+	return err
+}
