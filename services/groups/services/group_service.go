@@ -257,6 +257,18 @@ func (s *GroupService) GetGroupMembers(groupID, userID int) ([]*models.GroupMemb
 	return db.GetGroupMembers(s.database, groupID)
 }
 
+// IsAcceptedMember exposes the authoritative membership decision to trusted
+// services without giving them direct database access.
+func (s *GroupService) IsAcceptedMember(groupID, userID int) (bool, error) {
+	return db.IsGroupMember(s.database, groupID, userID)
+}
+
+// GetAcceptedMemberIDs exposes the accepted recipients for trusted
+// service-to-service fan-out.
+func (s *GroupService) GetAcceptedMemberIDs(groupID int) ([]int, error) {
+	return db.GetAcceptedGroupMemberIDs(s.database, groupID)
+}
+
 // CreateEvent creates a new event (members can create events)
 func (s *GroupService) CreateEvent(req *models.CreateEventRequest, creatorID int, creatorName string) (*models.Event, error) {
 	// Check if creator is a member
@@ -359,42 +371,6 @@ func (s *GroupService) RespondToEvent(req *models.EventResponseRequest, userID i
 	}
 
 	return nil
-}
-
-// CreateGroupMessage creates a message in group chat (members only)
-func (s *GroupService) CreateGroupMessage(groupID, senderID int, content string) (*models.GroupMessage, error) {
-	// Check if sender is a member
-	isMember, err := db.IsGroupMember(s.database, groupID, senderID)
-	if err != nil {
-		return nil, err
-	}
-	if !isMember {
-		return nil, errors.New("only group members can send messages")
-	}
-
-	if content == "" {
-		return nil, errors.New("message content is required")
-	}
-
-	return db.CreateGroupMessage(s.database, groupID, senderID, content)
-}
-
-// GetGroupMessages retrieves group chat messages (members only)
-func (s *GroupService) GetGroupMessages(groupID, userID int, limit int) ([]*models.GroupMessage, error) {
-	// Check if user is a member
-	isMember, err := db.IsGroupMember(s.database, groupID, userID)
-	if err != nil {
-		return nil, err
-	}
-	if !isMember {
-		return nil, errors.New("only group members can view messages")
-	}
-
-	if limit <= 0 || limit > 100 {
-		limit = 50 // Default limit
-	}
-
-	return db.GetGroupMessages(s.database, groupID, limit)
 }
 
 func (s *GroupService) LeaveGroup(groupID, userID int) error {

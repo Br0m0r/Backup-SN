@@ -6,6 +6,7 @@ import (
 	"log"
 	"net/http"
 	"social-network/services/chat/db"
+	"social-network/services/chat/groupsclient"
 	"social-network/services/chat/middleware"
 	"social-network/services/chat/models"
 	"social-network/services/chat/utils"
@@ -16,15 +17,19 @@ import (
 
 // ChatHandlers handles HTTP endpoints for chat
 type ChatHandlers struct {
-	database *sql.DB
-	hub      *Hub
+	messageDatabase  *sql.DB
+	identityDatabase *sql.DB
+	hub              *Hub
+	groupMembership  groupsclient.Membership
 }
 
 // NewChatHandlers creates a new ChatHandlers instance
-func NewChatHandlers(database *sql.DB, hub *Hub) *ChatHandlers {
+func NewChatHandlers(messageDatabase, identityDatabase *sql.DB, hub *Hub, groupMembership groupsclient.Membership) *ChatHandlers {
 	return &ChatHandlers{
-		database: database,
-		hub:      hub,
+		messageDatabase:  messageDatabase,
+		identityDatabase: identityDatabase,
+		hub:              hub,
+		groupMembership:  groupMembership,
 	}
 }
 
@@ -51,7 +56,7 @@ func (h *ChatHandlers) GetChatHistory(w http.ResponseWriter, r *http.Request) {
 	}
 
 	// Check if user can chat with this person
-	canChat, err := db.CanChat(h.database, userID, otherUserID)
+	canChat, err := db.CanChat(h.messageDatabase, h.identityDatabase, userID, otherUserID)
 	if err != nil {
 		log.Printf("Error checking chat permission: %v", err)
 		utils.ErrorResponse(w, "Failed to check permissions", http.StatusInternalServerError)
@@ -72,7 +77,7 @@ func (h *ChatHandlers) GetChatHistory(w http.ResponseWriter, r *http.Request) {
 	}
 
 	// Retrieve chat history
-	messages, err := db.GetChatHistory(h.database, userID, otherUserID, limit)
+	messages, err := db.GetChatHistory(h.messageDatabase, userID, otherUserID, limit)
 	if err != nil {
 		log.Printf("Error getting chat history: %v", err)
 		utils.ErrorResponse(w, "Failed to retrieve messages", http.StatusInternalServerError)
@@ -94,7 +99,7 @@ func (h *ChatHandlers) GetConversations(w http.ResponseWriter, r *http.Request) 
 		return
 	}
 
-	conversations, err := db.GetConversations(h.database, userID)
+	conversations, err := db.GetConversations(h.messageDatabase, h.identityDatabase, userID)
 	if err != nil {
 		log.Printf("Error getting conversations: %v", err)
 		utils.ErrorResponse(w, "Failed to retrieve conversations", http.StatusInternalServerError)
@@ -134,7 +139,7 @@ func (h *ChatHandlers) MarkAsRead(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	err = db.MarkAsRead(h.database, otherUserID, userID)
+	err = db.MarkAsRead(h.messageDatabase, otherUserID, userID)
 	if err != nil {
 		log.Printf("Error marking messages as read: %v", err)
 		utils.ErrorResponse(w, "Failed to mark messages as read", http.StatusInternalServerError)
@@ -155,7 +160,7 @@ func (h *ChatHandlers) GetUnreadCount(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	count, err := db.GetUnreadCount(h.database, userID)
+	count, err := db.GetUnreadCount(h.messageDatabase, userID)
 	if err != nil {
 		log.Printf("Error getting unread count: %v", err)
 		utils.ErrorResponse(w, "Failed to get unread count", http.StatusInternalServerError)
@@ -195,7 +200,7 @@ func (h *ChatHandlers) SendMessage(w http.ResponseWriter, r *http.Request) {
 	}
 
 	// Check if user can chat with receiver
-	canChat, err := db.CanChat(h.database, userID, req.ReceiverID)
+	canChat, err := db.CanChat(h.messageDatabase, h.identityDatabase, userID, req.ReceiverID)
 	if err != nil {
 		log.Printf("Error checking chat permission: %v", err)
 		utils.ErrorResponse(w, "Failed to check permissions", http.StatusInternalServerError)
@@ -216,7 +221,7 @@ func (h *ChatHandlers) SendMessage(w http.ResponseWriter, r *http.Request) {
 		CreatedAt:  time.Now(),
 	}
 
-	if err := db.SaveMessage(h.database, msg); err != nil {
+	if err := db.SaveMessage(h.messageDatabase, msg); err != nil {
 		log.Printf("Error saving message: %v", err)
 		utils.ErrorResponse(w, "Failed to send message", http.StatusInternalServerError)
 		return
@@ -240,6 +245,10 @@ func (h *ChatHandlers) SendMessage(w http.ResponseWriter, r *http.Request) {
 
 // HealthCheck handles GET /health
 func (h *ChatHandlers) HealthCheck(w http.ResponseWriter, r *http.Request) {
+	if err := h.messageDatabase.PingContext(r.Context()); err != nil {
+		utils.ErrorResponse(w, "Database unavailable", http.StatusServiceUnavailable)
+		return
+	}
 	utils.SuccessResponse(w, map[string]interface{}{
 		"status":  "healthy",
 		"service": "chat-service",
@@ -269,7 +278,7 @@ func (h *ChatHandlers) GetGroupChatHistory(w http.ResponseWriter, r *http.Reques
 	}
 
 	// Check if user is a member
-	isMember, err := db.IsGroupMember(h.database, groupID, userID)
+	isMember, err := h.groupMembership.IsMember(r.Context(), groupID, userID)
 	if err != nil {
 		log.Printf("Error checking group membership: %v", err)
 		utils.ErrorResponse(w, "Failed to check membership", http.StatusInternalServerError)
@@ -290,7 +299,7 @@ func (h *ChatHandlers) GetGroupChatHistory(w http.ResponseWriter, r *http.Reques
 	}
 
 	// Retrieve group chat history
-	messages, err := db.GetGroupChatHistory(h.database, groupID, limit)
+	messages, err := db.GetGroupChatHistory(h.messageDatabase, groupID, limit)
 	if err != nil {
 		log.Printf("Error getting group chat history: %v", err)
 		utils.ErrorResponse(w, "Failed to retrieve messages", http.StatusInternalServerError)
@@ -342,7 +351,7 @@ func (h *ChatHandlers) SendGroupMessage(w http.ResponseWriter, r *http.Request) 
 	}
 
 	// Check if user is a member
-	isMember, err := db.IsGroupMember(h.database, groupID, userID)
+	isMember, err := h.groupMembership.IsMember(r.Context(), groupID, userID)
 	if err != nil {
 		log.Printf("Error checking group membership: %v", err)
 		utils.ErrorResponse(w, "Failed to check membership", http.StatusInternalServerError)
@@ -362,7 +371,7 @@ func (h *ChatHandlers) SendGroupMessage(w http.ResponseWriter, r *http.Request) 
 		CreatedAt: time.Now(),
 	}
 
-	if err := db.SaveGroupMessage(h.database, msg); err != nil {
+	if err := db.SaveGroupMessage(h.messageDatabase, msg); err != nil {
 		log.Printf("Error saving group message: %v", err)
 		utils.ErrorResponse(w, "Failed to send message", http.StatusInternalServerError)
 		return
@@ -393,7 +402,7 @@ func (h *ChatHandlers) GetAvailableContacts(w http.ResponseWriter, r *http.Reque
 		return
 	}
 
-	contacts, err := db.GetAvailableContacts(h.database, userID)
+	contacts, err := db.GetAvailableContacts(h.messageDatabase, h.identityDatabase, userID)
 	if err != nil {
 		log.Printf("Error getting available contacts: %v", err)
 		utils.ErrorResponse(w, "Failed to retrieve contacts", http.StatusInternalServerError)

@@ -9,6 +9,7 @@ import (
 	"strings"
 	"time"
 
+	"social-network/services/chat/groupsclient"
 	"social-network/services/chat/handlers"
 	"social-network/services/chat/middleware"
 	"social-network/services/common/authcache"
@@ -16,8 +17,10 @@ import (
 	"social-network/services/common/notify"
 	"social-network/services/common/objectstore"
 	"social-network/services/common/origin"
+	"social-network/services/common/postgres"
 	"social-network/services/common/realtime"
 	"social-network/services/common/redisstore"
+	"social-network/services/common/serviceauth"
 
 	_ "github.com/mattn/go-sqlite3"
 )
@@ -25,18 +28,30 @@ import (
 func main() {
 	log.Println("Starting Chat Service...")
 
-	// Get database path from environment or use default
+	messageDatabaseConfig, err := postgres.FromEnvironment()
+	if err != nil {
+		log.Fatalf("Invalid Chat database configuration: %v", err)
+	}
+	messageDatabase, err := postgres.Open(context.Background(), messageDatabaseConfig)
+	if err != nil {
+		log.Fatalf("Failed to open Chat database: %v", err)
+	}
+	defer messageDatabase.Close()
+	log.Printf("Connected to %s", postgres.Description(messageDatabaseConfig.URL))
+
+	// The temporary identity connection is read-only at the Chat boundary and
+	// remains until Users profile/follow contracts replace it.
 	dbPath := os.Getenv("DATABASE_PATH")
 	if dbPath == "" {
 		dbPath = "./social_network.db"
 	}
 
 	// Open database connection
-	database, err := OpenDB(dbPath)
+	identityDatabase, err := OpenLegacyDB(dbPath)
 	if err != nil {
 		log.Fatalf("Failed to open database: %v", err)
 	}
-	defer database.Close()
+	defer identityDatabase.Close()
 
 	log.Printf("Connected to database at %s", dbPath)
 
@@ -45,6 +60,14 @@ func main() {
 	log.Printf("Auth service URL: %s", authServiceURL)
 	if err := notify.ValidateConfig(); err != nil {
 		log.Fatalf("Invalid notification client configuration: %v", err)
+	}
+	internalServiceToken, err := serviceauth.TokenFromEnvironment()
+	if err != nil {
+		log.Fatalf("Invalid internal service authentication configuration: %v", err)
+	}
+	groupMembership, err := groupsclient.FromEnvironment(internalServiceToken)
+	if err != nil {
+		log.Fatalf("Invalid Groups client configuration: %v", err)
 	}
 
 	originValidator, err := origin.FromEnvironment()
@@ -78,11 +101,11 @@ func main() {
 	defer cancelService()
 
 	// Create WebSocket hub
-	hub := handlers.NewHub(database, originValidator.Check, realtimeBus)
+	hub := handlers.NewHub(messageDatabase, identityDatabase, originValidator.Check, realtimeBus, groupMembership)
 	go hub.Run(serviceContext)
 
 	// Create handlers
-	chatHandlers := handlers.NewChatHandlers(database, hub)
+	chatHandlers := handlers.NewChatHandlers(messageDatabase, identityDatabase, hub, groupMembership)
 	uploadHandlers := handlers.NewUploadHandlers(mediaStore)
 
 	// Create auth middleware and rate limiter
@@ -141,7 +164,7 @@ func main() {
 }
 
 // OpenDB opens a connection to the SQLite database
-func OpenDB(dbPath string) (*sql.DB, error) {
+func OpenLegacyDB(dbPath string) (*sql.DB, error) {
 	db, err := sql.Open("sqlite3", dbPath)
 	if err != nil {
 		return nil, err

@@ -40,6 +40,40 @@ export async function getChatHistory(userId, token, limit = 50) {
   }
 }
 
+// Get group-chat history from Chat, the sole message owner.
+export async function getGroupMessages(groupId, token, limit = 50) {
+  try {
+    const response = await axios.get(`${CHAT_API_URL}/chat/groups/${groupId}/history`, {
+      params: { limit },
+      headers: {
+        Authorization: `Bearer ${token}`
+      }
+    })
+    const data = unwrapResponse(response)
+    return Array.isArray(data.messages) ? data.messages : []
+  } catch (error) {
+    throw new Error(error.response?.data?.error || error.message || 'Failed to load group messages')
+  }
+}
+
+// Send a group-chat message through Chat when WebSocket delivery is unavailable.
+export async function createGroupMessage(groupId, content, token) {
+  try {
+    const response = await axios.post(
+      `${CHAT_API_URL}/chat/groups/${groupId}/messages`,
+      { content },
+      {
+        headers: {
+          Authorization: `Bearer ${token}`
+        }
+      }
+    )
+    return unwrapResponse(response)
+  } catch (error) {
+    throw new Error(error.response?.data?.error || error.message || 'Failed to send group message')
+  }
+}
+
 // Upload image
 export async function uploadImage(file, token) {
   try {

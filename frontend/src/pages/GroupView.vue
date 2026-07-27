@@ -395,8 +395,6 @@ import {
   getGroup,
   getGroupMembers,
   getGroupEvents,
-  getGroupMessages,
-  createGroupMessage,
   requestJoinGroup,
   respondToEvent as respondToEventService,
   createEvent as createEventService,
@@ -406,6 +404,7 @@ import {
   updateGroupImage,
   getGroupImageUrl
 } from '@/services/groupsService'
+import { getGroupMessages, createGroupMessage } from '@/services/chatService'
 import { getGroupPosts as fetchGroupPosts, getPostImageUrl } from '@/services/postsService'
 import { searchUsersForGroup } from '@/services/usersService'
 import { useToast } from '@/composables/useToast'

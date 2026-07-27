@@ -75,7 +75,7 @@ func (f *fakeRealtime) emit(data []byte) {
 
 func TestHubSupportsMultipleConnectionsAndRemoteFanout(t *testing.T) {
 	transport := newFakeRealtime()
-	hub := NewHub(nil, func(*http.Request) bool { return true }, transport)
+	hub := NewHub(nil, nil, func(*http.Request) bool { return true }, transport, nil)
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
 	go hub.Run(ctx)

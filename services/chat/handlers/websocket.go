@@ -7,6 +7,7 @@ import (
 	"log"
 	"net/http"
 	"social-network/services/chat/db"
+	"social-network/services/chat/groupsclient"
 	"social-network/services/chat/middleware"
 	"social-network/services/chat/models"
 	"social-network/services/chat/utils"
@@ -20,15 +21,17 @@ import (
 
 // Hub manages active WebSocket connections
 type Hub struct {
-	clients    map[int]map[*Client]struct{}
-	broadcast  chan *models.WebSocketMessage
-	publish    chan []byte
-	register   chan *Client
-	unregister chan *Client
-	mu         sync.RWMutex
-	database   *sql.DB
-	realtime   realtime.Transport
-	upgrader   websocket.Upgrader
+	clients          map[int]map[*Client]struct{}
+	broadcast        chan *models.WebSocketMessage
+	publish          chan []byte
+	register         chan *Client
+	unregister       chan *Client
+	mu               sync.RWMutex
+	database         *sql.DB
+	identityDatabase *sql.DB
+	membership       groupsclient.Membership
+	realtime         realtime.Transport
+	upgrader         websocket.Upgrader
 }
 
 // Client represents a WebSocket client connection
@@ -41,15 +44,17 @@ type Client struct {
 }
 
 // NewHub creates a new Hub instance
-func NewHub(database *sql.DB, checkOrigin func(*http.Request) bool, transport realtime.Transport) *Hub {
+func NewHub(database, identityDatabase *sql.DB, checkOrigin func(*http.Request) bool, transport realtime.Transport, membership groupsclient.Membership) *Hub {
 	return &Hub{
-		clients:    make(map[int]map[*Client]struct{}),
-		broadcast:  make(chan *models.WebSocketMessage, 256),
-		publish:    make(chan []byte, 256),
-		register:   make(chan *Client),
-		unregister: make(chan *Client),
-		database:   database,
-		realtime:   transport,
+		clients:          make(map[int]map[*Client]struct{}),
+		broadcast:        make(chan *models.WebSocketMessage, 256),
+		publish:          make(chan []byte, 256),
+		register:         make(chan *Client),
+		unregister:       make(chan *Client),
+		database:         database,
+		identityDatabase: identityDatabase,
+		membership:       membership,
+		realtime:         transport,
 		upgrader: websocket.Upgrader{
 			CheckOrigin: checkOrigin,
 		},
@@ -142,7 +147,7 @@ func (h *Hub) deliverLocal(ctx context.Context, message *models.WebSocketMessage
 	}
 	recipients := []int{message.ReceiverID}
 	if message.Type == "group_message" {
-		recipients, err = db.GetGroupMembers(h.database, message.GroupID)
+		recipients, err = h.membership.MemberIDs(ctx, message.GroupID)
 		if err != nil {
 			log.Printf("Error getting group members: %v", err)
 			return
@@ -403,7 +408,7 @@ func (c *Client) handleChatMessage(wsMsg *models.WebSocketMessage) {
 	}
 
 	// Check if sender can chat with receiver
-	canChat, err := db.CanChat(c.hub.database, c.userID, wsMsg.ReceiverID)
+	canChat, err := db.CanChat(c.hub.database, c.hub.identityDatabase, c.userID, wsMsg.ReceiverID)
 	if err != nil {
 		log.Printf("Error checking chat permission: %v", err)
 		c.sendError("Failed to check chat permissions")
@@ -492,7 +497,7 @@ func (c *Client) handleGroupChatMessage(wsMsg *models.WebSocketMessage) {
 	}
 
 	// Check if sender is a member of the group
-	isMember, err := db.IsGroupMember(c.hub.database, wsMsg.GroupID, c.userID)
+	isMember, err := c.hub.membership.IsMember(context.Background(), wsMsg.GroupID, c.userID)
 	if err != nil {
 		log.Printf("Error checking group membership: %v", err)
 		c.sendError("Failed to verify group membership")
@@ -530,7 +535,7 @@ func (c *Client) handleGroupChatMessage(wsMsg *models.WebSocketMessage) {
 	c.hub.Broadcast(wsMsg)
 
 	// Get offline members for notifications
-	groupMembers, err := db.GetGroupMembers(c.hub.database, wsMsg.GroupID)
+	groupMembers, err := c.hub.membership.MemberIDs(context.Background(), wsMsg.GroupID)
 	if err == nil {
 		var offlineMemberIDs []int
 		for _, memberID := range groupMembers {

@@ -314,8 +314,9 @@ Exit condition: the existing shared-database system can be deployed safely as an
 - [x] Add Redis for rate-limit/presence state and cross-replica WebSocket fan-out.
 - [ ] Move SQLite data into PostgreSQL while initially preserving the logical schema if necessary.
   - [x] Extract Notifications into its own PostgreSQL database, migration history, release job, and verified SQLite copy command.
+  - [x] Extract Chat message state into its own PostgreSQL database while retaining temporary identity/follow reads.
   - [x] Make clean interim environments deterministic with a disposable SQLite volume and one-shot schema migration job.
-  - [ ] Extract Chat, Posts, Groups, Users, and Auth in dependency order.
+  - [ ] Extract Posts, Groups, Users, and Auth in dependency order.
 - [ ] Establish backups and verify restoration.
 
 Exit condition: application containers are disposable and major services can run multiple replicas.
@@ -332,7 +333,10 @@ Exit condition: core writes do not fail merely because Notification service is u
 ### Phase 4: Split data ownership
 
 - [x] Give Notifications its own database first; it has a relatively clear boundary.
-- [ ] Split Chat messages and delivery/read state.
+- [x] Split Chat messages and delivery/read state.
+  - [x] Make Chat the sole API and SQL owner for group messages.
+  - [x] Replace Chat's direct `group_members` read with a versioned, service-authenticated Groups contract.
+  - [x] Move direct and group messages into Chat-owned PostgreSQL with migrations and a verified copy command.
 - [ ] Split Posts and its privacy/read models.
 - [ ] Split Groups, membership, invitations, and events.
 - [ ] Split Users/profile/follow data from Auth credentials and sessions.
@@ -363,7 +367,7 @@ Do not begin by splitting all databases simultaneously. The first useful milesto
 
 After that foundation works, introduce the broker and separate one domain at a time. This provides deployable value early and keeps data migration risk manageable.
 
-Implementation status: Notifications is now the first completed data extraction. See [Notification PostgreSQL Migration Runbook](notification-postgresql-migration.md) for the local and deployment cutover procedure. Redis now shares Gateway rate limits, Chat presence, and Chat/Notification WebSocket fan-out across replicas; see [Redis Realtime State](redis-realtime-state.md). The remaining services continue to share SQLite until their cross-domain reads have been replaced with contracts or projections. For clean interim environments, Compose now owns that SQLite state in a named volume and applies all schema migrations through a one-shot release job before Auth starts.
+Implementation status: Notifications and Chat message state have completed data extraction. See the [Notification PostgreSQL Migration Runbook](notification-postgresql-migration.md) and [Chat PostgreSQL Migration Runbook](chat-postgresql-migration.md) for cutover procedures. Redis shares Gateway rate limits, Chat presence, and Chat/Notification WebSocket fan-out across replicas; see [Redis Realtime State](redis-realtime-state.md). Chat still reads identity/follow data from shared SQLite, and the other services remain there until cross-domain reads are replaced with contracts or projections. For clean interim environments, Compose owns that SQLite state in a named volume and applies migrations through a one-shot release job before Auth starts.
 
 ## Decisions to Record Before Implementation
 

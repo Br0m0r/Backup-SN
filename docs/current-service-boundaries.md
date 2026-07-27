@@ -15,7 +15,7 @@ Update this document whenever a table, synchronous dependency, or public API mov
 | Users | 8082 | Profiles, follows, user search, avatars | Auth verification; Notification creation; shared SQLite |
 | Posts | 8083 | Posts, feed, privacy, comments, post/comment images | Auth verification; Notification creation; shared SQLite; S3-compatible media storage |
 | Groups | 8084 | Groups, membership, invitations, events, group image | Auth verification; Notification creation; shared SQLite |
-| Chat | 8085 | Direct/group chat REST and WebSocket delivery, attachments | Auth verification; Notification creation; shared SQLite; S3-compatible media storage; Redis |
+| Chat | 8085 | Direct/group chat REST and WebSocket delivery, attachments | Auth verification; authenticated Groups membership reads; Notification creation; service-owned PostgreSQL; temporary shared-SQLite identity/follow reads; S3-compatible media storage; Redis |
 | Notifications | 8086 | Notification inbox and WebSocket delivery | Auth verification; service-owned PostgreSQL; Redis |
 
 The browser now defaults to relative `/api/<service>` URLs through the Gateway. Direct `VITE_*` URL overrides remain available for isolated development. In Compose, only Gateway port 8080 is published to the host; application service ports are private to the bridge network.
@@ -26,7 +26,7 @@ The Gateway adds browser security headers, rejects known request bodies above th
 
 All uploaded media now uses opaque, owner-scoped keys in S3-compatible object storage; the Gateway exposes read-only `/media` access while storage credentials remain private. Repeatable migration commands remain available for legacy Chat and post/comment files. The discarded development avatars and group images required no legacy copy, and their services no longer expose static file handlers or upload bind mounts.
 
-All Go services use `docker/backend.Dockerfile`, with the service name and port supplied as build arguments. Notifications is the first database extraction: it uses a private PostgreSQL database, owns an embedded migration history, and no longer has a foreign key to the Users domain. The other five backend services still share SQLite. Backend, Gateway, and Frontend runtime images run as non-root users, include health checks, use explicit base-image release lines, and are built in CI. Fixed Compose container names were removed so they do not block future replica scaling.
+All Go services use `docker/backend.Dockerfile`, with the service name and port supplied as build arguments. Notifications and Chat now have private PostgreSQL databases and embedded migration histories without cross-domain foreign keys. Chat temporarily retains shared-SQLite reads for user profiles and follow rules, but all durable message state is service-owned. Backend, Gateway, and Frontend runtime images run as non-root users, include health checks, use explicit base-image release lines, and are built in CI. Fixed Compose container names were removed so they do not block future replica scaling.
 
 ## Current Table Access
 
@@ -41,11 +41,11 @@ The following table is based on SQL statements in each service. "Target owner" i
 | `comments` | Posts | Posts | Move with Posts. |
 | `post_viewers` | Posts | Posts | Move with Posts. External viewer IDs remain identity references, not cross-database foreign keys. |
 | `groups` | Groups | Groups | Move with Groups. |
-| `group_members` | Groups, Users, Chat | Groups | Users currently excludes existing members during invite search; Chat checks membership. Replace both with a Groups contract or projection. |
+| `group_members` | Groups, Users | Groups | Chat no longer reads this table and uses the authenticated Groups membership contract. Users still excludes existing members during invite search; replace that read with a Groups contract or projection. |
 | `events` | Groups | Groups | Move with Groups. |
 | `event_responses` | Groups | Groups | Move with Groups. |
-| `messages` | Chat | Chat | Move with Chat. |
-| `group_messages` | Groups and Chat | Chat | This currently has two writers and two APIs. Choose Chat as the sole message owner; Groups remains the membership authority. |
+| `messages` | Chat only, in its service-owned PostgreSQL database | Chat | Database extraction is complete. External sender/recipient IDs are identity references without cross-database foreign keys. |
+| `group_messages` | Chat only, in its service-owned PostgreSQL database | Chat | Database extraction is complete. Chat authorizes access through the Groups membership contract. |
 | `notifications` | Notifications only, in its service-owned PostgreSQL database | Notifications | Database extraction is complete. Notification creation still uses authenticated synchronous HTTP and should move to event consumption in Phase 3. |
 
 ## Highest-Priority Ownership Violations
@@ -71,24 +71,26 @@ Posts joins `users` to render authors and joins `follows` to calculate feed visi
 
 ### Chat depends on Users, Follows, and Groups
 
-Chat queries profiles, relationship data, and group membership to build contacts and authorize messages. After separation:
+Chat queries profiles and relationship data to build contacts and authorize direct messages. Group-message authorization and recipient fan-out now use the versioned, service-authenticated Groups membership contract. After full separation:
 
 - Display data should come from a local profile projection.
 - Direct-message permission should use a versioned Users contract or local relationship projection.
-- Group-message permission should use a Groups membership contract or local membership projection.
+- Group-message permission uses the Groups membership contract; an event-fed local projection remains an optional future resilience optimization.
 - Persisted messages must have one owner: Chat.
 
-### Group messages have two owners
+### Group message ownership
 
-Both Groups and Chat expose group-message operations and write `group_messages`. This is the most direct violation of single-writer ownership.
+**Resolved:** Chat is the sole group-message API and SQL writer. The frontend's
+history and HTTP fallback operations use Chat, and Groups no longer defines
+group-message routes, handlers, service methods, models, or queries. Chat
+authorizes send/history operations and resolves fan-out recipients through
+Groups' `GET /internal/v1/groups/{groupID}/members[/{userID}]` contract, protected
+by `INTERNAL_SERVICE_TOKEN`; it no longer reads `group_members`.
 
-Migration approach:
-
-1. Keep the Chat API/WebSocket as the canonical message path.
-2. Change the frontend's group history/send operations to Chat.
-3. Have Chat authorize membership through Groups or a membership projection.
-4. Remove group-message handlers and SQL from Groups.
-5. Move `group_messages` into Chat's database.
+**Database extraction complete:** direct and group messages now live in
+Chat-owned PostgreSQL with embedded migrations and a verified SQLite copy
+command. Chat retains only profile/follow reads from shared SQLite until the
+Users contract or projections are introduced.
 
 ### Notification creation is synchronous and publicly reachable
 
@@ -124,13 +126,13 @@ Resolved during this inventory:
 - Group search now uses `GET /groups?q=<query>` consistently in the frontend and backend.
 - Search responses are normalized to the `{ groups: [] }` shape expected by `SuggestedGroups.vue`.
 - Unused frontend methods for nonexistent group delete, group post, and deprecated group-response endpoints were removed. Group posts already use the Posts service.
+- Group chat history and HTTP fallback sends now use Chat; the duplicate Groups API and SQL writer were removed.
 
 Still to address:
 
 - Normalize the existing Go formatting debt in a dedicated mechanical change, then enforce `gofmt` in CI.
 - Extract route construction from each `main.go` so API contracts can be integration tested without launching a process.
 - Publish OpenAPI definitions and define compatibility/versioning rules.
-- Consolidate duplicate group-chat REST behavior under Chat.
 - Standardize pagination and error codes, not only the JSON envelope.
 
 ## Extraction Order
@@ -139,9 +141,9 @@ The current access graph supports this order:
 
 1. **Notifications:** already owns its only table; replace producers after adding event infrastructure.
 2. **Media state:** move files to object storage independently of relational data.
-3. **Chat messages:** isolate `messages`, then resolve the duplicate `group_messages` writer.
+3. **Chat messages:** database extraction is complete; replace the remaining Users/profile/follow reads.
 4. **Posts:** introduce profile and relationship projections before moving its tables.
-5. **Groups:** introduce profile projections and a membership contract for Chat/Users.
+5. **Groups:** introduce profile projections and replace Users' direct membership read; Chat already uses the Groups membership contract.
 6. **Auth and Users:** split the combined `users` record last, once stable identity events and profile contracts exist.
 
 Each extraction must finish with database credentials that cannot access another service's data.

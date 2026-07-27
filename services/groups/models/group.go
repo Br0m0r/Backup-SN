@@ -27,15 +27,6 @@ type GroupMember struct {
 	Nickname  *string `json:"nickname,omitempty"`
 }
 
-// GroupMessage represents a message in a group chat
-type GroupMessage struct {
-	ID        int       `json:"id"`
-	GroupID   int       `json:"group_id"`
-	SenderID  *int      `json:"sender_id,omitempty"`
-	Content   string    `json:"content"`
-	CreatedAt time.Time `json:"created_at"`
-}
-
 // Event represents a group event
 type Event struct {
 	ID          int       `json:"id"`

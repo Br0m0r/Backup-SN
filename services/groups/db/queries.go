@@ -219,6 +219,34 @@ func IsGroupMember(db *sql.DB, groupID, userID int) (bool, error) {
 	return count > 0, nil
 }
 
+// GetAcceptedGroupMemberIDs returns the identities authorized to participate
+// in a group's service-to-service workflows.
+func GetAcceptedGroupMemberIDs(db *sql.DB, groupID int) ([]int, error) {
+	rows, err := db.Query(`
+		SELECT user_id
+		FROM group_members
+		WHERE group_id = ? AND status = 'accepted'
+		ORDER BY user_id
+	`, groupID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+
+	memberIDs := make([]int, 0)
+	for rows.Next() {
+		var userID int
+		if err := rows.Scan(&userID); err != nil {
+			return nil, err
+		}
+		memberIDs = append(memberIDs, userID)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return memberIDs, nil
+}
+
 // InviteMember invites a user to join a group (auto-accepts them)
 func InviteMember(db *sql.DB, groupID, userID int) (int, error) {
 	query := `
@@ -608,86 +636,6 @@ func RespondToEvent(db *sql.DB, eventID, userID int, response string) error {
 	`
 	_, err := db.Exec(query, eventID, userID, response, response)
 	return err
-}
-
-// CreateGroupMessage creates a new message in a group chat
-func CreateGroupMessage(db *sql.DB, groupID, senderID int, content string) (*models.GroupMessage, error) {
-	query := `
-		INSERT INTO group_messages (group_id, sender_id, content)
-		VALUES (?, ?, ?)
-	`
-	result, err := db.Exec(query, groupID, senderID, content)
-	if err != nil {
-		return nil, err
-	}
-
-	id, err := result.LastInsertId()
-	if err != nil {
-		return nil, err
-	}
-
-	return GetGroupMessageByID(db, int(id))
-}
-
-// GetGroupMessageByID retrieves a group message by ID
-func GetGroupMessageByID(db *sql.DB, messageID int) (*models.GroupMessage, error) {
-	query := `
-		SELECT id, group_id, sender_id, content, created_at
-		FROM group_messages
-		WHERE id = ?
-	`
-	message := &models.GroupMessage{}
-	err := db.QueryRow(query, messageID).Scan(
-		&message.ID,
-		&message.GroupID,
-		&message.SenderID,
-		&message.Content,
-		&message.CreatedAt,
-	)
-	if err != nil {
-		return nil, err
-	}
-	return message, nil
-}
-
-// GetGroupMessages retrieves messages for a group
-func GetGroupMessages(db *sql.DB, groupID int, limit int) ([]*models.GroupMessage, error) {
-	query := `
-		SELECT id, group_id, sender_id, content, created_at
-		FROM group_messages
-		WHERE group_id = ?
-		ORDER BY created_at DESC
-		LIMIT ?
-	`
-
-	rows, err := db.Query(query, groupID, limit)
-	if err != nil {
-		return nil, err
-	}
-	defer rows.Close()
-
-	var messages []*models.GroupMessage
-	for rows.Next() {
-		message := &models.GroupMessage{}
-		err := rows.Scan(
-			&message.ID,
-			&message.GroupID,
-			&message.SenderID,
-			&message.Content,
-			&message.CreatedAt,
-		)
-		if err != nil {
-			return nil, err
-		}
-		messages = append(messages, message)
-	}
-
-	// Reverse to get chronological order
-	for i, j := 0, len(messages)-1; i < j; i, j = i+1, j-1 {
-		messages[i], messages[j] = messages[j], messages[i]
-	}
-
-	return messages, rows.Err()
 }
 
 // GetUsernameByID retrieves username from users table

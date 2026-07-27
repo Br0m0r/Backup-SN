@@ -45,6 +45,16 @@ RUN case "${SERVICE}" in \
         -tags sqlite_omit_load_extension \
         -trimpath \
         -ldflags="-s -w" \
+        -o /out/migrate ./services/chat/cmd/migrate && \
+      CGO_ENABLED=1 go build \
+        -tags sqlite_omit_load_extension \
+        -trimpath \
+        -ldflags="-s -w" \
+        -o /out/copy-sqlite ./services/chat/cmd/copy-sqlite && \
+      CGO_ENABLED=1 go build \
+        -tags sqlite_omit_load_extension \
+        -trimpath \
+        -ldflags="-s -w" \
         -o /out/copy-chat-media ./services/chat/cmd/copy-media; \
     elif [ "${SERVICE}" = "posts" ]; then \
       CGO_ENABLED=1 go build \

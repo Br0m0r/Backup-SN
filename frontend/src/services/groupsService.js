@@ -175,24 +175,6 @@ export async function respondToRequest(groupId, memberId, accept, token) {
   return unwrapResponse(response)
 }
 
-// Get group chat messages
-export async function getGroupMessages(groupId, token) {
-  const response = await client.get(`/groups/${groupId}/messages`, {
-    params: { limit: 50 },
-    headers: { Authorization: `Bearer ${token}` }
-  })
-  return unwrapResponse(response)
-}
-
-// Send a chat message to the group
-export async function createGroupMessage(groupId, content, token) {
-  const response = await client.post(`/groups/${groupId}/messages`,
-    { content },
-    { headers: { Authorization: `Bearer ${token}` } }
-  )
-  return unwrapResponse(response)
-}
-
 export async function leaveGroup(groupId, token) {
   const response = await client.delete(`/groups/${groupId}/leave`, {
     headers: { Authorization: `Bearer ${token}` }

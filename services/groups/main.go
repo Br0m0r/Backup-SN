@@ -15,6 +15,7 @@ import (
 	"social-network/services/common/httpserver"
 	"social-network/services/common/notify"
 	"social-network/services/common/objectstore"
+	"social-network/services/common/serviceauth"
 	"social-network/services/groups/handlers"
 	"social-network/services/groups/middleware"
 	"social-network/services/groups/services"
@@ -49,6 +50,7 @@ func main() {
 
 	// Initialize handlers
 	groupHandlers := handlers.NewGroupHandlers(groupService, mediaStore)
+	internalMembershipHandlers := handlers.NewInternalMembershipHandlers(groupService)
 
 	// Get auth service URL from environment
 	authServiceURL := os.Getenv("AUTH_SERVICE_URL")
@@ -57,6 +59,10 @@ func main() {
 	}
 	if err := notify.ValidateConfig(); err != nil {
 		log.Fatalf("Invalid notification client configuration: %v", err)
+	}
+	internalServiceToken, err := serviceauth.TokenFromEnvironment()
+	if err != nil {
+		log.Fatalf("Invalid internal service authentication configuration: %v", err)
 	}
 
 	// Apply middleware
@@ -69,6 +75,10 @@ func main() {
 
 	// Health check (no auth required)
 	mux.HandleFunc("/health", handlers.HealthHandler)
+	mux.Handle(
+		"/internal/v1/groups/",
+		serviceauth.Authenticate(internalServiceToken, http.HandlerFunc(internalMembershipHandlers.GetMembership)),
+	)
 
 	// Group routes (auth required + rate limited for write operations)
 	mux.Handle("/groups", authMiddleware(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
@@ -112,15 +122,6 @@ func main() {
 			if r.Method == "GET" {
 				groupHandlers.GetGroupEvents(w, r)
 			} else {
-				http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
-			}
-		} else if strings.HasSuffix(path, "/messages") {
-			switch r.Method {
-			case "POST":
-				rateLimiter.RateLimit(http.HandlerFunc(groupHandlers.CreateGroupMessage)).ServeHTTP(w, r)
-			case "GET":
-				groupHandlers.GetGroupMessages(w, r)
-			default:
 				http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
 			}
 		} else {
