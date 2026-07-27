@@ -1,14 +1,19 @@
 package main
 
 import (
+	"context"
 	"database/sql"
 	"log"
 	"net/http"
 	"os"
+	"time"
 
 	_ "github.com/mattn/go-sqlite3"
 
 	"social-network/services/common/authcache"
+	"social-network/services/common/httpserver"
+	"social-network/services/common/notify"
+	"social-network/services/common/objectstore"
 	"social-network/services/posts/handlers"
 	"social-network/services/posts/middleware"
 	"social-network/services/posts/services"
@@ -33,13 +38,26 @@ func main() {
 	if authServiceURL == "" {
 		authServiceURL = "http://auth-service:8081"
 	}
+	if err := notify.ValidateConfig(); err != nil {
+		log.Fatalf("Invalid notification client configuration: %v", err)
+	}
+	objectStoreConfig, err := objectstore.FromEnvironment()
+	if err != nil {
+		log.Fatalf("Invalid object storage configuration: %v", err)
+	}
+	objectStoreContext, cancelObjectStore := context.WithTimeout(context.Background(), 10*time.Second)
+	mediaStore, err := objectstore.Open(objectStoreContext, objectStoreConfig)
+	cancelObjectStore()
+	if err != nil {
+		log.Fatalf("Failed to connect to object storage: %v", err)
+	}
 
 	// Initialize services
 	postService := services.NewPostService(database)
 
 	// Initialize handlers
 	postHandlers := handlers.NewPostHandlers(postService)
-	uploadHandlers := handlers.NewUploadHandlers()
+	uploadHandlers := handlers.NewUploadHandlers(mediaStore)
 
 	// Initialize middleware
 	rateLimiter := middleware.NewRateLimiter()
@@ -52,10 +70,6 @@ func main() {
 
 	// Health check (no auth, no rate limiting)
 	mux.HandleFunc("/health", handlers.HealthHandler)
-
-	// Static file server for uploaded images
-	fs := http.FileServer(http.Dir("./uploads"))
-	mux.Handle("/uploads/", http.StripPrefix("/uploads/", fs))
 
 	// Post endpoints
 	mux.Handle("/posts", authMiddleware(rateLimiter.RateLimit(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
@@ -125,14 +139,15 @@ func main() {
 		}
 	}))))
 
-	// Apply common middleware
-	handler := middleware.CORS(
-		middleware.Logging(mux),
-	)
+	// Browser traffic reaches this private service through the gateway.
+	handler := middleware.Logging(mux)
 
 	// Start server
-	log.Println("Post Service starting on port :8083")
-	log.Fatal(http.ListenAndServe(":8083", handler))
+	address := httpserver.Address("8083")
+	log.Printf("Post Service starting on %s", address)
+	if err := httpserver.Run(httpserver.New(address, handler)); err != nil {
+		log.Fatalf("Post Service stopped with error: %v", err)
+	}
 }
 
 // OpenDB opens a connection to the SQLite database

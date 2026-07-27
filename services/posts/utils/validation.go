@@ -3,6 +3,7 @@ package utils
 import (
 	"errors"
 	"html"
+	"net/url"
 	"regexp"
 	"strings"
 )
@@ -83,16 +84,36 @@ func ValidateImagePath(imagePath *string) error {
 		return nil
 	}
 
-	path := *imagePath
-
-	// Check for path traversal attempts
-	if strings.Contains(path, "..") {
+	imageURL := *imagePath
+	if imageURL != strings.TrimSpace(imageURL) || strings.Contains(imageURL, `\`) {
 		return errors.New("Invalid image path")
 	}
 
-	// Check for absolute paths
-	if strings.HasPrefix(path, "/") || strings.HasPrefix(path, "\\") {
-		return errors.New("Image path must be relative")
+	parsed, err := url.Parse(imageURL)
+	if err != nil || parsed.Scheme != "" || parsed.Host != "" || parsed.User != nil {
+		return errors.New("Image path must use the local media route")
+	}
+	if parsed.RawQuery != "" || parsed.Fragment != "" {
+		return errors.New("Invalid image path")
+	}
+	decodedPath, err := url.PathUnescape(parsed.EscapedPath())
+	if err != nil {
+		return errors.New("Invalid image path")
+	}
+
+	// Check for path traversal attempts
+	if strings.Contains(decodedPath, "..") {
+		return errors.New("Invalid image path")
+	}
+
+	// Object-storage uploads are returned through the gateway's same-origin
+	// media route. Other absolute paths remain invalid; relative paths are
+	// temporarily accepted for legacy records until all media is migrated.
+	if strings.HasPrefix(decodedPath, "/") && !strings.HasPrefix(decodedPath, "/media/") {
+		return errors.New("Image path must use the local media route")
+	}
+	if decodedPath == "/media/" {
+		return errors.New("Invalid image path")
 	}
 
 	return nil

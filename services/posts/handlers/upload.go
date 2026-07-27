@@ -1,31 +1,31 @@
 package handlers
 
 import (
+	"bytes"
+	"crypto/rand"
+	"encoding/hex"
 	"fmt"
 	"io"
+	"log"
 	"net/http"
-	"os"
-	"path/filepath"
+	"path"
 	"strings"
-	"time"
 
+	"social-network/services/common/objectstore"
 	"social-network/services/posts/middleware"
 	"social-network/services/posts/utils"
 )
 
-const (
-	maxUploadSize = 5 << 20 // 5MB
-	uploadDir     = "./uploads/posts"
-)
+const maxUploadSize = 5 << 20 // 5MB
 
 // UploadHandlers handles file upload requests
-type UploadHandlers struct{}
+type UploadHandlers struct {
+	store objectstore.Store
+}
 
 // NewUploadHandlers creates a new upload handlers instance
-func NewUploadHandlers() *UploadHandlers {
-	// Ensure upload directory exists
-	os.MkdirAll(uploadDir, os.ModePerm)
-	return &UploadHandlers{}
+func NewUploadHandlers(store objectstore.Store) *UploadHandlers {
+	return &UploadHandlers{store: store}
 }
 
 // UploadImage handles POST /upload/image requests
@@ -43,55 +43,55 @@ func (h *UploadHandlers) UploadImage(w http.ResponseWriter, r *http.Request) {
 	}
 
 	// Parse multipart form
-	r.Body = http.MaxBytesReader(w, r.Body, maxUploadSize)
+	r.Body = http.MaxBytesReader(w, r.Body, maxUploadSize+(1<<20))
 	if err := r.ParseMultipartForm(maxUploadSize); err != nil {
-		if err.Error() == "http: request body too large" {
-			utils.ErrorResponse(w, "File too large (max 5MB)", http.StatusBadRequest)
-		} else {
-			utils.ErrorResponse(w, fmt.Sprintf("Failed to parse form: %v", err), http.StatusBadRequest)
-		}
+		utils.ErrorResponse(w, "File too large or invalid form data (max 5MB)", http.StatusBadRequest)
 		return
+	}
+	if r.MultipartForm != nil {
+		defer r.MultipartForm.RemoveAll()
 	}
 
 	// Get the file from form
-	file, fileHeader, err := r.FormFile("image")
+	file, _, err := r.FormFile("image")
 	if err != nil {
 		utils.ErrorResponse(w, "No file provided", http.StatusBadRequest)
 		return
 	}
 	defer file.Close()
 
-	// Validate file type
-	ext := strings.ToLower(filepath.Ext(fileHeader.Filename))
-	if ext != ".jpg" && ext != ".jpeg" && ext != ".png" && ext != ".gif" {
+	contents, err := io.ReadAll(io.LimitReader(file, maxUploadSize+1))
+	if err != nil {
+		utils.ErrorResponse(w, "Failed to read file", http.StatusBadRequest)
+		return
+	}
+	if len(contents) == 0 || len(contents) > maxUploadSize {
+		utils.ErrorResponse(w, "File too large (max 5MB)", http.StatusBadRequest)
+		return
+	}
+	contentType := http.DetectContentType(contents)
+	extension, ok := postImageExtension(contentType)
+	if !ok {
 		utils.ErrorResponse(w, "Invalid file type. Only JPG, PNG, and GIF allowed", http.StatusBadRequest)
 		return
 	}
 
-	// Generate unique filename
-	timestamp := time.Now().Unix()
-	filename := fmt.Sprintf("%d_%d%s", userID, timestamp, ext)
-	filePath := filepath.Join(uploadDir, filename)
-
-	// Create the file on disk
-	dst, err := os.Create(filePath)
+	objectName, err := randomPostObjectName()
 	if err != nil {
+		log.Printf("Failed to generate post media key: %v", err)
 		utils.ErrorResponse(w, "Failed to save file", http.StatusInternalServerError)
 		return
 	}
-	defer dst.Close()
-
-	// Copy file content
-	if _, err := io.Copy(dst, file); err != nil {
+	key := fmt.Sprintf("posts/users/%d/%s%s", userID, objectName, extension)
+	if err := h.store.Put(r.Context(), key, bytes.NewReader(contents), int64(len(contents)), contentType); err != nil {
+		log.Printf("Failed to upload post media: %v", err)
 		utils.ErrorResponse(w, "Failed to save file", http.StatusInternalServerError)
 		return
 	}
 
-	// Return the file path (relative, without leading slash)
-	relativePath := fmt.Sprintf("uploads/posts/%s", filename)
 	utils.SuccessResponse(w, map[string]string{
-		"image_path": relativePath,
-		"filename":   filename,
+		"image_path": h.store.URL(key),
+		"filename":   path.Base(key),
 	})
 }
 
@@ -103,7 +103,7 @@ func (h *UploadHandlers) DeleteImage(w http.ResponseWriter, r *http.Request) {
 	}
 
 	// Get authenticated user ID from context
-	_, ok := middleware.GetUserIDFromContext(r)
+	userID, ok := middleware.GetUserIDFromContext(r)
 	if !ok {
 		utils.ErrorResponse(w, "Unauthorized", http.StatusUnauthorized)
 		return
@@ -116,18 +116,18 @@ func (h *UploadHandlers) DeleteImage(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// Extract filename from path
-	filename := filepath.Base(imagePath)
-	fullPath := filepath.Join(uploadDir, filename)
-
-	// Check if file exists
-	if _, err := os.Stat(fullPath); os.IsNotExist(err) {
-		utils.ErrorResponse(w, "File not found", http.StatusNotFound)
+	key, err := h.store.KeyFromURL(imagePath)
+	if err != nil {
+		utils.ErrorResponse(w, "Invalid image path", http.StatusBadRequest)
 		return
 	}
-
-	// Delete the file
-	if err := os.Remove(fullPath); err != nil {
+	ownerPrefix := fmt.Sprintf("posts/users/%d/", userID)
+	if !strings.HasPrefix(key, ownerPrefix) {
+		utils.ErrorResponse(w, "Cannot delete another user's image", http.StatusForbidden)
+		return
+	}
+	if err := h.store.Delete(r.Context(), key); err != nil {
+		log.Printf("Failed to delete post media: %v", err)
 		utils.ErrorResponse(w, "Failed to delete file", http.StatusInternalServerError)
 		return
 	}
@@ -135,4 +135,25 @@ func (h *UploadHandlers) DeleteImage(w http.ResponseWriter, r *http.Request) {
 	utils.SuccessResponse(w, map[string]string{
 		"message": "Image deleted successfully",
 	})
+}
+
+func randomPostObjectName() (string, error) {
+	var random [16]byte
+	if _, err := rand.Read(random[:]); err != nil {
+		return "", err
+	}
+	return hex.EncodeToString(random[:]), nil
+}
+
+func postImageExtension(contentType string) (string, bool) {
+	switch contentType {
+	case "image/jpeg":
+		return ".jpg", true
+	case "image/png":
+		return ".png", true
+	case "image/gif":
+		return ".gif", true
+	default:
+		return "", false
+	}
 }
