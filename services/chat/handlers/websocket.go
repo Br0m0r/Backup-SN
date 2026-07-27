@@ -1,6 +1,7 @@
 package handlers
 
 import (
+	"context"
 	"database/sql"
 	"encoding/json"
 	"log"
@@ -10,26 +11,24 @@ import (
 	"social-network/services/chat/models"
 	"social-network/services/chat/utils"
 	"social-network/services/common/notify"
+	"social-network/services/common/realtime"
 	"sync"
 	"time"
 
 	"github.com/gorilla/websocket"
 )
 
-var upgrader = websocket.Upgrader{
-	CheckOrigin: func(r *http.Request) bool {
-		return true // Allow all origins for development
-	},
-}
-
 // Hub manages active WebSocket connections
 type Hub struct {
-	clients    map[int]*Client // userID -> Client
+	clients    map[int]map[*Client]struct{}
 	broadcast  chan *models.WebSocketMessage
+	publish    chan []byte
 	register   chan *Client
 	unregister chan *Client
 	mu         sync.RWMutex
 	database   *sql.DB
+	realtime   realtime.Transport
+	upgrader   websocket.Upgrader
 }
 
 // Client represents a WebSocket client connection
@@ -42,90 +41,225 @@ type Client struct {
 }
 
 // NewHub creates a new Hub instance
-func NewHub(database *sql.DB) *Hub {
+func NewHub(database *sql.DB, checkOrigin func(*http.Request) bool, transport realtime.Transport) *Hub {
 	return &Hub{
-		clients:    make(map[int]*Client),
+		clients:    make(map[int]map[*Client]struct{}),
 		broadcast:  make(chan *models.WebSocketMessage, 256),
+		publish:    make(chan []byte, 256),
 		register:   make(chan *Client),
 		unregister: make(chan *Client),
 		database:   database,
+		realtime:   transport,
+		upgrader: websocket.Upgrader{
+			CheckOrigin: checkOrigin,
+		},
 	}
 }
 
-// Run starts the hub's main loop
-func (h *Hub) Run() {
+// Run starts the hub's main loop and Redis workers.
+func (h *Hub) Run(ctx context.Context) {
+	if h.realtime != nil {
+		go h.runPublisher(ctx)
+		go h.runSubscriber(ctx)
+		go h.runPresenceHeartbeat(ctx)
+	}
 	for {
 		select {
+		case <-ctx.Done():
+			return
 		case client := <-h.register:
 			h.mu.Lock()
-			h.clients[client.userID] = client
+			connections := h.clients[client.userID]
+			if connections == nil {
+				connections = make(map[*Client]struct{})
+				h.clients[client.userID] = connections
+			}
+			wasOffline := len(connections) == 0
+			connections[client] = struct{}{}
 			h.mu.Unlock()
+			if wasOffline {
+				h.markOnline(ctx, client.userID)
+			}
 			log.Printf("Client registered: user %d", client.userID)
 
 		case client := <-h.unregister:
 			h.mu.Lock()
-			if _, ok := h.clients[client.userID]; ok {
-				delete(h.clients, client.userID)
-				close(client.send)
+			removed, nowOffline := h.removeClientLocked(client)
+			h.mu.Unlock()
+			if removed {
 				log.Printf("Client unregistered: user %d", client.userID)
 			}
-			h.mu.Unlock()
+			if nowOffline {
+				h.markOffline(ctx, client.userID)
+			}
 
 		case message := <-h.broadcast:
-			h.mu.RLock()
-
-			if message.Type == "group_message" {
-				// Broadcast to all group members
-				members, err := db.GetGroupMembers(h.database, message.GroupID)
-				if err != nil {
-					log.Printf("Error getting group members: %v", err)
-					h.mu.RUnlock()
-					continue
-				}
-
-				data, err := json.Marshal(message)
-				if err != nil {
-					log.Printf("Error marshaling group message: %v", err)
-					h.mu.RUnlock()
-					continue
-				}
-
-				// Send to all online group members
-				for _, memberID := range members {
-					if client, ok := h.clients[memberID]; ok {
-						select {
-						case client.send <- data:
-						default:
-							close(client.send)
-							delete(h.clients, memberID)
-						}
-					}
-				}
-			} else {
-				// Send to receiver if online (1-on-1 chat)
-				if client, ok := h.clients[message.ReceiverID]; ok {
-					data, err := json.Marshal(message)
-					if err == nil {
-						select {
-						case client.send <- data:
-						default:
-							close(client.send)
-							delete(h.clients, client.userID)
-						}
-					}
-				}
-			}
-			h.mu.RUnlock()
+			h.deliverLocal(ctx, message)
 		}
+	}
+}
+
+// Broadcast delivers locally and publishes to other Chat replicas.
+func (h *Hub) Broadcast(message *models.WebSocketMessage) {
+	copyOfMessage := *message
+	h.broadcast <- &copyOfMessage
+	if h.realtime == nil {
+		return
+	}
+	data, err := json.Marshal(&copyOfMessage)
+	if err != nil {
+		log.Printf("Error marshaling Chat realtime message: %v", err)
+		return
+	}
+	select {
+	case h.publish <- data:
+	default:
+		log.Printf("Chat realtime publish queue is full; clients must recover from persisted history")
 	}
 }
 
 // IsUserOnline checks if a user is currently connected
 func (h *Hub) IsUserOnline(userID int) bool {
 	h.mu.RLock()
-	defer h.mu.RUnlock()
-	_, ok := h.clients[userID]
-	return ok
+	local := len(h.clients[userID]) > 0
+	h.mu.RUnlock()
+	if local || h.realtime == nil {
+		return local
+	}
+	online, err := h.realtime.IsOnline(context.Background(), userID)
+	if err != nil {
+		log.Printf("Failed to read Chat presence for user %d: %v", userID, err)
+		return false
+	}
+	return online
+}
+
+func (h *Hub) deliverLocal(ctx context.Context, message *models.WebSocketMessage) {
+	data, err := json.Marshal(message)
+	if err != nil {
+		log.Printf("Error marshaling Chat message: %v", err)
+		return
+	}
+	recipients := []int{message.ReceiverID}
+	if message.Type == "group_message" {
+		recipients, err = db.GetGroupMembers(h.database, message.GroupID)
+		if err != nil {
+			log.Printf("Error getting group members: %v", err)
+			return
+		}
+	}
+
+	var offline []int
+	h.mu.Lock()
+	for _, userID := range recipients {
+		for client := range h.clients[userID] {
+			select {
+			case client.send <- data:
+			default:
+				_, nowOffline := h.removeClientLocked(client)
+				if nowOffline {
+					offline = append(offline, userID)
+				}
+			}
+		}
+	}
+	h.mu.Unlock()
+	for _, userID := range offline {
+		h.markOffline(ctx, userID)
+	}
+}
+
+func (h *Hub) removeClientLocked(client *Client) (bool, bool) {
+	connections := h.clients[client.userID]
+	if _, ok := connections[client]; !ok {
+		return false, false
+	}
+	delete(connections, client)
+	close(client.send)
+	if len(connections) == 0 {
+		delete(h.clients, client.userID)
+		return true, true
+	}
+	return true, false
+}
+
+func (h *Hub) runPublisher(ctx context.Context) {
+	for {
+		select {
+		case <-ctx.Done():
+			return
+		case data := <-h.publish:
+			if err := h.realtime.Publish(ctx, data); err != nil {
+				log.Printf("Failed to publish Chat realtime message: %v", err)
+			}
+		}
+	}
+}
+
+func (h *Hub) runSubscriber(ctx context.Context) {
+	delay := time.Second
+	for ctx.Err() == nil {
+		err := h.realtime.Subscribe(ctx, func(data []byte) {
+			var message models.WebSocketMessage
+			if err := json.Unmarshal(data, &message); err != nil {
+				log.Printf("Ignoring malformed Chat realtime message: %v", err)
+				return
+			}
+			select {
+			case h.broadcast <- &message:
+			case <-ctx.Done():
+			}
+		})
+		if err == nil || ctx.Err() != nil {
+			return
+		}
+		log.Printf("Chat realtime subscription interrupted: %v; retrying in %s", err, delay)
+		select {
+		case <-ctx.Done():
+			return
+		case <-time.After(delay):
+		}
+		if delay < 30*time.Second {
+			delay *= 2
+		}
+	}
+}
+
+func (h *Hub) runPresenceHeartbeat(ctx context.Context) {
+	ticker := time.NewTicker(h.realtime.PresenceRefreshInterval())
+	defer ticker.Stop()
+	for {
+		select {
+		case <-ctx.Done():
+			return
+		case <-ticker.C:
+			h.mu.RLock()
+			userIDs := make([]int, 0, len(h.clients))
+			for userID := range h.clients {
+				userIDs = append(userIDs, userID)
+			}
+			h.mu.RUnlock()
+			for _, userID := range userIDs {
+				h.markOnline(ctx, userID)
+			}
+		}
+	}
+}
+
+func (h *Hub) markOnline(ctx context.Context, userID int) {
+	if h.realtime != nil {
+		if err := h.realtime.MarkOnline(ctx, userID); err != nil {
+			log.Printf("Failed to refresh Chat presence for user %d: %v", userID, err)
+		}
+	}
+}
+
+func (h *Hub) markOffline(ctx context.Context, userID int) {
+	if h.realtime != nil {
+		if err := h.realtime.MarkOffline(ctx, userID); err != nil {
+			log.Printf("Failed to clear Chat presence for user %d: %v", userID, err)
+		}
+	}
 }
 
 // HandleWebSocket handles WebSocket connection upgrades
@@ -138,7 +272,7 @@ func (h *Hub) HandleWebSocket(w http.ResponseWriter, r *http.Request) {
 	}
 
 	// Upgrade HTTP connection to WebSocket
-	conn, err := upgrader.Upgrade(w, r, nil)
+	conn, err := h.upgrader.Upgrade(w, r, nil)
 	if err != nil {
 		log.Printf("WebSocket upgrade failed: %v", err)
 		return
@@ -304,7 +438,7 @@ func (c *Client) handleChatMessage(wsMsg *models.WebSocketMessage) {
 	wsMsg.Type = "message"
 
 	// Broadcast to receiver if online
-	c.hub.broadcast <- wsMsg
+	c.hub.Broadcast(wsMsg)
 
 	// Send notification if receiver is offline
 	if !c.hub.IsUserOnline(wsMsg.ReceiverID) {
@@ -330,7 +464,7 @@ func (c *Client) handleReadReceipt(wsMsg *models.WebSocketMessage) {
 // handleTypingIndicator forwards typing status to receiver
 func (c *Client) handleTypingIndicator(wsMsg *models.WebSocketMessage) {
 	wsMsg.Type = "typing"
-	c.hub.broadcast <- wsMsg
+	c.hub.Broadcast(wsMsg)
 }
 
 // sendError sends an error message to the client
@@ -393,7 +527,7 @@ func (c *Client) handleGroupChatMessage(wsMsg *models.WebSocketMessage) {
 	wsMsg.Timestamp = msg.CreatedAt
 
 	// Broadcast to all group members (including sender)
-	c.hub.broadcast <- wsMsg
+	c.hub.Broadcast(wsMsg)
 
 	// Get offline members for notifications
 	groupMembers, err := db.GetGroupMembers(c.hub.database, wsMsg.GroupID)

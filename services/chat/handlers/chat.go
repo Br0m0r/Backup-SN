@@ -231,7 +231,7 @@ func (h *ChatHandlers) SendMessage(w http.ResponseWriter, r *http.Request) {
 		Content:    sanitizedContent,
 		Timestamp:  msg.CreatedAt,
 	}
-	h.hub.broadcast <- wsMsg
+	h.hub.Broadcast(wsMsg)
 
 	utils.SuccessResponse(w, map[string]interface{}{
 		"message": msg,
@@ -377,7 +377,7 @@ func (h *ChatHandlers) SendGroupMessage(w http.ResponseWriter, r *http.Request) 
 		Content:   sanitizedContent,
 		Timestamp: msg.CreatedAt,
 	}
-	h.hub.broadcast <- wsMsg
+	h.hub.Broadcast(wsMsg)
 
 	utils.SuccessResponse(w, map[string]interface{}{
 		"message": msg,

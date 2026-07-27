@@ -1,15 +1,23 @@
 package main
 
 import (
+	"context"
 	"database/sql"
 	"log"
 	"net/http"
 	"os"
 	"strings"
+	"time"
 
 	"social-network/services/chat/handlers"
 	"social-network/services/chat/middleware"
 	"social-network/services/common/authcache"
+	"social-network/services/common/httpserver"
+	"social-network/services/common/notify"
+	"social-network/services/common/objectstore"
+	"social-network/services/common/origin"
+	"social-network/services/common/realtime"
+	"social-network/services/common/redisstore"
 
 	_ "github.com/mattn/go-sqlite3"
 )
@@ -35,14 +43,47 @@ func main() {
 	// Get auth service URL
 	authServiceURL := middleware.GetAuthServiceURL()
 	log.Printf("Auth service URL: %s", authServiceURL)
+	if err := notify.ValidateConfig(); err != nil {
+		log.Fatalf("Invalid notification client configuration: %v", err)
+	}
+
+	originValidator, err := origin.FromEnvironment()
+	if err != nil {
+		log.Fatalf("Invalid WebSocket origin configuration: %v", err)
+	}
+	objectStoreConfig, err := objectstore.FromEnvironment()
+	if err != nil {
+		log.Fatalf("Invalid object storage configuration: %v", err)
+	}
+	objectStoreContext, cancelObjectStore := context.WithTimeout(context.Background(), 10*time.Second)
+	mediaStore, err := objectstore.Open(objectStoreContext, objectStoreConfig)
+	cancelObjectStore()
+	if err != nil {
+		log.Fatalf("Failed to connect to object storage: %v", err)
+	}
+	redisConfig, err := redisstore.FromEnvironment()
+	if err != nil {
+		log.Fatalf("Invalid Redis configuration: %v", err)
+	}
+	redisState, err := redisstore.Open(context.Background(), redisConfig)
+	if err != nil {
+		log.Fatalf("Failed to connect to Redis: %v", err)
+	}
+	defer redisState.Close()
+	realtimeBus, err := realtime.New(redisState, "chat")
+	if err != nil {
+		log.Fatalf("Invalid Chat realtime configuration: %v", err)
+	}
+	serviceContext, cancelService := context.WithCancel(context.Background())
+	defer cancelService()
 
 	// Create WebSocket hub
-	hub := handlers.NewHub(database)
-	go hub.Run()
+	hub := handlers.NewHub(database, originValidator.Check, realtimeBus)
+	go hub.Run(serviceContext)
 
 	// Create handlers
 	chatHandlers := handlers.NewChatHandlers(database, hub)
-	uploadHandlers := handlers.NewUploadHandlers()
+	uploadHandlers := handlers.NewUploadHandlers(mediaStore)
 
 	// Create auth middleware and rate limiter
 	authMiddleware := authcache.AuthMiddleware(authServiceURL)
@@ -70,10 +111,6 @@ func main() {
 	mux.Handle("/upload/image", authMiddleware(rateLimiter.RateLimit(http.HandlerFunc(uploadHandlers.UploadImage))))
 	mux.Handle("/upload/delete", authMiddleware(rateLimiter.RateLimit(http.HandlerFunc(uploadHandlers.DeleteImage))))
 
-	// Static file server for uploaded images (no auth required for viewing)
-	fs := http.FileServer(http.Dir("./uploads"))
-	mux.Handle("/uploads/", http.StripPrefix("/uploads/", fs))
-
 	// Group chat endpoints (auth required + rate limited for writes)
 	mux.Handle("/chat/groups/", authMiddleware(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		// Route based on path pattern
@@ -92,14 +129,15 @@ func main() {
 		}
 	})))
 
-	// Apply common middleware (CORS and Logging)
-	handler := middleware.CORS(
-		middleware.Logging(mux),
-	)
+	// Browser traffic reaches this private service through the gateway.
+	handler := middleware.Logging(mux)
 
 	// Start server
-	log.Println("Chat Service starting on port :8085")
-	log.Fatal(http.ListenAndServe(":8085", handler))
+	address := httpserver.Address("8085")
+	log.Printf("Chat Service starting on %s", address)
+	if err := httpserver.Run(httpserver.New(address, handler)); err != nil {
+		log.Fatalf("Chat Service stopped with error: %v", err)
+	}
 }
 
 // OpenDB opens a connection to the SQLite database
