@@ -7,10 +7,18 @@ import (
 	"log"
 	"net/http"
 	"os"
+	"strings"
+	"time"
+
+	"social-network/services/common/serviceauth"
 )
 
 // Config
-var notificationServiceURL string
+var (
+	notificationServiceURL string
+	internalServiceToken   string
+	notificationHTTPClient = &http.Client{Timeout: 3 * time.Second}
+)
 
 func init() {
 	notificationServiceURL = os.Getenv("NOTIFICATION_SERVICE_URL")
@@ -19,6 +27,16 @@ func init() {
 		// Use http://notification-service:8086 when running in Docker
 		notificationServiceURL = "http://localhost:8086"
 	}
+	internalServiceToken = strings.TrimSpace(os.Getenv(serviceauth.EnvName))
+}
+
+// ValidateConfig ensures notification producers have the credential required
+// by the Notification service before accepting application traffic.
+func ValidateConfig() error {
+	if len(internalServiceToken) < 32 {
+		return fmt.Errorf("%s must be configured with at least 32 characters", serviceauth.EnvName)
+	}
+	return nil
 }
 
 // ============================================
@@ -40,11 +58,18 @@ func createNotification(userID int, notifType, content string, relatedID int) er
 		return err
 	}
 
-	resp, err := http.Post(
-		notificationServiceURL+"/notifications",
-		"application/json",
-		bytes.NewBuffer(jsonData),
-	)
+	if err := ValidateConfig(); err != nil {
+		return err
+	}
+
+	req, err := http.NewRequest(http.MethodPost, notificationServiceURL+"/notifications", bytes.NewBuffer(jsonData))
+	if err != nil {
+		return fmt.Errorf("create notification request: %w", err)
+	}
+	req.Header.Set("Content-Type", "application/json")
+	req.Header.Set(serviceauth.HeaderName, internalServiceToken)
+
+	resp, err := notificationHTTPClient.Do(req)
 
 	if err != nil {
 		log.Printf("[Notify] HTTP error calling notification service: %v", err)
