@@ -1,30 +1,42 @@
 package services
 
 import (
+	"context"
 	"database/sql"
 	"errors"
 
 	"social-network/services/common/notify"
 	"social-network/services/users/db"
 	"social-network/services/users/models"
+	"social-network/services/users/postsclient"
 	"social-network/services/users/utils"
 )
 
 // UserService handles user-related business logic
 type UserService struct {
 	database *sql.DB
+	posts    postsclient.Reader
 }
 
 // NewUserService creates a new user service instance
-func NewUserService(database *sql.DB) *UserService {
+func NewUserService(database *sql.DB, posts postsclient.Reader) *UserService {
 	return &UserService{
 		database: database,
+		posts:    posts,
 	}
 }
 
 // GetProfile retrieves a user's profile
 func (s *UserService) GetProfile(userID int) (*models.User, error) {
 	return db.GetUserByID(s.database, userID)
+}
+
+func (s *UserService) GetProfileSummaries(userIDs []int, search string) ([]models.ProfileSummary, error) {
+	return db.GetProfileSummaries(s.database, userIDs, search)
+}
+
+func (s *UserService) GetAcceptedFollowingIDs(userID int) ([]int, error) {
+	return db.GetAcceptedFollowingIDs(s.database, userID)
 }
 
 // UpdateProfile updates a user's profile
@@ -235,7 +247,7 @@ func (s *UserService) GetUserProfile(userID, viewerID int) (*models.ProfileRespo
 	}
 
 	// Get user's posts
-	posts, err := db.GetUserPosts(s.database, userID)
+	posts, err := s.posts.UserPosts(context.Background(), userID)
 	if err != nil {
 		posts = []models.UserPost{} // If error, return empty slice
 	}
@@ -304,15 +316,13 @@ func (s *UserService) GetUserStats(userID int) (map[string]int, error) {
 		return nil, err
 	}
 
-	// Get post count
-	var postCount int
-	err = s.database.QueryRow(`SELECT COUNT(*) FROM Posts WHERE user_id = ?`, userID).Scan(&postCount)
+	posts, err := s.posts.UserPosts(context.Background(), userID)
 	if err != nil {
 		return nil, err
 	}
 
 	return map[string]int{
-		"posts":     postCount,
+		"posts":     len(posts),
 		"followers": len(followers),
 		"following": len(following),
 	}, nil

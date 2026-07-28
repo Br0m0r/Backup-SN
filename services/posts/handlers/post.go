@@ -25,6 +25,14 @@ func NewPostHandlers(postService *services.PostService) *PostHandlers {
 	}
 }
 
+func (h *PostHandlers) HealthCheck(w http.ResponseWriter, r *http.Request) {
+	if err := h.postService.Ping(r.Context()); err != nil {
+		utils.ErrorResponse(w, "Database unavailable", http.StatusServiceUnavailable)
+		return
+	}
+	utils.SuccessResponse(w, map[string]string{"status": "healthy", "service": "post-service"})
+}
+
 // CreatePost handles POST /posts requests
 func (h *PostHandlers) CreatePost(w http.ResponseWriter, r *http.Request) {
 	if r.Method != "POST" {

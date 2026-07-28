@@ -61,6 +61,16 @@ RUN case "${SERVICE}" in \
         -tags sqlite_omit_load_extension \
         -trimpath \
         -ldflags="-s -w" \
+        -o /out/migrate ./services/posts/cmd/migrate && \
+      CGO_ENABLED=1 go build \
+        -tags sqlite_omit_load_extension \
+        -trimpath \
+        -ldflags="-s -w" \
+        -o /out/copy-sqlite ./services/posts/cmd/copy-sqlite && \
+      CGO_ENABLED=1 go build \
+        -tags sqlite_omit_load_extension \
+        -trimpath \
+        -ldflags="-s -w" \
         -o /out/copy-post-media ./services/posts/cmd/copy-media; \
     fi
 

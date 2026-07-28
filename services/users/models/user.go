@@ -55,6 +55,16 @@ type Follow struct {
 	CreatedAt   time.Time `json:"created_at"`
 }
 
+// ProfileSummary is the non-sensitive identity view shared with trusted
+// services that render user-authored content.
+type ProfileSummary struct {
+	ID         int     `json:"id"`
+	Username   string  `json:"username"`
+	FirstName  *string `json:"first_name,omitempty"`
+	LastName   *string `json:"last_name,omitempty"`
+	AvatarPath *string `json:"avatar_path,omitempty"`
+}
+
 // FollowRequest represents a follow action request
 type FollowRequest struct {
 	UserID int `json:"user_id"`

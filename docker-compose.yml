@@ -6,6 +6,7 @@ networks:
 volumes:
   shared-sqlite-data:
   chat-postgres-data:
+  posts-postgres-data:
   notifications-postgres-data:
   media-data:
 
@@ -77,6 +78,8 @@ services:
       - DATABASE_PATH=/data/social_network.db
       - AUTH_SERVICE_URL=http://auth-service:8081  # How user service finds auth service
       - NOTIFICATION_SERVICE_URL=http://notification-service:8086  # For sending follow notifications
+      - POSTS_SERVICE_URL=http://post-service:8083
+      - POSTS_SERVICE_TIMEOUT=${POSTS_SERVICE_TIMEOUT:-3s}
       - INTERNAL_SERVICE_TOKEN=${INTERNAL_SERVICE_TOKEN:?Set INTERNAL_SERVICE_TOKEN in .env}
       - OBJECT_STORAGE_ENDPOINT=${OBJECT_STORAGE_ENDPOINT:-media:9000}
       - OBJECT_STORAGE_ACCESS_KEY=${OBJECT_STORAGE_ACCESS_KEY:-socialnetwork}
@@ -105,13 +108,22 @@ services:
         condition: service_started  # Post service needs auth service for token verification
       notification-service:
         condition: service_started  # Post service sends notifications on comments
+      posts-migrations:
+        condition: service_completed_successfully
       media-init:
         condition: service_completed_successfully
     networks:
       - social-network
     environment:
-      - DATABASE_PATH=/data/social_network.db
+      - DATABASE_URL=postgres://posts:${POSTS_DB_PASSWORD:-posts-dev-only}@posts-db:5432/posts?sslmode=disable
+      - DB_MAX_OPEN_CONNS=${POSTS_DB_MAX_OPEN_CONNS:-25}
+      - DB_MAX_IDLE_CONNS=${POSTS_DB_MAX_IDLE_CONNS:-5}
+      - DB_CONN_MAX_LIFETIME=${POSTS_DB_CONN_MAX_LIFETIME:-30m}
+      - DB_CONN_MAX_IDLE_TIME=${POSTS_DB_CONN_MAX_IDLE_TIME:-5m}
+      - DB_CONNECT_TIMEOUT=${POSTS_DB_CONNECT_TIMEOUT:-10s}
       - AUTH_SERVICE_URL=http://auth-service:8081  # How post service finds auth service
+      - USERS_SERVICE_URL=http://user-service:8082
+      - USERS_SERVICE_TIMEOUT=${USERS_SERVICE_TIMEOUT:-3s}
       - NOTIFICATION_SERVICE_URL=http://notification-service:8086  # For sending comment notifications
       - INTERNAL_SERVICE_TOKEN=${INTERNAL_SERVICE_TOKEN:?Set INTERNAL_SERVICE_TOKEN in .env}
       - PORT=8083
@@ -121,8 +133,46 @@ services:
       - OBJECT_STORAGE_BUCKET=${OBJECT_STORAGE_BUCKET:-social-network-media}
       - OBJECT_STORAGE_USE_TLS=${OBJECT_STORAGE_USE_TLS:-false}
       - OBJECT_STORAGE_PUBLIC_BASE_URL=${OBJECT_STORAGE_PUBLIC_BASE_URL:-/media/social-network-media}
+  posts-db:
+    image: postgres:17.10-alpine3.23
+    init: true
+    security_opt:
+      - no-new-privileges:true
+    expose:
+      - "5432"
+    networks:
+      - social-network
+    environment:
+      - POSTGRES_DB=posts
+      - POSTGRES_USER=posts
+      - POSTGRES_PASSWORD=${POSTS_DB_PASSWORD:-posts-dev-only}
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U posts -d posts"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
     volumes:
-      - shared-sqlite-data:/data
+      - posts-postgres-data:/var/lib/postgresql/data
+
+  posts-migrations:
+    build:
+      context: .
+      dockerfile: ./docker/backend.Dockerfile
+      args:
+        SERVICE: posts
+        PORT: "8083"
+    init: true
+    security_opt:
+      - no-new-privileges:true
+    entrypoint: ["./migrate"]
+    depends_on:
+      posts-db:
+        condition: service_healthy
+    networks:
+      - social-network
+    environment:
+      - DATABASE_URL=postgres://posts:${POSTS_DB_PASSWORD:-posts-dev-only}@posts-db:5432/posts?sslmode=disable
+      - DB_CONNECT_TIMEOUT=${POSTS_DB_CONNECT_TIMEOUT:-10s}
 
   # Group Service - services/groups/main.go runs on port 8084
   group-service:
@@ -485,5 +535,5 @@ services:
 # curl http://localhost:8080/api/notifications/health   (notification service)
 # http://localhost:8080                                 (frontend - open in browser)
 #
-# Databases: Chat and Notifications own PostgreSQL. Chat temporarily retains a
-# read-only identity/relationship dependency on shared SQLite.
+# Databases: Chat, Posts, and Notifications own PostgreSQL. Chat temporarily
+# retains a read-only identity/relationship dependency on shared SQLite.

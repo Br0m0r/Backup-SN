@@ -4,9 +4,71 @@ import (
 	"database/sql"
 	"errors"
 	"log"
+	"strings"
 
 	"social-network/services/users/models"
 )
+
+// GetProfileSummaries returns only non-sensitive profile display fields.
+func GetProfileSummaries(database *sql.DB, userIDs []int, search string) ([]models.ProfileSummary, error) {
+	query := `SELECT id, username, first_name, last_name, avatar_path FROM users`
+	arguments := make([]any, 0)
+	switch {
+	case len(userIDs) > 0:
+		placeholders := make([]string, len(userIDs))
+		for index, userID := range userIDs {
+			placeholders[index] = "?"
+			arguments = append(arguments, userID)
+		}
+		query += ` WHERE id IN (` + strings.Join(placeholders, ",") + `)`
+	case strings.TrimSpace(search) != "":
+		pattern := "%" + strings.TrimSpace(search) + "%"
+		query += ` WHERE username LIKE ? OR first_name LIKE ? OR last_name LIKE ?`
+		arguments = append(arguments, pattern, pattern, pattern)
+	default:
+		return []models.ProfileSummary{}, nil
+	}
+	query += ` ORDER BY id LIMIT 200`
+
+	rows, err := database.Query(query, arguments...)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	profiles := make([]models.ProfileSummary, 0)
+	for rows.Next() {
+		var profile models.ProfileSummary
+		if err := rows.Scan(&profile.ID, &profile.Username, &profile.FirstName, &profile.LastName, &profile.AvatarPath); err != nil {
+			return nil, err
+		}
+		profiles = append(profiles, profile)
+	}
+	return profiles, rows.Err()
+}
+
+// GetAcceptedFollowingIDs returns the Users-owned relationship decision used
+// by downstream feed and privacy logic.
+func GetAcceptedFollowingIDs(database *sql.DB, userID int) ([]int, error) {
+	rows, err := database.Query(`
+		SELECT following_id
+		FROM follows
+		WHERE follower_id = ? AND status = 'accepted'
+		ORDER BY following_id
+	`, userID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	userIDs := make([]int, 0)
+	for rows.Next() {
+		var followingID int
+		if err := rows.Scan(&followingID); err != nil {
+			return nil, err
+		}
+		userIDs = append(userIDs, followingID)
+	}
+	return userIDs, rows.Err()
+}
 
 // GetUserByID retrieves a user profile by ID
 func GetUserByID(db *sql.DB, userID int) (*models.User, error) {
@@ -530,57 +592,6 @@ func RespondToFollowRequest(db *sql.DB, followerID, followingID int, accept bool
 
 		return nil
 	}
-}
-
-// GetUserPosts retrieves all posts by a user from the posts database
-func GetUserPosts(db *sql.DB, userID int) ([]models.UserPost, error) {
-	query := `
-		SELECT id, user_id, title, content, image_path, privacy_level, created_at
-		FROM posts
-		WHERE user_id = ?
-		ORDER BY created_at DESC
-	`
-
-	rows, err := db.Query(query, userID)
-	if err != nil {
-		return nil, err
-	}
-	defer rows.Close()
-
-	var posts []models.UserPost
-	for rows.Next() {
-		var post models.UserPost
-		var title, imagePath sql.NullString
-
-		err := rows.Scan(
-			&post.ID,
-			&post.UserID,
-			&title,
-			&post.Content,
-			&imagePath,
-			&post.PrivacyLevel,
-			&post.CreatedAt,
-		)
-		if err != nil {
-			log.Printf("Error scanning post: %v", err)
-			continue
-		}
-
-		if title.Valid {
-			post.Title = &title.String
-		}
-		if imagePath.Valid {
-			post.ImagePath = &imagePath.String
-		}
-
-		posts = append(posts, post)
-	}
-
-	if posts == nil {
-		posts = []models.UserPost{}
-	}
-
-	return posts, nil
 }
 
 // GetUserFollowersList retrieves followers with accepted status

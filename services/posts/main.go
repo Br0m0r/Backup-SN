@@ -2,36 +2,34 @@ package main
 
 import (
 	"context"
-	"database/sql"
 	"log"
 	"net/http"
 	"os"
 	"time"
 
-	_ "github.com/mattn/go-sqlite3"
-
 	"social-network/services/common/authcache"
 	"social-network/services/common/httpserver"
 	"social-network/services/common/notify"
 	"social-network/services/common/objectstore"
+	"social-network/services/common/postgres"
+	"social-network/services/common/serviceauth"
 	"social-network/services/posts/handlers"
 	"social-network/services/posts/middleware"
 	"social-network/services/posts/services"
+	"social-network/services/posts/usersclient"
 )
 
 func main() {
-	// Get database path from environment variable or use default
-	dbPath := os.Getenv("DATABASE_PATH")
-	if dbPath == "" {
-		dbPath = "/app/social_network.db"
-	}
-
-	// Open database connection
-	database, err := OpenDB(dbPath)
+	databaseConfig, err := postgres.FromEnvironment()
 	if err != nil {
-		log.Fatalf("Failed to connect to database: %v", err)
+		log.Fatalf("Invalid Posts database configuration: %v", err)
+	}
+	database, err := postgres.Open(context.Background(), databaseConfig)
+	if err != nil {
+		log.Fatalf("Failed to connect to Posts database: %v", err)
 	}
 	defer database.Close()
+	log.Printf("Connected to %s", postgres.Description(databaseConfig.URL))
 
 	// Get auth service URL from environment variable
 	authServiceURL := os.Getenv("AUTH_SERVICE_URL")
@@ -40,6 +38,14 @@ func main() {
 	}
 	if err := notify.ValidateConfig(); err != nil {
 		log.Fatalf("Invalid notification client configuration: %v", err)
+	}
+	internalServiceToken, err := serviceauth.TokenFromEnvironment()
+	if err != nil {
+		log.Fatalf("Invalid internal service authentication configuration: %v", err)
+	}
+	userDirectory, err := usersclient.FromEnvironment(internalServiceToken)
+	if err != nil {
+		log.Fatalf("Invalid Users client configuration: %v", err)
 	}
 	objectStoreConfig, err := objectstore.FromEnvironment()
 	if err != nil {
@@ -53,10 +59,11 @@ func main() {
 	}
 
 	// Initialize services
-	postService := services.NewPostService(database)
+	postService := services.NewPostService(database, userDirectory)
 
 	// Initialize handlers
 	postHandlers := handlers.NewPostHandlers(postService)
+	internalUserPostHandlers := handlers.NewInternalUserPostHandlers(postService)
 	uploadHandlers := handlers.NewUploadHandlers(mediaStore)
 
 	// Initialize middleware
@@ -69,7 +76,8 @@ func main() {
 	mux := http.NewServeMux()
 
 	// Health check (no auth, no rate limiting)
-	mux.HandleFunc("/health", handlers.HealthHandler)
+	mux.HandleFunc("/health", postHandlers.HealthCheck)
+	mux.Handle("/internal/v1/users/", serviceauth.Authenticate(internalServiceToken, internalUserPostHandlers))
 
 	// Post endpoints
 	mux.Handle("/posts", authMiddleware(rateLimiter.RateLimit(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
@@ -148,32 +156,4 @@ func main() {
 	if err := httpserver.Run(httpserver.New(address, handler)); err != nil {
 		log.Fatalf("Post Service stopped with error: %v", err)
 	}
-}
-
-// OpenDB opens a connection to the SQLite database
-func OpenDB(dbPath string) (*sql.DB, error) {
-	db, err := sql.Open("sqlite3", dbPath)
-	if err != nil {
-		return nil, err
-	}
-
-	// Enable foreign key constraints
-	_, err = db.Exec("PRAGMA foreign_keys = ON;")
-	if err != nil {
-		db.Close()
-		return nil, err
-	}
-
-	// Test the connection
-	if err := db.Ping(); err != nil {
-		db.Close()
-		return nil, err
-	}
-
-	// Set connection pool settings
-	db.SetMaxOpenConns(25)
-	db.SetMaxIdleConns(5)
-
-	log.Printf("Connected to database: %s", dbPath)
-	return db, nil
 }

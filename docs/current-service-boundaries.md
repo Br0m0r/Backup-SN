@@ -12,8 +12,8 @@ Update this document whenever a table, synchronous dependency, or public API mov
 | --- | ---: | --- | --- |
 | Gateway | 8080 | Single public origin, API routing, WebSocket upgrades, frontend proxy | All application services, Frontend, Redis |
 | Auth | 8081 | Registration, login, logout, session verification | Shared SQLite database |
-| Users | 8082 | Profiles, follows, user search, avatars | Auth verification; Notification creation; shared SQLite |
-| Posts | 8083 | Posts, feed, privacy, comments, post/comment images | Auth verification; Notification creation; shared SQLite; S3-compatible media storage |
+| Users | 8082 | Profiles, follows, user search, avatars | Auth verification; authenticated Posts reads; Notification creation; shared SQLite |
+| Posts | 8083 | Posts, feed, privacy, comments, post/comment images | Auth verification; authenticated Users profile/relationship reads; Notification creation; service-owned PostgreSQL; S3-compatible media storage |
 | Groups | 8084 | Groups, membership, invitations, events, group image | Auth verification; Notification creation; shared SQLite |
 | Chat | 8085 | Direct/group chat REST and WebSocket delivery, attachments | Auth verification; authenticated Groups membership reads; Notification creation; service-owned PostgreSQL; temporary shared-SQLite identity/follow reads; S3-compatible media storage; Redis |
 | Notifications | 8086 | Notification inbox and WebSocket delivery | Auth verification; service-owned PostgreSQL; Redis |
@@ -26,7 +26,7 @@ The Gateway adds browser security headers, rejects known request bodies above th
 
 All uploaded media now uses opaque, owner-scoped keys in S3-compatible object storage; the Gateway exposes read-only `/media` access while storage credentials remain private. Repeatable migration commands remain available for legacy Chat and post/comment files. The discarded development avatars and group images required no legacy copy, and their services no longer expose static file handlers or upload bind mounts.
 
-All Go services use `docker/backend.Dockerfile`, with the service name and port supplied as build arguments. Notifications and Chat now have private PostgreSQL databases and embedded migration histories without cross-domain foreign keys. Chat temporarily retains shared-SQLite reads for user profiles and follow rules, but all durable message state is service-owned. Backend, Gateway, and Frontend runtime images run as non-root users, include health checks, use explicit base-image release lines, and are built in CI. Fixed Compose container names were removed so they do not block future replica scaling.
+All Go services use `docker/backend.Dockerfile`, with the service name and port supplied as build arguments. Notifications, Chat, and Posts now have private PostgreSQL databases and embedded migration histories without cross-domain foreign keys. Posts obtains profile/follow data through Users contracts, and Users obtains profile post lists through Posts. Chat temporarily retains shared-SQLite reads for user profiles and follow rules. Backend, Gateway, and Frontend runtime images run as non-root users, include health checks, use explicit base-image release lines, and are built in CI. Fixed Compose container names were removed so they do not block future replica scaling.
 
 ## Current Table Access
 
@@ -34,12 +34,12 @@ The following table is based on SQL statements in each service. "Target owner" i
 
 | Current table | Services accessing it | Target owner | Required separation |
 | --- | --- | --- | --- |
-| `users` | Auth, Users, Posts, Groups, Chat | Split between Auth and Users | Create an Auth account/credential record and a Users profile record. Replace joins in Posts, Groups, and Chat with API composition or event-fed projections. |
+| `users` | Auth, Users, Groups, Chat | Split between Auth and Users | Posts now uses the Users profile contract. Create separate Auth credentials and Users profiles, then replace the remaining Groups/Chat reads. |
 | `sessions` | Auth | Auth | Move with Auth credentials and expose token/JWKS contracts. |
-| `follows` | Users, Posts, Chat | Users | Posts needs a feed/audience projection; Chat needs a conversation-permission contract or projection. |
-| `posts` | Posts, Users | Posts | Users currently reads Posts for profile statistics; obtain this through a Posts API or event-fed counter. |
-| `comments` | Posts | Posts | Move with Posts. |
-| `post_viewers` | Posts | Posts | Move with Posts. External viewer IDs remain identity references, not cross-database foreign keys. |
+| `follows` | Users, Chat | Users | Posts now uses the Users following contract. Chat still needs a conversation-permission contract or projection. |
+| `posts` | Posts only, in its service-owned PostgreSQL database | Posts | Database extraction is complete; Users reads profile posts through the authenticated Posts contract. |
+| `comments` | Posts only, in its service-owned PostgreSQL database | Posts | Database extraction is complete. |
+| `post_viewers` | Posts only, in its service-owned PostgreSQL database | Posts | Database extraction is complete; viewer IDs are external identity references. |
 | `groups` | Groups | Groups | Move with Groups. |
 | `group_members` | Groups, Users | Groups | Chat no longer reads this table and uses the authenticated Groups membership contract. Users still excludes existing members during invite search; replace that read with a Groups contract or projection. |
 | `events` | Groups | Groups | Move with Groups. |
@@ -62,12 +62,9 @@ Target split:
 
 ### Posts depends on Users and Follows
 
-Posts joins `users` to render authors and joins `follows` to calculate feed visibility. After separation:
+**Resolved:** Posts no longer joins `users` or `follows`. It obtains batch profile summaries, profile search results, and accepted-following IDs through versioned Users contracts protected by `INTERNAL_SERVICE_TOKEN`. Users obtains profile post lists through the corresponding Posts contract.
 
-- Posts should keep an event-fed author projection for feed rendering.
-- Users should publish follow changes.
-- Posts should maintain the audience/read model needed for feed queries, or a future Feed service may own that projection.
-- Post privacy remains enforced by Posts even if its decision uses locally projected relationship data.
+Posts remains the privacy authority: it combines the Users relationship decision with its own `post_viewers` state. Event-fed profile and relationship projections remain the preferred future resilience optimization.
 
 ### Chat depends on Users, Follows, and Groups
 
@@ -142,7 +139,7 @@ The current access graph supports this order:
 1. **Notifications:** already owns its only table; replace producers after adding event infrastructure.
 2. **Media state:** move files to object storage independently of relational data.
 3. **Chat messages:** database extraction is complete; replace the remaining Users/profile/follow reads.
-4. **Posts:** introduce profile and relationship projections before moving its tables.
+4. **Posts:** database extraction and prerequisite synchronous contracts are complete; replace contracts with projections after event infrastructure exists.
 5. **Groups:** introduce profile projections and replace Users' direct membership read; Chat already uses the Groups membership contract.
 6. **Auth and Users:** split the combined `users` record last, once stable identity events and profile contracts exist.
 

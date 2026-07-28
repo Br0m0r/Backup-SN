@@ -15,8 +15,10 @@ import (
 	"social-network/services/common/httpserver"
 	"social-network/services/common/notify"
 	"social-network/services/common/objectstore"
+	"social-network/services/common/serviceauth"
 	"social-network/services/users/handlers"
 	"social-network/services/users/middleware"
+	"social-network/services/users/postsclient"
 	"social-network/services/users/services"
 )
 
@@ -44,13 +46,6 @@ func main() {
 		log.Fatalf("Failed to connect to object storage: %v", err)
 	}
 
-	// Initialize services
-	userService := services.NewUserService(db)
-
-	// Initialize handlers
-	userHandlers := handlers.NewUserHandlers(userService)
-	uploadHandlers := handlers.NewUploadHandlers(userService, mediaStore)
-
 	// Get auth service URL from environment
 	authServiceURL := os.Getenv("AUTH_SERVICE_URL")
 	if authServiceURL == "" {
@@ -59,6 +54,22 @@ func main() {
 	if err := notify.ValidateConfig(); err != nil {
 		log.Fatalf("Invalid notification client configuration: %v", err)
 	}
+	internalServiceToken, err := serviceauth.TokenFromEnvironment()
+	if err != nil {
+		log.Fatalf("Invalid internal service authentication configuration: %v", err)
+	}
+	postReader, err := postsclient.FromEnvironment(internalServiceToken)
+	if err != nil {
+		log.Fatalf("Invalid Posts client configuration: %v", err)
+	}
+
+	// Initialize services
+	userService := services.NewUserService(db, postReader)
+
+	// Initialize handlers
+	userHandlers := handlers.NewUserHandlers(userService)
+	internalReadHandlers := handlers.NewInternalReadHandlers(userService)
+	uploadHandlers := handlers.NewUploadHandlers(userService, mediaStore)
 
 	// Apply middleware
 	authMiddleware := authcache.AuthMiddleware(authServiceURL)
@@ -70,6 +81,7 @@ func main() {
 
 	// Health check (no auth required)
 	mux.HandleFunc("/health", handlers.HealthHandler)
+	mux.Handle("/internal/v1/users/", serviceauth.Authenticate(internalServiceToken, internalReadHandlers))
 
 	// Upload routes (auth required + rate limited)
 	mux.Handle("/upload/avatar", authMiddleware(rateLimiter.RateLimit(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
