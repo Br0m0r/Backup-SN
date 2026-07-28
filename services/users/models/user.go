@@ -66,6 +66,13 @@ type ProfileSummary struct {
 	Nickname   *string `json:"nickname,omitempty"`
 }
 
+// ChatContact is the Users-owned identity and relationship view consumed by
+// Chat when building the available-contact list.
+type ChatContact struct {
+	ProfileSummary
+	IsMessageRequest bool `json:"is_message_request"`
+}
+
 // FollowRequest represents a follow action request
 type FollowRequest struct {
 	UserID int `json:"user_id"`

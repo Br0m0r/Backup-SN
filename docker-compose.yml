@@ -289,7 +289,6 @@ services:
     networks:
       - social-network
     environment:
-      - DATABASE_PATH=/data/social_network.db
       - DATABASE_URL=postgres://chat:${CHAT_DB_PASSWORD:-chat-dev-only}@chat-db:5432/chat?sslmode=disable
       - DB_MAX_OPEN_CONNS=${CHAT_DB_MAX_OPEN_CONNS:-25}
       - DB_MAX_IDLE_CONNS=${CHAT_DB_MAX_IDLE_CONNS:-5}
@@ -297,6 +296,8 @@ services:
       - DB_CONN_MAX_IDLE_TIME=${CHAT_DB_CONN_MAX_IDLE_TIME:-5m}
       - DB_CONNECT_TIMEOUT=${CHAT_DB_CONNECT_TIMEOUT:-10s}
       - AUTH_SERVICE_URL=http://auth-service:8081  # How chat service finds auth service
+      - USERS_SERVICE_URL=http://user-service:8082
+      - USERS_SERVICE_TIMEOUT=${USERS_SERVICE_TIMEOUT:-3s}
       - NOTIFICATION_SERVICE_URL=http://notification-service:8086  # For sending message notifications
       - GROUPS_SERVICE_URL=http://group-service:8084
       - GROUPS_SERVICE_TIMEOUT=${GROUPS_SERVICE_TIMEOUT:-3s}
@@ -313,9 +314,6 @@ services:
       - OBJECT_STORAGE_BUCKET=${OBJECT_STORAGE_BUCKET:-social-network-media}
       - OBJECT_STORAGE_USE_TLS=${OBJECT_STORAGE_USE_TLS:-false}
       - OBJECT_STORAGE_PUBLIC_BASE_URL=${OBJECT_STORAGE_PUBLIC_BASE_URL:-/media/social-network-media}
-    volumes:
-      - shared-sqlite-data:/data
-
   chat-db:
     image: postgres:17.10-alpine3.23
     init: true

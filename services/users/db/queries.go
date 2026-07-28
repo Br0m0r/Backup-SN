@@ -70,6 +70,97 @@ func GetAcceptedFollowingIDs(database *sql.DB, userID int) ([]int, error) {
 	return userIDs, rows.Err()
 }
 
+// CanStartConversation applies the Users-owned profile/follow rules for a new
+// direct conversation. Chat remains responsible for its existing-history rule.
+func CanStartConversation(database *sql.DB, senderID, receiverID int) (bool, error) {
+	var canChat int
+	err := database.QueryRow(`
+		SELECT CASE
+			WHEN receiver.is_public_profile = 1
+				AND EXISTS (
+					SELECT 1 FROM follows
+					WHERE follower_id = ? AND following_id = ? AND status = 'accepted'
+				) THEN 1
+			WHEN receiver.is_public_profile = 0
+				AND EXISTS (
+					SELECT 1 FROM follows
+					WHERE follower_id = ? AND following_id = ? AND status = 'accepted'
+				)
+				AND EXISTS (
+					SELECT 1 FROM follows
+					WHERE follower_id = ? AND following_id = ? AND status = 'accepted'
+				) THEN 1
+			ELSE 0
+		END
+		FROM users receiver
+		WHERE receiver.id = ?
+	`, senderID, receiverID, senderID, receiverID, receiverID, senderID, receiverID).Scan(&canChat)
+	if errors.Is(err, sql.ErrNoRows) {
+		return false, nil
+	}
+	return canChat == 1, err
+}
+
+// GetChatContacts returns identities allowed by Users-owned profile/follow
+// rules, plus recent inbound senders supplied by Chat.
+func GetChatContacts(database *sql.DB, userID int, recentSenderIDs []int) ([]models.ChatContact, error) {
+	recentClause := ""
+	arguments := []any{userID, userID, userID, userID}
+	if len(recentSenderIDs) > 0 {
+		placeholders := make([]string, len(recentSenderIDs))
+		for index, senderID := range recentSenderIDs {
+			placeholders[index] = "?"
+			arguments = append(arguments, senderID)
+		}
+		recentClause = " OR u.id IN (" + strings.Join(placeholders, ",") + ")"
+	}
+	rows, err := database.Query(`
+		SELECT DISTINCT u.id, u.username, u.first_name, u.last_name,
+			u.avatar_path, u.nickname,
+			CASE WHEN NOT EXISTS (
+				SELECT 1 FROM follows
+				WHERE follower_id = ? AND following_id = u.id AND status = 'accepted'
+			) THEN 1 ELSE 0 END
+		FROM users u
+		WHERE u.id != ?
+			AND ((
+				EXISTS (
+					SELECT 1 FROM follows f1
+					WHERE f1.following_id = u.id AND f1.follower_id = ?
+						AND f1.status = 'accepted'
+				)
+				AND (
+					u.is_public_profile = 1
+					OR EXISTS (
+						SELECT 1 FROM follows f2
+						WHERE f2.follower_id = u.id AND f2.following_id = ?
+							AND f2.status = 'accepted'
+					)
+				)
+			)`+recentClause+`)
+		ORDER BY lower(u.username)
+		LIMIT 500
+	`, arguments...)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	contacts := make([]models.ChatContact, 0)
+	for rows.Next() {
+		var contact models.ChatContact
+		var isMessageRequest int
+		if err := rows.Scan(
+			&contact.ID, &contact.Username, &contact.FirstName, &contact.LastName,
+			&contact.AvatarPath, &contact.Nickname, &isMessageRequest,
+		); err != nil {
+			return nil, err
+		}
+		contact.IsMessageRequest = isMessageRequest == 1
+		contacts = append(contacts, contact)
+	}
+	return contacts, rows.Err()
+}
+
 // GetUserByID retrieves a user profile by ID
 func GetUserByID(db *sql.DB, userID int) (*models.User, error) {
 	query := `

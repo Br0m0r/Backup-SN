@@ -9,7 +9,9 @@ import (
 	"social-network/services/chat/groupsclient"
 	"social-network/services/chat/middleware"
 	"social-network/services/chat/models"
+	"social-network/services/chat/usersclient"
 	"social-network/services/chat/utils"
+	"sort"
 	"strconv"
 	"strings"
 	"time"
@@ -17,19 +19,19 @@ import (
 
 // ChatHandlers handles HTTP endpoints for chat
 type ChatHandlers struct {
-	messageDatabase  *sql.DB
-	identityDatabase *sql.DB
-	hub              *Hub
-	groupMembership  groupsclient.Membership
+	messageDatabase *sql.DB
+	userDirectory   usersclient.Directory
+	hub             *Hub
+	groupMembership groupsclient.Membership
 }
 
 // NewChatHandlers creates a new ChatHandlers instance
-func NewChatHandlers(messageDatabase, identityDatabase *sql.DB, hub *Hub, groupMembership groupsclient.Membership) *ChatHandlers {
+func NewChatHandlers(messageDatabase *sql.DB, userDirectory usersclient.Directory, hub *Hub, groupMembership groupsclient.Membership) *ChatHandlers {
 	return &ChatHandlers{
-		messageDatabase:  messageDatabase,
-		identityDatabase: identityDatabase,
-		hub:              hub,
-		groupMembership:  groupMembership,
+		messageDatabase: messageDatabase,
+		userDirectory:   userDirectory,
+		hub:             hub,
+		groupMembership: groupMembership,
 	}
 }
 
@@ -56,7 +58,7 @@ func (h *ChatHandlers) GetChatHistory(w http.ResponseWriter, r *http.Request) {
 	}
 
 	// Check if user can chat with this person
-	canChat, err := db.CanChat(h.messageDatabase, h.identityDatabase, userID, otherUserID)
+	canChat, err := canChat(r.Context(), h.messageDatabase, h.userDirectory, userID, otherUserID)
 	if err != nil {
 		log.Printf("Error checking chat permission: %v", err)
 		utils.ErrorResponse(w, "Failed to check permissions", http.StatusInternalServerError)
@@ -99,12 +101,39 @@ func (h *ChatHandlers) GetConversations(w http.ResponseWriter, r *http.Request) 
 		return
 	}
 
-	conversations, err := db.GetConversations(h.messageDatabase, h.identityDatabase, userID)
+	conversations, err := db.GetConversations(h.messageDatabase, userID)
 	if err != nil {
 		log.Printf("Error getting conversations: %v", err)
 		utils.ErrorResponse(w, "Failed to retrieve conversations", http.StatusInternalServerError)
 		return
 	}
+	userIDs := make([]int, 0, len(conversations))
+	for _, conversation := range conversations {
+		userIDs = append(userIDs, conversation.UserID)
+	}
+	profiles, err := h.userDirectory.Profiles(r.Context(), userIDs)
+	if err != nil {
+		log.Printf("Error hydrating conversations: %v", err)
+		utils.ErrorResponse(w, "Failed to retrieve conversations", http.StatusInternalServerError)
+		return
+	}
+	profilesByID := make(map[int]usersclient.Profile, len(profiles))
+	for _, profile := range profiles {
+		profilesByID[profile.ID] = profile
+	}
+	hydrated := conversations[:0]
+	for index := range conversations {
+		profile, ok := profilesByID[conversations[index].UserID]
+		if !ok {
+			continue
+		}
+		conversations[index].Username = profile.Username
+		conversations[index].FirstName = profile.FirstName
+		conversations[index].LastName = profile.LastName
+		conversations[index].Nickname = profile.Nickname
+		hydrated = append(hydrated, conversations[index])
+	}
+	conversations = hydrated
 
 	// Update online status for each conversation
 	for i := range conversations {
@@ -200,7 +229,7 @@ func (h *ChatHandlers) SendMessage(w http.ResponseWriter, r *http.Request) {
 	}
 
 	// Check if user can chat with receiver
-	canChat, err := db.CanChat(h.messageDatabase, h.identityDatabase, userID, req.ReceiverID)
+	canChat, err := canChat(r.Context(), h.messageDatabase, h.userDirectory, userID, req.ReceiverID)
 	if err != nil {
 		log.Printf("Error checking chat permission: %v", err)
 		utils.ErrorResponse(w, "Failed to check permissions", http.StatusInternalServerError)
@@ -402,11 +431,63 @@ func (h *ChatHandlers) GetAvailableContacts(w http.ResponseWriter, r *http.Reque
 		return
 	}
 
-	contacts, err := db.GetAvailableContacts(h.messageDatabase, h.identityDatabase, userID)
+	recentSenderIDs, err := db.GetRecentSenderIDs(h.messageDatabase, userID)
+	if err != nil {
+		log.Printf("Error getting recent senders: %v", err)
+		utils.ErrorResponse(w, "Failed to retrieve contacts", http.StatusInternalServerError)
+		return
+	}
+	directoryContacts, err := h.userDirectory.Contacts(r.Context(), userID, recentSenderIDs)
 	if err != nil {
 		log.Printf("Error getting available contacts: %v", err)
 		utils.ErrorResponse(w, "Failed to retrieve contacts", http.StatusInternalServerError)
 		return
+	}
+	type contactWithTime struct {
+		contact      models.ChatContact
+		lastChatTime sql.NullTime
+	}
+	results := make([]contactWithTime, 0, len(directoryContacts))
+	for _, directoryContact := range directoryContacts {
+		contact := models.ChatContact{
+			UserID: directoryContact.ID, Username: directoryContact.Username,
+			IsMessageRequest: directoryContact.IsMessageRequest,
+		}
+		if directoryContact.FirstName != nil {
+			contact.FirstName = *directoryContact.FirstName
+		}
+		if directoryContact.LastName != nil {
+			contact.LastName = *directoryContact.LastName
+		}
+		if directoryContact.Nickname != nil {
+			contact.Nickname = *directoryContact.Nickname
+		}
+		if directoryContact.AvatarPath != nil {
+			contact.AvatarPath = *directoryContact.AvatarPath
+		}
+		lastChatTime, unreadCount, err := db.GetContactActivity(h.messageDatabase, userID, contact.UserID)
+		if err != nil {
+			log.Printf("Error getting contact activity: %v", err)
+			utils.ErrorResponse(w, "Failed to retrieve contacts", http.StatusInternalServerError)
+			return
+		}
+		contact.UnreadCount = unreadCount
+		contact.HasChatHistory = lastChatTime.Valid
+		results = append(results, contactWithTime{contact: contact, lastChatTime: lastChatTime})
+	}
+	sort.SliceStable(results, func(i, j int) bool {
+		left, right := results[i], results[j]
+		if left.lastChatTime.Valid != right.lastChatTime.Valid {
+			return left.lastChatTime.Valid
+		}
+		if left.lastChatTime.Valid && !left.lastChatTime.Time.Equal(right.lastChatTime.Time) {
+			return left.lastChatTime.Time.After(right.lastChatTime.Time)
+		}
+		return strings.ToLower(left.contact.Username) < strings.ToLower(right.contact.Username)
+	})
+	contacts := make([]models.ChatContact, 0, len(results))
+	for _, result := range results {
+		contacts = append(contacts, result.contact)
 	}
 
 	// Update online status for each contact

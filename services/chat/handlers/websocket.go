@@ -10,6 +10,7 @@ import (
 	"social-network/services/chat/groupsclient"
 	"social-network/services/chat/middleware"
 	"social-network/services/chat/models"
+	"social-network/services/chat/usersclient"
 	"social-network/services/chat/utils"
 	"social-network/services/common/notify"
 	"social-network/services/common/realtime"
@@ -21,17 +22,17 @@ import (
 
 // Hub manages active WebSocket connections
 type Hub struct {
-	clients          map[int]map[*Client]struct{}
-	broadcast        chan *models.WebSocketMessage
-	publish          chan []byte
-	register         chan *Client
-	unregister       chan *Client
-	mu               sync.RWMutex
-	database         *sql.DB
-	identityDatabase *sql.DB
-	membership       groupsclient.Membership
-	realtime         realtime.Transport
-	upgrader         websocket.Upgrader
+	clients       map[int]map[*Client]struct{}
+	broadcast     chan *models.WebSocketMessage
+	publish       chan []byte
+	register      chan *Client
+	unregister    chan *Client
+	mu            sync.RWMutex
+	database      *sql.DB
+	userDirectory usersclient.Directory
+	membership    groupsclient.Membership
+	realtime      realtime.Transport
+	upgrader      websocket.Upgrader
 }
 
 // Client represents a WebSocket client connection
@@ -44,17 +45,17 @@ type Client struct {
 }
 
 // NewHub creates a new Hub instance
-func NewHub(database, identityDatabase *sql.DB, checkOrigin func(*http.Request) bool, transport realtime.Transport, membership groupsclient.Membership) *Hub {
+func NewHub(database *sql.DB, userDirectory usersclient.Directory, checkOrigin func(*http.Request) bool, transport realtime.Transport, membership groupsclient.Membership) *Hub {
 	return &Hub{
-		clients:          make(map[int]map[*Client]struct{}),
-		broadcast:        make(chan *models.WebSocketMessage, 256),
-		publish:          make(chan []byte, 256),
-		register:         make(chan *Client),
-		unregister:       make(chan *Client),
-		database:         database,
-		identityDatabase: identityDatabase,
-		membership:       membership,
-		realtime:         transport,
+		clients:       make(map[int]map[*Client]struct{}),
+		broadcast:     make(chan *models.WebSocketMessage, 256),
+		publish:       make(chan []byte, 256),
+		register:      make(chan *Client),
+		unregister:    make(chan *Client),
+		database:      database,
+		userDirectory: userDirectory,
+		membership:    membership,
+		realtime:      transport,
 		upgrader: websocket.Upgrader{
 			CheckOrigin: checkOrigin,
 		},
@@ -408,7 +409,7 @@ func (c *Client) handleChatMessage(wsMsg *models.WebSocketMessage) {
 	}
 
 	// Check if sender can chat with receiver
-	canChat, err := db.CanChat(c.hub.database, c.hub.identityDatabase, c.userID, wsMsg.ReceiverID)
+	canChat, err := canChat(context.Background(), c.hub.database, c.hub.userDirectory, c.userID, wsMsg.ReceiverID)
 	if err != nil {
 		log.Printf("Error checking chat permission: %v", err)
 		c.sendError("Failed to check chat permissions")

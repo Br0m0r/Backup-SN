@@ -28,6 +28,14 @@ func (h *InternalReadHandlers) ServeHTTP(w http.ResponseWriter, r *http.Request)
 		h.getProfiles(w, r)
 		return
 	}
+	if path == "chat/permission" {
+		h.getChatPermission(w, r)
+		return
+	}
+	if path == "chat/contacts" {
+		h.getChatContacts(w, r)
+		return
+	}
 	parts := strings.Split(path, "/")
 	if len(parts) != 2 || parts[1] != "following" {
 		utils.ErrorResponse(w, "Not found", http.StatusNotFound)
@@ -45,6 +53,52 @@ func (h *InternalReadHandlers) ServeHTTP(w http.ResponseWriter, r *http.Request)
 		return
 	}
 	utils.SuccessResponse(w, map[string]any{"following_ids": followingIDs})
+}
+
+func (h *InternalReadHandlers) getChatPermission(w http.ResponseWriter, r *http.Request) {
+	senderID, senderErr := strconv.Atoi(r.URL.Query().Get("sender_id"))
+	receiverID, receiverErr := strconv.Atoi(r.URL.Query().Get("receiver_id"))
+	if senderErr != nil || receiverErr != nil || senderID <= 0 || receiverID <= 0 {
+		utils.ErrorResponse(w, "Invalid sender or receiver ID", http.StatusBadRequest)
+		return
+	}
+	canChat, err := h.service.CanStartConversation(senderID, receiverID)
+	if err != nil {
+		log.Printf("Failed to evaluate direct conversation permission: %v", err)
+		utils.ErrorResponse(w, "Failed to check conversation permission", http.StatusInternalServerError)
+		return
+	}
+	utils.SuccessResponse(w, map[string]any{"can_start": canChat})
+}
+
+func (h *InternalReadHandlers) getChatContacts(w http.ResponseWriter, r *http.Request) {
+	userID, err := strconv.Atoi(r.URL.Query().Get("user_id"))
+	if err != nil || userID <= 0 {
+		utils.ErrorResponse(w, "Invalid user ID", http.StatusBadRequest)
+		return
+	}
+	recentSenderIDs := make([]int, 0)
+	if rawIDs := strings.TrimSpace(r.URL.Query().Get("recent_sender_ids")); rawIDs != "" {
+		for _, rawID := range strings.Split(rawIDs, ",") {
+			senderID, err := strconv.Atoi(strings.TrimSpace(rawID))
+			if err != nil || senderID <= 0 {
+				utils.ErrorResponse(w, "Invalid recent sender ID", http.StatusBadRequest)
+				return
+			}
+			recentSenderIDs = append(recentSenderIDs, senderID)
+			if len(recentSenderIDs) > 500 {
+				utils.ErrorResponse(w, "Too many recent sender IDs", http.StatusBadRequest)
+				return
+			}
+		}
+	}
+	contacts, err := h.service.GetChatContacts(userID, recentSenderIDs)
+	if err != nil {
+		log.Printf("Failed to retrieve Chat contacts: %v", err)
+		utils.ErrorResponse(w, "Failed to retrieve Chat contacts", http.StatusInternalServerError)
+		return
+	}
+	utils.SuccessResponse(w, map[string]any{"contacts": contacts})
 }
 
 func (h *InternalReadHandlers) getProfiles(w http.ResponseWriter, r *http.Request) {

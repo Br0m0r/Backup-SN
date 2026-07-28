@@ -8,8 +8,9 @@ command that verifies both tables before committing. User, sender, recipient,
 and group IDs are external domain references; the Chat schema intentionally has
 no cross-database foreign keys.
 
-Chat still reads profiles and follow relationships from shared SQLite. Those
-reads are temporary and do not include message tables.
+Chat reads profiles, contact eligibility, and new-conversation permissions
+through authenticated Users contracts. It has no runtime connection to shared
+SQLite. Event-fed local projections remain a future resilience improvement.
 
 ## Fresh local environment
 

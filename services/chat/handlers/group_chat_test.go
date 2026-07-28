@@ -18,8 +18,8 @@ import (
 func TestChatOwnsGroupMessageHTTPFlow(t *testing.T) {
 	database := openGroupChatTestDatabase(t)
 	membership := fakeGroupMembership{members: map[int][]int{7: {42}}}
-	hub := NewHub(database, database, nil, nil, membership)
-	handler := NewChatHandlers(database, database, hub, membership)
+	hub := NewHub(database, nil, nil, nil, membership)
+	handler := NewChatHandlers(database, nil, hub, membership)
 
 	sendRequest := httptest.NewRequest(
 		http.MethodPost,
@@ -70,7 +70,7 @@ func TestChatOwnsGroupMessageHTTPFlow(t *testing.T) {
 func TestChatRejectsGroupMessageFromNonMember(t *testing.T) {
 	database := openGroupChatTestDatabase(t)
 	membership := fakeGroupMembership{members: map[int][]int{7: {42}}}
-	handler := NewChatHandlers(database, database, NewHub(database, database, nil, nil, membership), membership)
+	handler := NewChatHandlers(database, nil, NewHub(database, nil, nil, nil, membership), membership)
 
 	request := httptest.NewRequest(
 		http.MethodPost,

@@ -21,7 +21,7 @@ A Facebook-like social network built with hybrid microservices architecture, fea
 
 **Backend:**
 - Go microservices (Auth, Users, Posts, Groups, Chat, Notifications)
-- Service-owned PostgreSQL for Notifications, Chat messages, Posts, and Groups; shared SQLite for the remaining Auth/Users identity state
+- Service-owned PostgreSQL for Notifications, Chat, Posts, and Groups; shared SQLite only for the remaining Auth/Users identity state
 - S3-compatible object storage for avatars, group images, post/comment media, and Chat attachments
 - Redis for distributed Gateway rate limits, Chat presence, and WebSocket fan-out
 - Gorilla WebSocket

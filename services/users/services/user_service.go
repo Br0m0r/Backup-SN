@@ -42,6 +42,14 @@ func (s *UserService) GetAcceptedFollowingIDs(userID int) ([]int, error) {
 	return db.GetAcceptedFollowingIDs(s.database, userID)
 }
 
+func (s *UserService) CanStartConversation(senderID, receiverID int) (bool, error) {
+	return db.CanStartConversation(s.database, senderID, receiverID)
+}
+
+func (s *UserService) GetChatContacts(userID int, recentSenderIDs []int) ([]models.ChatContact, error) {
+	return db.GetChatContacts(s.database, userID, recentSenderIDs)
+}
+
 // UpdateProfile updates a user's profile
 func (s *UserService) UpdateProfile(userID int, req *models.UpdateProfileRequest) (*models.User, error) {
 	// Validate and sanitize first name
