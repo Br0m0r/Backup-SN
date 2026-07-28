@@ -1,20 +1,114 @@
 package services
 
 import (
+	"context"
 	"database/sql"
 	"errors"
 	"social-network/services/common/notify"
 	"social-network/services/groups/db"
 	"social-network/services/groups/models"
+	"social-network/services/groups/usersclient"
+	"strings"
 	"time"
 )
 
 type GroupService struct {
-	database *sql.DB
+	database  *sql.DB
+	directory usersclient.Directory
 }
 
-func NewGroupService(database *sql.DB) *GroupService {
-	return &GroupService{database: database}
+func NewGroupService(database *sql.DB, directory usersclient.Directory) *GroupService {
+	return &GroupService{database: database, directory: directory}
+}
+
+func (s *GroupService) Ping(ctx context.Context) error {
+	return s.database.PingContext(ctx)
+}
+
+func (s *GroupService) profiles(userIDs []int) (map[int]usersclient.Profile, error) {
+	if len(userIDs) == 0 || s.directory == nil {
+		return map[int]usersclient.Profile{}, nil
+	}
+	profiles, err := s.directory.Profiles(context.Background(), userIDs)
+	if err != nil {
+		return nil, err
+	}
+	byID := make(map[int]usersclient.Profile, len(profiles))
+	for _, profile := range profiles {
+		byID[profile.ID] = profile
+	}
+	return byID, nil
+}
+
+func (s *GroupService) hydrateMembers(members []*models.GroupMember) error {
+	userIDs := make([]int, 0, len(members))
+	for _, member := range members {
+		userIDs = append(userIDs, member.UserID)
+	}
+	profiles, err := s.profiles(userIDs)
+	if err != nil {
+		return err
+	}
+	for _, member := range members {
+		if profile, ok := profiles[member.UserID]; ok {
+			member.Username = profile.Username
+			member.FirstName = profile.FirstName
+			member.LastName = profile.LastName
+			member.Nickname = profile.Nickname
+		}
+	}
+	return nil
+}
+
+func profileName(profile usersclient.Profile) string {
+	parts := make([]string, 0, 2)
+	if profile.FirstName != nil && strings.TrimSpace(*profile.FirstName) != "" {
+		parts = append(parts, strings.TrimSpace(*profile.FirstName))
+	}
+	if profile.LastName != nil && strings.TrimSpace(*profile.LastName) != "" {
+		parts = append(parts, strings.TrimSpace(*profile.LastName))
+	}
+	if len(parts) > 0 {
+		return strings.Join(parts, " ")
+	}
+	if profile.Username != "" {
+		return profile.Username
+	}
+	return "Unknown"
+}
+
+func (s *GroupService) username(userID int) (string, error) {
+	profiles, err := s.profiles([]int{userID})
+	if err != nil {
+		return "", err
+	}
+	profile, ok := profiles[userID]
+	if !ok {
+		return "", errors.New("user profile not found")
+	}
+	return profile.Username, nil
+}
+
+func (s *GroupService) hydrateEvents(events []*models.EventWithResponses) error {
+	userIDs := make([]int, 0, len(events))
+	for _, event := range events {
+		if event.CreatorID != nil {
+			userIDs = append(userIDs, *event.CreatorID)
+		}
+	}
+	profiles, err := s.profiles(userIDs)
+	if err != nil {
+		return err
+	}
+	for _, event := range events {
+		event.CreatorName = "Unknown"
+		if event.CreatorID != nil {
+			if profile, ok := profiles[*event.CreatorID]; ok {
+				event.CreatorName = profileName(profile)
+			}
+		}
+	}
+	return nil
 }
 
 // CreateGroup creates a new group
@@ -112,7 +206,14 @@ func (s *GroupService) GetPendingRequests(groupID, userID int) ([]*models.GroupM
 		return nil, errors.New("only group creator can view pending requests")
 	}
 
-	return db.GetPendingRequests(s.database, groupID)
+	members, err := db.GetPendingRequests(s.database, groupID)
+	if err != nil {
+		return nil, err
+	}
+	if err := s.hydrateMembers(members); err != nil {
+		return nil, err
+	}
+	return members, nil
 }
 
 // RespondToRequest accepts or rejects a join request (creator only)
@@ -151,7 +252,7 @@ func (s *GroupService) RespondToRequest(groupID, memberID, userID int, accept bo
 		if accept {
 			notify.GroupRequestAccepted(requesterID, groupID, group.Name)
 			// Notify creator about new member
-			requesterName, err := db.GetUsernameByID(s.database, requesterID)
+			requesterName, err := s.username(requesterID)
 			if err == nil {
 				notify.NewGroupMember(group.CreatorID, groupID, requesterName, group.Name)
 			}
@@ -204,7 +305,7 @@ func (s *GroupService) RespondToInvitation(invitationID, userID int, accept bool
 	}
 
 	// Send notification to group creator
-	username, err := db.GetUsernameByID(s.database, userID)
+	username, err := s.username(userID)
 	if err == nil {
 		if accept {
 			notify.GroupInvitationAccepted(creatorID, groupID, username, groupName)
@@ -231,7 +332,7 @@ func (s *GroupService) RespondToInvitationByGroupID(groupID, userID int, accept 
 	}
 
 	// Send notification to group creator
-	username, err := db.GetUsernameByID(s.database, userID)
+	username, err := s.username(userID)
 	if err == nil {
 		if accept {
 			notify.GroupInvitationAccepted(group.CreatorID, groupID, username, group.Name)
@@ -254,7 +355,14 @@ func (s *GroupService) GetGroupMembers(groupID, userID int) ([]*models.GroupMemb
 		return nil, errors.New("only group members can view member list")
 	}
 
-	return db.GetGroupMembers(s.database, groupID)
+	members, err := db.GetGroupMembers(s.database, groupID)
+	if err != nil {
+		return nil, err
+	}
+	if err := s.hydrateMembers(members); err != nil {
+		return nil, err
+	}
+	return members, nil
 }
 
 // IsAcceptedMember exposes the authoritative membership decision to trusted
@@ -267,6 +375,10 @@ func (s *GroupService) IsAcceptedMember(groupID, userID int) (bool, error) {
 // service-to-service fan-out.
 func (s *GroupService) GetAcceptedMemberIDs(groupID int) ([]int, error) {
 	return db.GetAcceptedGroupMemberIDs(s.database, groupID)
+}
+
+func (s *GroupService) GetParticipantIDs(groupID int) ([]int, error) {
+	return db.GetGroupParticipantIDs(s.database, groupID)
 }
 
 // CreateEvent creates a new event (members can create events)
@@ -321,7 +433,14 @@ func (s *GroupService) CreateEvent(req *models.CreateEventRequest, creatorID int
 
 // GetEvent retrieves event with response counts
 func (s *GroupService) GetEvent(eventID, userID int) (*models.EventWithResponses, error) {
-	return db.GetEventWithResponses(s.database, eventID, userID)
+	event, err := db.GetEventWithResponses(s.database, eventID, userID)
+	if err != nil {
+		return nil, err
+	}
+	if err := s.hydrateEvents([]*models.EventWithResponses{event}); err != nil {
+		return nil, err
+	}
+	return event, nil
 }
 
 // GetGroupEvents retrieves all events for a group
@@ -335,7 +454,14 @@ func (s *GroupService) GetGroupEvents(groupID, userID int) ([]*models.EventWithR
 		return nil, errors.New("only group members can view events")
 	}
 
-	return db.GetGroupEvents(s.database, groupID, userID)
+	events, err := db.GetGroupEvents(s.database, groupID, userID)
+	if err != nil {
+		return nil, err
+	}
+	if err := s.hydrateEvents(events); err != nil {
+		return nil, err
+	}
+	return events, nil
 }
 
 // RespondToEvent creates or updates a user's RSVP to an event

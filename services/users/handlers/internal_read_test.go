@@ -33,7 +33,7 @@ func TestInternalUsersReadContract(t *testing.T) {
 	`); err != nil {
 		t.Fatal(err)
 	}
-	handler := NewInternalReadHandlers(services.NewUserService(database, nil))
+	handler := NewInternalReadHandlers(services.NewUserService(database, nil, nil))
 	protected := serviceauth.Authenticate(token, handler)
 
 	unauthorized := httptest.NewRecorder()

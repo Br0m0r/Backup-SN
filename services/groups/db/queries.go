@@ -10,16 +10,17 @@ import (
 
 // CreateGroup creates a new group
 func CreateGroup(db *sql.DB, name string, description, imageURL *string, creatorID int) (*models.Group, error) {
-	query := `
-		INSERT INTO groups (name, description, image_url, creator_id)
-		VALUES (?, ?, ?, ?)
-	`
-	result, err := db.Exec(query, name, description, imageURL, creatorID)
+	transaction, err := db.Begin()
 	if err != nil {
 		return nil, err
 	}
-
-	id, err := result.LastInsertId()
+	defer transaction.Rollback()
+	var id int
+	err = transaction.QueryRow(`
+		INSERT INTO groups (name, description, image_url, creator_id)
+		VALUES ($1, $2, $3, $4)
+		RETURNING id
+	`, name, description, imageURL, creatorID).Scan(&id)
 	if err != nil {
 		return nil, err
 	}
@@ -27,14 +28,16 @@ func CreateGroup(db *sql.DB, name string, description, imageURL *string, creator
 	// Add creator as admin member
 	memberQuery := `
 		INSERT INTO group_members (group_id, user_id, role, status)
-		VALUES (?, ?, 'admin', 'accepted')
+		VALUES ($1, $2, 'admin', 'accepted')
 	`
-	_, err = db.Exec(memberQuery, id, creatorID)
+	_, err = transaction.Exec(memberQuery, id, creatorID)
 	if err != nil {
 		return nil, err
 	}
-
-	return GetGroupByID(db, int(id))
+	if err := transaction.Commit(); err != nil {
+		return nil, err
+	}
+	return GetGroupByID(db, id)
 }
 
 // GetGroupByID retrieves a group by ID
@@ -42,7 +45,7 @@ func GetGroupByID(db *sql.DB, groupID int) (*models.Group, error) {
 	query := `
 		SELECT id, name, description, image_url, creator_id, created_at
 		FROM groups
-		WHERE id = ?
+		WHERE id = $1
 	`
 	group := &models.Group{}
 	err := db.QueryRow(query, groupID).Scan(
@@ -67,16 +70,16 @@ func GetGroupWithDetails(db *sql.DB, groupID, userID int) (*models.GroupWithDeta
 			COUNT(DISTINCT gm.id) as member_count,
 			CASE WHEN EXISTS(
 				SELECT 1 FROM group_members 
-				WHERE group_id = g.id AND user_id = ? AND status = 'accepted'
+				WHERE group_id = g.id AND user_id = $1 AND status = 'accepted'
 			) THEN 1 ELSE 0 END as is_member,
-			CASE WHEN g.creator_id = ? THEN 1 ELSE 0 END as is_creator,
+			CASE WHEN g.creator_id = $2 THEN 1 ELSE 0 END as is_creator,
 			CASE WHEN EXISTS(
 				SELECT 1 FROM group_members 
-				WHERE group_id = g.id AND user_id = ? AND status = 'pending'
+				WHERE group_id = g.id AND user_id = $3 AND status = 'pending'
 			) THEN 1 ELSE 0 END as has_pending_request
 		FROM groups g
 		LEFT JOIN group_members gm ON g.id = gm.group_id AND gm.status = 'accepted'
-		WHERE g.id = ?
+		WHERE g.id = $4
 		GROUP BY g.id
 	`
 
@@ -123,21 +126,21 @@ func queryGroups(db *sql.DB, userID int, searchQuery string) ([]*models.GroupWit
 			COUNT(DISTINCT gm.id) as member_count,
 			CASE WHEN EXISTS(
 				SELECT 1 FROM group_members 
-				WHERE group_id = g.id AND user_id = ? AND status = 'accepted'
+				WHERE group_id = g.id AND user_id = $1 AND status = 'accepted'
 			) THEN 1 ELSE 0 END as is_member,
-			CASE WHEN g.creator_id = ? THEN 1 ELSE 0 END as is_creator,
+			CASE WHEN g.creator_id = $2 THEN 1 ELSE 0 END as is_creator,
 			CASE WHEN EXISTS(
 				SELECT 1 FROM group_members 
-				WHERE group_id = g.id AND user_id = ? AND status = 'pending'
+				WHERE group_id = g.id AND user_id = $3 AND status = 'pending'
 			) THEN 1 ELSE 0 END as has_pending_request
 		FROM groups g
 		LEFT JOIN group_members gm ON g.id = gm.group_id AND gm.status = 'accepted'
-		WHERE (? = '' OR instr(lower(g.name), lower(?)) > 0 OR instr(lower(COALESCE(g.description, '')), lower(?)) > 0)
+		WHERE ($4 = '' OR lower(g.name) LIKE '%' || lower($4) || '%' OR lower(COALESCE(g.description, '')) LIKE '%' || lower($4) || '%')
 		GROUP BY g.id
 		ORDER BY g.created_at DESC
 	`
 
-	rows, err := db.Query(query, userID, userID, userID, searchQuery, searchQuery, searchQuery)
+	rows, err := db.Query(query, userID, userID, userID, searchQuery)
 	if err != nil {
 		return nil, err
 	}
@@ -178,10 +181,10 @@ func queryGroups(db *sql.DB, userID int, searchQuery string) ([]*models.GroupWit
 func UpdateGroup(db *sql.DB, groupID int, name, description, imageURL *string) error {
 	query := `
 		UPDATE groups
-		SET name = COALESCE(?, name),
-			description = COALESCE(?, description),
-			image_url = COALESCE(?, image_url)
-		WHERE id = ?
+		SET name = COALESCE($1, name),
+			description = COALESCE($2, description),
+			image_url = COALESCE($3, image_url)
+		WHERE id = $4
 	`
 	_, err := db.Exec(query, name, description, imageURL, groupID)
 	return err
@@ -189,14 +192,14 @@ func UpdateGroup(db *sql.DB, groupID int, name, description, imageURL *string) e
 
 // UpdateGroupImage updates only the group's image URL
 func UpdateGroupImage(db *sql.DB, groupID int, imageURL string) error {
-	query := `UPDATE groups SET image_url = ? WHERE id = ?`
+	query := `UPDATE groups SET image_url = $1 WHERE id = $2`
 	_, err := db.Exec(query, imageURL, groupID)
 	return err
 }
 
 // IsGroupCreator checks if user is the group creator
 func IsGroupCreator(db *sql.DB, groupID, userID int) (bool, error) {
-	query := `SELECT creator_id FROM groups WHERE id = ?`
+	query := `SELECT creator_id FROM groups WHERE id = $1`
 	var creatorID int
 	err := db.QueryRow(query, groupID).Scan(&creatorID)
 	if err != nil {
@@ -209,7 +212,7 @@ func IsGroupCreator(db *sql.DB, groupID, userID int) (bool, error) {
 func IsGroupMember(db *sql.DB, groupID, userID int) (bool, error) {
 	query := `
 		SELECT COUNT(*) FROM group_members
-		WHERE group_id = ? AND user_id = ? AND status = 'accepted'
+		WHERE group_id = $1 AND user_id = $2 AND status = 'accepted'
 	`
 	var count int
 	err := db.QueryRow(query, groupID, userID).Scan(&count)
@@ -225,7 +228,7 @@ func GetAcceptedGroupMemberIDs(db *sql.DB, groupID int) ([]int, error) {
 	rows, err := db.Query(`
 		SELECT user_id
 		FROM group_members
-		WHERE group_id = ? AND status = 'accepted'
+		WHERE group_id = $1 AND status = 'accepted'
 		ORDER BY user_id
 	`, groupID)
 	if err != nil {
@@ -247,30 +250,46 @@ func GetAcceptedGroupMemberIDs(db *sql.DB, groupID int) ([]int, error) {
 	return memberIDs, nil
 }
 
+// GetGroupParticipantIDs returns every identity with an existing membership
+// record, including pending and invited users.
+func GetGroupParticipantIDs(db *sql.DB, groupID int) ([]int, error) {
+	rows, err := db.Query(`
+		SELECT user_id FROM group_members
+		WHERE group_id = $1
+		ORDER BY user_id
+	`, groupID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	userIDs := make([]int, 0)
+	for rows.Next() {
+		var userID int
+		if err := rows.Scan(&userID); err != nil {
+			return nil, err
+		}
+		userIDs = append(userIDs, userID)
+	}
+	return userIDs, rows.Err()
+}
+
 // InviteMember invites a user to join a group (auto-accepts them)
 func InviteMember(db *sql.DB, groupID, userID int) (int, error) {
 	query := `
 		INSERT INTO group_members (group_id, user_id, role, status)
-		VALUES (?, ?, 'member', 'invited')
+		VALUES ($1, $2, 'member', 'invited')
+		RETURNING id
 	`
-	result, err := db.Exec(query, groupID, userID)
-	if err != nil {
-		return 0, err
-	}
-
-	invitationID, err := result.LastInsertId()
-	if err != nil {
-		return 0, err
-	}
-
-	return int(invitationID), nil
+	var invitationID int
+	err := db.QueryRow(query, groupID, userID).Scan(&invitationID)
+	return invitationID, err
 }
 
 // RequestToJoinGroup creates a pending membership request
 func RequestToJoinGroup(db *sql.DB, groupID, userID int) error {
 	query := `
 		INSERT INTO group_members (group_id, user_id, role, status)
-		VALUES (?, ?, 'member', 'pending')
+		VALUES ($1, $2, 'member', 'pending')
 	`
 	_, err := db.Exec(query, groupID, userID)
 	return err
@@ -279,13 +298,10 @@ func RequestToJoinGroup(db *sql.DB, groupID, userID int) error {
 // GetPendingRequests gets all pending join requests for a group with user details
 func GetPendingRequests(db *sql.DB, groupID int) ([]*models.GroupMember, error) {
 	query := `
-		SELECT 
-			gm.id, gm.group_id, gm.user_id, gm.role, gm.status, gm.joined_at,
-			u.username, u.first_name, u.last_name, u.nickname
-		FROM group_members gm
-		JOIN users u ON gm.user_id = u.id
-		WHERE gm.group_id = ? AND gm.status = 'pending'
-		ORDER BY gm.joined_at DESC
+		SELECT id, group_id, user_id, role, status, joined_at
+		FROM group_members
+		WHERE group_id = $1 AND status = 'pending'
+		ORDER BY joined_at DESC
 	`
 
 	rows, err := db.Query(query, groupID)
@@ -297,7 +313,6 @@ func GetPendingRequests(db *sql.DB, groupID int) ([]*models.GroupMember, error) 
 	var members []*models.GroupMember
 	for rows.Next() {
 		member := &models.GroupMember{}
-		var firstName, lastName, nickname *string
 		err := rows.Scan(
 			&member.ID,
 			&member.GroupID,
@@ -305,18 +320,10 @@ func GetPendingRequests(db *sql.DB, groupID int) ([]*models.GroupMember, error) 
 			&member.Role,
 			&member.Status,
 			&member.JoinedAt,
-			&member.Username,
-			&firstName,
-			&lastName,
-			&nickname,
 		)
 		if err != nil {
 			return nil, err
 		}
-		// Assign optional fields
-		member.FirstName = firstName
-		member.LastName = lastName
-		member.Nickname = nickname
 		members = append(members, member)
 	}
 
@@ -329,12 +336,12 @@ func RespondToJoinRequest(db *sql.DB, memberID int, accept bool) error {
 		query := `
 			UPDATE group_members
 			SET status = 'accepted'
-			WHERE id = ?
+			WHERE id = $1
 		`
 		_, err := db.Exec(query, memberID)
 		return err
 	} else {
-		query := `DELETE FROM group_members WHERE id = ?`
+		query := `DELETE FROM group_members WHERE id = $1`
 		_, err := db.Exec(query, memberID)
 		return err
 	}
@@ -348,7 +355,7 @@ func GetUserInvitations(db *sql.DB, userID int) ([]*models.GroupInvitation, erro
 			g.name, g.description, g.image_url
 		FROM group_members gm
 		JOIN groups g ON gm.group_id = g.id
-		WHERE gm.user_id = ? AND gm.status = 'invited'
+		WHERE gm.user_id = $1 AND gm.status = 'invited'
 		ORDER BY gm.joined_at DESC
 	`
 
@@ -386,7 +393,7 @@ func GetUserInvitations(db *sql.DB, userID int) ([]*models.GroupInvitation, erro
 func RespondToInvitation(db *sql.DB, invitationID, userID int, accept bool) error {
 	// First verify the invitation belongs to this user
 	var count int
-	checkQuery := `SELECT COUNT(*) FROM group_members WHERE id = ? AND user_id = ? AND status = 'invited'`
+	checkQuery := `SELECT COUNT(*) FROM group_members WHERE id = $1 AND user_id = $2 AND status = 'invited'`
 	err := db.QueryRow(checkQuery, invitationID, userID).Scan(&count)
 	if err != nil {
 		return err
@@ -399,12 +406,12 @@ func RespondToInvitation(db *sql.DB, invitationID, userID int, accept bool) erro
 		query := `
 			UPDATE group_members
 			SET status = 'accepted'
-			WHERE id = ?
+			WHERE id = $1
 		`
 		_, err := db.Exec(query, invitationID)
 		return err
 	} else {
-		query := `DELETE FROM group_members WHERE id = ?`
+		query := `DELETE FROM group_members WHERE id = $1`
 		_, err := db.Exec(query, invitationID)
 		return err
 	}
@@ -414,7 +421,7 @@ func RespondToInvitation(db *sql.DB, invitationID, userID int, accept bool) erro
 func RespondToInvitationByGroupID(db *sql.DB, groupID, userID int, accept bool) error {
 	// Find the invitation ID first
 	var invitationID int
-	query := `SELECT id FROM group_members WHERE group_id = ? AND user_id = ? AND status = 'invited'`
+	query := `SELECT id FROM group_members WHERE group_id = $1 AND user_id = $2 AND status = 'invited'`
 	err := db.QueryRow(query, groupID, userID).Scan(&invitationID)
 	if err != nil {
 		if err == sql.ErrNoRows {
@@ -430,13 +437,10 @@ func RespondToInvitationByGroupID(db *sql.DB, groupID, userID int, accept bool) 
 // GetGroupMembers retrieves all accepted members of a group with user details
 func GetGroupMembers(db *sql.DB, groupID int) ([]*models.GroupMember, error) {
 	query := `
-		SELECT 
-			gm.id, gm.group_id, gm.user_id, gm.role, gm.status, gm.joined_at,
-			u.username, u.first_name, u.last_name, u.nickname
-		FROM group_members gm
-		JOIN users u ON gm.user_id = u.id
-		WHERE gm.group_id = ? AND gm.status = 'accepted'
-		ORDER BY gm.joined_at ASC
+		SELECT id, group_id, user_id, role, status, joined_at
+		FROM group_members
+		WHERE group_id = $1 AND status = 'accepted'
+		ORDER BY joined_at ASC
 	`
 
 	rows, err := db.Query(query, groupID)
@@ -448,7 +452,6 @@ func GetGroupMembers(db *sql.DB, groupID int) ([]*models.GroupMember, error) {
 	var members []*models.GroupMember
 	for rows.Next() {
 		member := &models.GroupMember{}
-		var firstName, lastName, nickname *string
 		err := rows.Scan(
 			&member.ID,
 			&member.GroupID,
@@ -456,18 +459,10 @@ func GetGroupMembers(db *sql.DB, groupID int) ([]*models.GroupMember, error) {
 			&member.Role,
 			&member.Status,
 			&member.JoinedAt,
-			&member.Username,
-			&firstName,
-			&lastName,
-			&nickname,
 		)
 		if err != nil {
 			return nil, err
 		}
-		// Assign optional fields
-		member.FirstName = firstName
-		member.LastName = lastName
-		member.Nickname = nickname
 		members = append(members, member)
 	}
 
@@ -478,19 +473,15 @@ func GetGroupMembers(db *sql.DB, groupID int) ([]*models.GroupMember, error) {
 func CreateEvent(db *sql.DB, groupID, creatorID int, title string, description *string, eventTime time.Time) (*models.Event, error) {
 	query := `
 		INSERT INTO events (group_id, creator_id, title, description, event_time)
-		VALUES (?, ?, ?, ?, ?)
+		VALUES ($1, $2, $3, $4, $5)
+		RETURNING id
 	`
-	result, err := db.Exec(query, groupID, creatorID, title, description, eventTime)
+	var id int
+	err := db.QueryRow(query, groupID, creatorID, title, description, eventTime).Scan(&id)
 	if err != nil {
 		return nil, err
 	}
-
-	id, err := result.LastInsertId()
-	if err != nil {
-		return nil, err
-	}
-
-	return GetEventByID(db, int(id))
+	return GetEventByID(db, id)
 }
 
 // GetEventByID retrieves an event by ID
@@ -498,7 +489,7 @@ func GetEventByID(db *sql.DB, eventID int) (*models.Event, error) {
 	query := `
 		SELECT id, group_id, creator_id, title, description, event_time, created_at
 		FROM events
-		WHERE id = ?
+		WHERE id = $1
 	`
 	event := &models.Event{}
 	err := db.QueryRow(query, eventID).Scan(
@@ -524,10 +515,10 @@ func GetEventWithResponses(db *sql.DB, eventID, userID int) (*models.EventWithRe
 			COUNT(CASE WHEN er.response = 'going' THEN 1 END) as going_count,
 			COUNT(CASE WHEN er.response = 'not_going' THEN 1 END) as not_going_count,
 			COUNT(CASE WHEN er.response = 'interested' THEN 1 END) as interested_count,
-			(SELECT response FROM event_responses WHERE event_id = e.id AND user_id = ?) as user_response
+			(SELECT response FROM event_responses WHERE event_id = e.id AND user_id = $1) as user_response
 		FROM events e
 		LEFT JOIN event_responses er ON e.id = er.event_id
-		WHERE e.id = ?
+		WHERE e.id = $2
 		GROUP BY e.id
 	`
 
@@ -563,15 +554,13 @@ func GetGroupEvents(db *sql.DB, groupID, userID int) ([]*models.EventWithRespons
 	query := `
 		SELECT 
 			e.id, e.group_id, e.creator_id, e.title, e.description, e.event_time, e.created_at,
-			u.first_name, u.last_name,
 			COUNT(CASE WHEN er.response = 'going' THEN 1 END) as going_count,
 			COUNT(CASE WHEN er.response = 'not_going' THEN 1 END) as not_going_count,
 			COUNT(CASE WHEN er.response = 'interested' THEN 1 END) as interested_count,
-			(SELECT response FROM event_responses WHERE event_id = e.id AND user_id = ?) as user_response
+			(SELECT response FROM event_responses WHERE event_id = e.id AND user_id = $1) as user_response
 		FROM events e
-		LEFT JOIN users u ON e.creator_id = u.id
 		LEFT JOIN event_responses er ON e.id = er.event_id
-		WHERE e.group_id = ?
+		WHERE e.group_id = $2
 		GROUP BY e.id
 		ORDER BY e.event_time ASC
 	`
@@ -586,7 +575,6 @@ func GetGroupEvents(db *sql.DB, groupID, userID int) ([]*models.EventWithRespons
 	for rows.Next() {
 		event := &models.EventWithResponses{}
 		var userResponse sql.NullString
-		var firstName, lastName sql.NullString
 
 		err := rows.Scan(
 			&event.ID,
@@ -596,8 +584,6 @@ func GetGroupEvents(db *sql.DB, groupID, userID int) ([]*models.EventWithRespons
 			&event.Description,
 			&event.EventTime,
 			&event.CreatedAt,
-			&firstName,
-			&lastName,
 			&event.GoingCount,
 			&event.NotGoingCount,
 			&event.InterestedCount,
@@ -611,15 +597,6 @@ func GetGroupEvents(db *sql.DB, groupID, userID int) ([]*models.EventWithRespons
 			event.UserResponse = userResponse.String
 		}
 
-		// Construct creator name from first and last name
-		if firstName.Valid && lastName.Valid {
-			event.CreatorName = firstName.String + " " + lastName.String
-		} else if firstName.Valid {
-			event.CreatorName = firstName.String
-		} else {
-			event.CreatorName = "Unknown"
-		}
-
 		events = append(events, event)
 	}
 
@@ -630,29 +607,18 @@ func GetGroupEvents(db *sql.DB, groupID, userID int) ([]*models.EventWithRespons
 func RespondToEvent(db *sql.DB, eventID, userID int, response string) error {
 	query := `
 		INSERT INTO event_responses (event_id, user_id, response)
-		VALUES (?, ?, ?)
+		VALUES ($1, $2, $3)
 		ON CONFLICT(event_id, user_id) 
-		DO UPDATE SET response = ?, created_at = datetime('now')
+		DO UPDATE SET response = EXCLUDED.response, created_at = CURRENT_TIMESTAMP
 	`
-	_, err := db.Exec(query, eventID, userID, response, response)
+	_, err := db.Exec(query, eventID, userID, response)
 	return err
-}
-
-// GetUsernameByID retrieves username from users table
-func GetUsernameByID(db *sql.DB, userID int) (string, error) {
-	var username string
-	query := `SELECT username FROM users WHERE id = ?`
-	err := db.QueryRow(query, userID).Scan(&username)
-	if err != nil {
-		return "", err
-	}
-	return username, nil
 }
 
 func RemoveGroupMember(db *sql.DB, groupID, userID int) error {
 	query := `
 		DELETE FROM group_members
-		WHERE group_id = ? AND user_id = ?
+		WHERE group_id = $1 AND user_id = $2
 	`
 	_, err := db.Exec(query, groupID, userID)
 	return err

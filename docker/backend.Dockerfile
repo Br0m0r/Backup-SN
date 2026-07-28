@@ -72,6 +72,17 @@ RUN case "${SERVICE}" in \
         -trimpath \
         -ldflags="-s -w" \
         -o /out/copy-post-media ./services/posts/cmd/copy-media; \
+    elif [ "${SERVICE}" = "groups" ]; then \
+      CGO_ENABLED=1 go build \
+        -tags sqlite_omit_load_extension \
+        -trimpath \
+        -ldflags="-s -w" \
+        -o /out/migrate ./services/groups/cmd/migrate && \
+      CGO_ENABLED=1 go build \
+        -tags sqlite_omit_load_extension \
+        -trimpath \
+        -ldflags="-s -w" \
+        -o /out/copy-sqlite ./services/groups/cmd/copy-sqlite; \
     fi
 
 FROM alpine:${ALPINE_RUNTIME_VERSION}

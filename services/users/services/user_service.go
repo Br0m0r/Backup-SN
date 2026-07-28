@@ -7,6 +7,7 @@ import (
 
 	"social-network/services/common/notify"
 	"social-network/services/users/db"
+	"social-network/services/users/groupsclient"
 	"social-network/services/users/models"
 	"social-network/services/users/postsclient"
 	"social-network/services/users/utils"
@@ -16,13 +17,15 @@ import (
 type UserService struct {
 	database *sql.DB
 	posts    postsclient.Reader
+	groups   groupsclient.Participants
 }
 
 // NewUserService creates a new user service instance
-func NewUserService(database *sql.DB, posts postsclient.Reader) *UserService {
+func NewUserService(database *sql.DB, posts postsclient.Reader, groups groupsclient.Participants) *UserService {
 	return &UserService{
 		database: database,
 		posts:    posts,
+		groups:   groups,
 	}
 }
 
@@ -155,13 +158,18 @@ func (s *UserService) SearchUsers(searchTerm string, currentUserID int) ([]*mode
 	return db.SearchUsers(s.database, searchTerm, currentUserID)
 }
 
-// SearchUsersForGroup searches for users to invite to a group (excludes only current group members)
+// SearchUsersForGroup searches for users to invite after consulting the
+// authoritative Groups participant contract.
 func (s *UserService) SearchUsersForGroup(searchTerm string, currentUserID int, groupID int) ([]*models.User, error) {
 	if searchTerm == "" {
 		return nil, errors.New("search term cannot be empty")
 	}
 
-	return db.SearchUsersForGroup(s.database, searchTerm, currentUserID, groupID)
+	excludedUserIDs, err := s.groups.ParticipantIDs(context.Background(), groupID)
+	if err != nil {
+		return nil, err
+	}
+	return db.SearchUsersForGroup(s.database, searchTerm, currentUserID, excludedUserIDs)
 }
 
 // GetFollowStatus checks the follow relationship status between two users

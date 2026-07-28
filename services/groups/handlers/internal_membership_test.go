@@ -37,7 +37,7 @@ func TestInternalMembershipContractIsAuthenticatedAndAcceptedOnly(t *testing.T) 
 		t.Fatalf("create fixtures: %v", err)
 	}
 
-	handler := NewInternalMembershipHandlers(services.NewGroupService(database))
+	handler := NewInternalMembershipHandlers(services.NewGroupService(database, nil))
 	protected := serviceauth.Authenticate(token, http.HandlerFunc(handler.GetMembership))
 
 	unauthorized := httptest.NewRecorder()
@@ -76,5 +76,21 @@ func TestInternalMembershipContractIsAuthenticatedAndAcceptedOnly(t *testing.T) 
 	}
 	if !reflect.DeepEqual(listBody.Data.MemberIDs, []int{42, 44}) {
 		t.Fatalf("member IDs = %v", listBody.Data.MemberIDs)
+	}
+
+	participantsRequest := httptest.NewRequest(http.MethodGet, "/internal/v1/groups/7/participants", nil)
+	participantsRequest.Header.Set(serviceauth.HeaderName, token)
+	participantsResponse := httptest.NewRecorder()
+	protected.ServeHTTP(participantsResponse, participantsRequest)
+	var participantsBody struct {
+		Data struct {
+			ParticipantIDs []int `json:"participant_ids"`
+		} `json:"data"`
+	}
+	if err := json.Unmarshal(participantsResponse.Body.Bytes(), &participantsBody); err != nil {
+		t.Fatalf("decode participant list: %v", err)
+	}
+	if !reflect.DeepEqual(participantsBody.Data.ParticipantIDs, []int{42, 43, 44}) {
+		t.Fatalf("participant IDs = %v", participantsBody.Data.ParticipantIDs)
 	}
 }

@@ -2,38 +2,35 @@ package main
 
 import (
 	"context"
-	"database/sql"
 	"log"
 	"net/http"
 	"os"
 	"strings"
 	"time"
 
-	_ "github.com/mattn/go-sqlite3"
-
 	"social-network/services/common/authcache"
 	"social-network/services/common/httpserver"
 	"social-network/services/common/notify"
 	"social-network/services/common/objectstore"
+	"social-network/services/common/postgres"
 	"social-network/services/common/serviceauth"
 	"social-network/services/groups/handlers"
 	"social-network/services/groups/middleware"
 	"social-network/services/groups/services"
+	"social-network/services/groups/usersclient"
 )
 
 func main() {
-	// Get database path from environment or use default
-	dbPath := os.Getenv("DATABASE_PATH")
-	if dbPath == "" {
-		dbPath = "/app/social_network.db"
-	}
-
-	// Open database connection
-	db, err := OpenDB(dbPath)
+	databaseConfig, err := postgres.FromEnvironment()
 	if err != nil {
-		log.Fatalf("Failed to connect to database: %v", err)
+		log.Fatalf("Invalid Groups database configuration: %v", err)
+	}
+	db, err := postgres.Open(context.Background(), databaseConfig)
+	if err != nil {
+		log.Fatalf("Failed to connect to Groups database: %v", err)
 	}
 	defer db.Close()
+	log.Printf("Connected to %s", postgres.Description(databaseConfig.URL))
 	objectStoreConfig, err := objectstore.FromEnvironment()
 	if err != nil {
 		log.Fatalf("Invalid object storage configuration: %v", err)
@@ -44,13 +41,6 @@ func main() {
 	if err != nil {
 		log.Fatalf("Failed to connect to object storage: %v", err)
 	}
-
-	// Initialize services
-	groupService := services.NewGroupService(db)
-
-	// Initialize handlers
-	groupHandlers := handlers.NewGroupHandlers(groupService, mediaStore)
-	internalMembershipHandlers := handlers.NewInternalMembershipHandlers(groupService)
 
 	// Get auth service URL from environment
 	authServiceURL := os.Getenv("AUTH_SERVICE_URL")
@@ -64,6 +54,15 @@ func main() {
 	if err != nil {
 		log.Fatalf("Invalid internal service authentication configuration: %v", err)
 	}
+	userDirectory, err := usersclient.FromEnvironment(internalServiceToken)
+	if err != nil {
+		log.Fatalf("Invalid Users client configuration: %v", err)
+	}
+
+	// Initialize services and handlers.
+	groupService := services.NewGroupService(db, userDirectory)
+	groupHandlers := handlers.NewGroupHandlers(groupService, mediaStore)
+	internalMembershipHandlers := handlers.NewInternalMembershipHandlers(groupService)
 
 	// Apply middleware
 	authMiddleware := authcache.AuthMiddleware(authServiceURL)
@@ -74,7 +73,7 @@ func main() {
 	mux := http.NewServeMux()
 
 	// Health check (no auth required)
-	mux.HandleFunc("/health", handlers.HealthHandler)
+	mux.HandleFunc("/health", groupHandlers.HealthCheck)
 	mux.Handle(
 		"/internal/v1/groups/",
 		serviceauth.Authenticate(internalServiceToken, http.HandlerFunc(internalMembershipHandlers.GetMembership)),
@@ -182,32 +181,4 @@ func main() {
 	if err := httpserver.Run(httpserver.New(address, handler)); err != nil {
 		log.Fatalf("Group Service stopped with error: %v", err)
 	}
-}
-
-// OpenDB opens a connection to the SQLite database
-func OpenDB(dbPath string) (*sql.DB, error) {
-	db, err := sql.Open("sqlite3", dbPath)
-	if err != nil {
-		return nil, err
-	}
-
-	// Enable foreign key constraints
-	_, err = db.Exec("PRAGMA foreign_keys = ON;")
-	if err != nil {
-		db.Close()
-		return nil, err
-	}
-
-	// Test the connection
-	if err := db.Ping(); err != nil {
-		db.Close()
-		return nil, err
-	}
-
-	// Set connection pool settings
-	db.SetMaxOpenConns(25)
-	db.SetMaxIdleConns(5)
-
-	log.Printf("Connected to database: %s", dbPath)
-	return db, nil
 }

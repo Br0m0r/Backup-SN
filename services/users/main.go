@@ -16,6 +16,7 @@ import (
 	"social-network/services/common/notify"
 	"social-network/services/common/objectstore"
 	"social-network/services/common/serviceauth"
+	"social-network/services/users/groupsclient"
 	"social-network/services/users/handlers"
 	"social-network/services/users/middleware"
 	"social-network/services/users/postsclient"
@@ -62,9 +63,13 @@ func main() {
 	if err != nil {
 		log.Fatalf("Invalid Posts client configuration: %v", err)
 	}
+	groupParticipants, err := groupsclient.FromEnvironment(internalServiceToken)
+	if err != nil {
+		log.Fatalf("Invalid Groups client configuration: %v", err)
+	}
 
 	// Initialize services
-	userService := services.NewUserService(db, postReader)
+	userService := services.NewUserService(db, postReader, groupParticipants)
 
 	// Initialize handlers
 	userHandlers := handlers.NewUserHandlers(userService)

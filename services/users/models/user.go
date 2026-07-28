@@ -63,6 +63,7 @@ type ProfileSummary struct {
 	FirstName  *string `json:"first_name,omitempty"`
 	LastName   *string `json:"last_name,omitempty"`
 	AvatarPath *string `json:"avatar_path,omitempty"`
+	Nickname   *string `json:"nickname,omitempty"`
 }
 
 // FollowRequest represents a follow action request

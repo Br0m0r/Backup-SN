@@ -32,9 +32,13 @@ const maxGroupImageUploadSize = 5 << 20 // 5 MiB
 
 var errInvalidGroupImage = errors.New("invalid group image")
 
-// HealthHandler handles GET /health
-func HealthHandler(w http.ResponseWriter, r *http.Request) {
-	utils.SendJSON(w, http.StatusOK, map[string]string{"status": "healthy"})
+// HealthCheck reports whether the service-owned database is reachable.
+func (h *GroupHandlers) HealthCheck(w http.ResponseWriter, r *http.Request) {
+	if err := h.service.Ping(r.Context()); err != nil {
+		utils.SendError(w, http.StatusServiceUnavailable, "Database unavailable")
+		return
+	}
+	utils.SendJSON(w, http.StatusOK, map[string]string{"status": "healthy", "service": "group-service"})
 }
 
 // CreateGroup handles POST /groups

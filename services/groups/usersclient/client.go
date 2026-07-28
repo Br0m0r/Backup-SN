@@ -27,8 +27,6 @@ type Profile struct {
 
 type Directory interface {
 	Profiles(context.Context, []int) ([]Profile, error)
-	SearchProfiles(context.Context, string) ([]Profile, error)
-	FollowingIDs(context.Context, int) ([]int, error)
 }
 
 type Client struct {
@@ -62,69 +60,33 @@ func (c *Client) Profiles(ctx context.Context, userIDs []int) ([]Profile, error)
 	}
 	values := make([]string, len(userIDs))
 	for index, userID := range userIDs {
-		if userID <= 0 {
-			return nil, errors.New("user IDs must be positive")
-		}
 		values[index] = strconv.Itoa(userID)
 	}
-	var payload struct {
-		Profiles []Profile `json:"profiles"`
-	}
-	path := "/internal/v1/users/profiles?ids=" + url.QueryEscape(strings.Join(values, ","))
-	if err := c.get(ctx, path, &payload); err != nil {
-		return nil, err
-	}
-	return payload.Profiles, nil
-}
-
-func (c *Client) SearchProfiles(ctx context.Context, query string) ([]Profile, error) {
-	var payload struct {
-		Profiles []Profile `json:"profiles"`
-	}
-	path := "/internal/v1/users/profiles?q=" + url.QueryEscape(strings.TrimSpace(query))
-	if err := c.get(ctx, path, &payload); err != nil {
-		return nil, err
-	}
-	return payload.Profiles, nil
-}
-
-func (c *Client) FollowingIDs(ctx context.Context, userID int) ([]int, error) {
-	if userID <= 0 {
-		return nil, errors.New("user ID must be positive")
-	}
-	var payload struct {
-		FollowingIDs []int `json:"following_ids"`
-	}
-	path := "/internal/v1/users/" + strconv.Itoa(userID) + "/following"
-	if err := c.get(ctx, path, &payload); err != nil {
-		return nil, err
-	}
-	return payload.FollowingIDs, nil
-}
-
-func (c *Client) get(ctx context.Context, path string, destination any) error {
-	request, err := http.NewRequestWithContext(ctx, http.MethodGet, c.baseURL+path, nil)
+	request, err := http.NewRequestWithContext(ctx, http.MethodGet,
+		c.baseURL+"/internal/v1/users/profiles?ids="+url.QueryEscape(strings.Join(values, ",")), nil)
 	if err != nil {
-		return err
+		return nil, err
 	}
 	request.Header.Set(serviceauth.HeaderName, c.token)
 	response, err := c.httpClient.Do(request)
 	if err != nil {
-		return fmt.Errorf("call Users read contract: %w", err)
+		return nil, fmt.Errorf("call Users profile contract: %w", err)
 	}
 	defer response.Body.Close()
 	if response.StatusCode != http.StatusOK {
-		return fmt.Errorf("Users read contract returned status %d", response.StatusCode)
+		return nil, fmt.Errorf("Users profile contract returned status %d", response.StatusCode)
 	}
 	var envelope struct {
-		Success bool            `json:"success"`
-		Data    json.RawMessage `json:"data"`
+		Success bool `json:"success"`
+		Data    struct {
+			Profiles []Profile `json:"profiles"`
+		} `json:"data"`
 	}
 	if err := json.NewDecoder(io.LimitReader(response.Body, 1<<20)).Decode(&envelope); err != nil {
-		return err
+		return nil, err
 	}
 	if !envelope.Success {
-		return errors.New("Users read contract returned an unsuccessful response")
+		return nil, errors.New("Users profile contract returned an unsuccessful response")
 	}
-	return json.Unmarshal(envelope.Data, destination)
+	return envelope.Data.Profiles, nil
 }

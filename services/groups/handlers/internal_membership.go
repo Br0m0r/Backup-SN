@@ -26,13 +26,26 @@ func (h *InternalMembershipHandlers) GetMembership(w http.ResponseWriter, r *htt
 	}
 
 	parts := strings.Split(strings.TrimPrefix(r.URL.Path, "/internal/v1/groups/"), "/")
-	if len(parts) < 2 || len(parts) > 3 || parts[1] != "members" {
+	if len(parts) < 2 || len(parts) > 3 ||
+		(parts[1] != "members" && parts[1] != "participants") ||
+		(parts[1] == "participants" && len(parts) != 2) {
 		utils.SendError(w, http.StatusNotFound, "Not found")
 		return
 	}
 	groupID, err := strconv.Atoi(parts[0])
 	if err != nil || groupID <= 0 {
 		utils.SendError(w, http.StatusBadRequest, "Invalid group ID")
+		return
+	}
+
+	if parts[1] == "participants" {
+		participantIDs, err := h.service.GetParticipantIDs(groupID)
+		if err != nil {
+			log.Printf("Failed to list group participants: %v", err)
+			utils.SendError(w, http.StatusInternalServerError, "Failed to retrieve group participants")
+			return
+		}
+		utils.SendJSON(w, http.StatusOK, map[string]any{"participant_ids": participantIDs})
 		return
 	}
 

@@ -317,7 +317,8 @@ Exit condition: the existing shared-database system can be deployed safely as an
   - [x] Extract Chat message state into its own PostgreSQL database while retaining temporary identity/follow reads.
   - [x] Extract Posts into its own PostgreSQL database after replacing Users/Follow joins with authenticated contracts.
   - [x] Make clean interim environments deterministic with a disposable SQLite volume and one-shot schema migration job.
-  - [ ] Extract Groups, Users, and Auth in dependency order.
+  - [x] Extract Groups into its own PostgreSQL database after replacing cross-domain reads with authenticated contracts.
+  - [ ] Extract Users and Auth in dependency order.
 - [ ] Establish backups and verify restoration.
 
 Exit condition: application containers are disposable and major services can run multiple replicas.
@@ -339,7 +340,7 @@ Exit condition: core writes do not fail merely because Notification service is u
   - [x] Replace Chat's direct `group_members` read with a versioned, service-authenticated Groups contract.
   - [x] Move direct and group messages into Chat-owned PostgreSQL with migrations and a verified copy command.
 - [x] Split Posts and its privacy/read models.
-- [ ] Split Groups, membership, invitations, and events.
+- [x] Split Groups, membership, invitations, and events.
 - [ ] Split Users/profile/follow data from Auth credentials and sessions.
 - [ ] Remove all remaining cross-service database access and foreign keys.
 
@@ -368,7 +369,7 @@ Do not begin by splitting all databases simultaneously. The first useful milesto
 
 After that foundation works, introduce the broker and separate one domain at a time. This provides deployable value early and keeps data migration risk manageable.
 
-Implementation status: Notifications, Chat message state, and Posts have completed data extraction. See their PostgreSQL migration runbooks for cutover procedures. Posts/Users now exchange versioned authenticated reads rather than accessing each other's tables. Redis shares Gateway rate limits, Chat presence, and Chat/Notification WebSocket fan-out across replicas; see [Redis Realtime State](redis-realtime-state.md). Chat still reads identity/follow data from shared SQLite, and Groups/Auth/Users remain there until their cross-domain reads are replaced. For clean interim environments, Compose owns that SQLite state in a named volume and applies migrations through a one-shot release job before Auth starts.
+Implementation status: Notifications, Chat message state, Posts, and Groups have completed data extraction. See their PostgreSQL migration runbooks for cutover procedures. Posts/Users and Groups/Users exchange versioned authenticated reads rather than accessing each other's tables. Redis shares Gateway rate limits, Chat presence, and Chat/Notification WebSocket fan-out across replicas; see [Redis Realtime State](redis-realtime-state.md). Chat still reads identity/follow data from shared SQLite, and Auth/Users remain there until their combined identity record and Chat dependencies are split. For clean interim environments, Compose owns that remaining SQLite state in a named volume and applies migrations through a one-shot release job before Auth starts.
 
 ## Decisions to Record Before Implementation
 

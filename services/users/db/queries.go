@@ -11,7 +11,7 @@ import (
 
 // GetProfileSummaries returns only non-sensitive profile display fields.
 func GetProfileSummaries(database *sql.DB, userIDs []int, search string) ([]models.ProfileSummary, error) {
-	query := `SELECT id, username, first_name, last_name, avatar_path FROM users`
+	query := `SELECT id, username, first_name, last_name, avatar_path, nickname FROM users`
 	arguments := make([]any, 0)
 	switch {
 	case len(userIDs) > 0:
@@ -38,7 +38,7 @@ func GetProfileSummaries(database *sql.DB, userIDs []int, search string) ([]mode
 	profiles := make([]models.ProfileSummary, 0)
 	for rows.Next() {
 		var profile models.ProfileSummary
-		if err := rows.Scan(&profile.ID, &profile.Username, &profile.FirstName, &profile.LastName, &profile.AvatarPath); err != nil {
+		if err := rows.Scan(&profile.ID, &profile.Username, &profile.FirstName, &profile.LastName, &profile.AvatarPath, &profile.Nickname); err != nil {
 			return nil, err
 		}
 		profiles = append(profiles, profile)
@@ -402,23 +402,33 @@ func SearchUsers(db *sql.DB, searchTerm string, currentUserID int) ([]*models.Us
 	return users, nil
 }
 
-// SearchUsersForGroup searches for users to invite to a group (excludes only current group members)
-func SearchUsersForGroup(db *sql.DB, searchTerm string, currentUserID int, groupID int) ([]*models.User, error) {
+// SearchUsersForGroup searches for invite candidates, excluding identities
+// already represented by a pending, invited, or accepted Groups record.
+func SearchUsersForGroup(db *sql.DB, searchTerm string, currentUserID int, excludedUserIDs []int) ([]*models.User, error) {
+	exclusion := ""
+	arguments := []any{}
+	if len(excludedUserIDs) > 0 {
+		placeholders := make([]string, len(excludedUserIDs))
+		for index, userID := range excludedUserIDs {
+			placeholders[index] = "?"
+			arguments = append(arguments, userID)
+		}
+		exclusion = " AND u.id NOT IN (" + strings.Join(placeholders, ",") + ")"
+	}
 	query := `
 		SELECT DISTINCT u.id, u.username, u.email, u.first_name, u.last_name, u.date_of_birth, u.avatar_path, 
 		       u.nickname, u.about_me, u.is_public_profile, u.created_at
 		FROM users u
 		WHERE (u.username LIKE ? OR u.first_name LIKE ? OR u.last_name LIKE ? OR u.nickname LIKE ?)
 		  AND u.id != ?
-		  AND u.id NOT IN (
-		    SELECT user_id FROM group_members 
-		    WHERE group_id = ?
-		  )
+		  ` + exclusion + `
 		LIMIT 50
 	`
 
 	searchPattern := "%" + searchTerm + "%"
-	rows, err := db.Query(query, searchPattern, searchPattern, searchPattern, searchPattern, currentUserID, groupID)
+	queryArguments := []any{searchPattern, searchPattern, searchPattern, searchPattern, currentUserID}
+	queryArguments = append(queryArguments, arguments...)
+	rows, err := db.Query(query, queryArguments...)
 	if err != nil {
 		return nil, err
 	}
