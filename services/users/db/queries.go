@@ -9,6 +9,29 @@ import (
 	"social-network/services/users/models"
 )
 
+// ProvisionProfile idempotently creates the Users-owned half of a newly
+// registered account. The empty password is a temporary compatibility value
+// required only while Users still uses the legacy combined SQLite table.
+func ProvisionProfile(database *sql.DB, request models.ProvisionProfileRequest) error {
+	_, err := database.Exec(`
+		INSERT INTO users (
+			id, username, email, password_hash, first_name, last_name,
+			date_of_birth, nickname, about_me, is_public_profile, created_at
+		)
+		VALUES (?, ?, ?, '', ?, ?, ?, ?, ?, 1, datetime('now'))
+		ON CONFLICT(id) DO UPDATE SET
+			username = excluded.username,
+			email = excluded.email,
+			first_name = excluded.first_name,
+			last_name = excluded.last_name,
+			date_of_birth = excluded.date_of_birth,
+			nickname = excluded.nickname,
+			about_me = excluded.about_me
+	`, request.AccountID, request.Username, request.Email, request.FirstName,
+		request.LastName, request.DateOfBirth, request.Nickname, request.AboutMe)
+	return err
+}
+
 // GetProfileSummaries returns only non-sensitive profile display fields.
 func GetProfileSummaries(database *sql.DB, userIDs []int, search string) ([]models.ProfileSummary, error) {
 	query := `SELECT id, username, first_name, last_name, avatar_path, nickname FROM users`

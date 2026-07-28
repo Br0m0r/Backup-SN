@@ -48,7 +48,7 @@ func (ts *TokenService) GenerateToken(userID int, username, email string) (strin
 	expiresAt := now.Add(30 * 24 * time.Hour)
 
 	// Store session in database
-	query := `INSERT INTO sessions (user_id, token, created_at, expires_at) VALUES (?, ?, ?, ?)`
+	query := `INSERT INTO sessions (account_id, token, created_at, expires_at) VALUES ($1, $2, $3, $4)`
 	_, err := ts.database.Exec(query, userID, token, now, expiresAt)
 	if err != nil {
 		return "", err
@@ -60,9 +60,9 @@ func (ts *TokenService) GenerateToken(userID int, username, email string) (strin
 // ValidateToken checks if a token is valid in the database and returns user info
 func (ts *TokenService) ValidateToken(token string) (*SessionData, error) {
 	query := `
-		SELECT id, user_id, token, created_at, expires_at 
-		FROM sessions 
-		WHERE token = ? AND expires_at > datetime('now')
+		SELECT id, account_id, token, created_at, expires_at
+		FROM sessions
+		WHERE token = $1 AND expires_at > CURRENT_TIMESTAMP
 	`
 
 	var session SessionData
@@ -85,7 +85,7 @@ func (ts *TokenService) ValidateToken(token string) (*SessionData, error) {
 
 // InvalidateToken removes a token from the database (logout)
 func (ts *TokenService) InvalidateToken(token string) error {
-	query := `DELETE FROM sessions WHERE token = ?`
+	query := `DELETE FROM sessions WHERE token = $1`
 	_, err := ts.database.Exec(query, token)
 	return err
 }
@@ -96,7 +96,7 @@ func (ts *TokenService) cleanupExpiredSessions() {
 	defer ticker.Stop()
 
 	for range ticker.C {
-		query := `DELETE FROM sessions WHERE expires_at < datetime('now')`
+		query := `DELETE FROM sessions WHERE expires_at < CURRENT_TIMESTAMP`
 		ts.database.Exec(query)
 	}
 }

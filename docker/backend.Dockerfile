@@ -29,7 +29,18 @@ RUN case "${SERVICE}" in \
       -trimpath \
       -ldflags="-s -w" \
       -o /out/migrate-sqlite ./services/common/cmd/migrate-sqlite && \
-    if [ "${SERVICE}" = "notifications" ]; then \
+    if [ "${SERVICE}" = "auth" ]; then \
+      CGO_ENABLED=1 go build \
+        -tags sqlite_omit_load_extension \
+        -trimpath \
+        -ldflags="-s -w" \
+        -o /out/migrate ./services/auth/cmd/migrate && \
+      CGO_ENABLED=1 go build \
+        -tags sqlite_omit_load_extension \
+        -trimpath \
+        -ldflags="-s -w" \
+        -o /out/copy-sqlite ./services/auth/cmd/copy-sqlite; \
+    elif [ "${SERVICE}" = "notifications" ]; then \
       CGO_ENABLED=1 go build \
         -tags sqlite_omit_load_extension \
         -trimpath \

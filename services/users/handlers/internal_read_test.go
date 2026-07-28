@@ -6,6 +6,7 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"reflect"
+	"strings"
 	"testing"
 
 	"social-network/services/common/serviceauth"
@@ -24,16 +25,17 @@ func TestInternalUsersReadContract(t *testing.T) {
 	t.Cleanup(func() { _ = database.Close() })
 	if _, err := database.Exec(`
 		CREATE TABLE users (
-			id INTEGER PRIMARY KEY, username TEXT, first_name TEXT,
-			last_name TEXT, avatar_path TEXT, nickname TEXT,
-			is_public_profile INTEGER NOT NULL
+			id INTEGER PRIMARY KEY, username TEXT UNIQUE, email TEXT UNIQUE,
+			password_hash TEXT NOT NULL, first_name TEXT, last_name TEXT,
+			date_of_birth TEXT, avatar_path TEXT, nickname TEXT, about_me TEXT,
+			is_public_profile INTEGER NOT NULL, created_at DATETIME
 		);
 		CREATE TABLE follows (follower_id INTEGER, following_id INTEGER, status TEXT);
-		INSERT INTO users VALUES
-			(7,'ada','Ada','Lovelace','/ada.png','Enchantress',1),
-			(8,'grace','Grace','Hopper',NULL,NULL,0),
-			(9,'linus','Linus','Torvalds',NULL,NULL,1),
-			(42,'current','Current','User',NULL,NULL,1);
+		INSERT INTO users (id,username,email,password_hash,first_name,last_name,avatar_path,nickname,is_public_profile,created_at) VALUES
+			(7,'ada','ada@example.com','hash','Ada','Lovelace','/ada.png','Enchantress',1,datetime('now')),
+			(8,'grace','grace@example.com','hash','Grace','Hopper',NULL,NULL,0,datetime('now')),
+			(9,'linus','linus@example.com','hash','Linus','Torvalds',NULL,NULL,1,datetime('now')),
+			(42,'current','current@example.com','hash','Current','User',NULL,NULL,1,datetime('now'));
 		INSERT INTO follows VALUES (42,7,'accepted'),(42,8,'pending');
 	`); err != nil {
 		t.Fatal(err)
@@ -99,5 +101,21 @@ func TestInternalUsersReadContract(t *testing.T) {
 		contactsBody.Data.Contacts[1].ID != 9 ||
 		!contactsBody.Data.Contacts[1].IsMessageRequest {
 		t.Fatalf("contacts = %+v", contactsBody.Data.Contacts)
+	}
+
+	provisionRequest := httptest.NewRequest(http.MethodPost, "/internal/v1/users/profiles",
+		strings.NewReader(`{"account_id":10,"username":"new","email":"new@example.com","first_name":"New","last_name":"User","date_of_birth":"2000-01-01"}`))
+	provisionRequest.Header.Set(serviceauth.HeaderName, token)
+	provisionResponse := httptest.NewRecorder()
+	protected.ServeHTTP(provisionResponse, provisionRequest)
+	if provisionResponse.Code != http.StatusOK {
+		t.Fatalf("provision response = %d, %s", provisionResponse.Code, provisionResponse.Body.String())
+	}
+	var provisionedUsername, provisionedPassword string
+	if err := database.QueryRow("SELECT username,password_hash FROM users WHERE id=10").Scan(&provisionedUsername, &provisionedPassword); err != nil {
+		t.Fatal(err)
+	}
+	if provisionedUsername != "new" || provisionedPassword != "" {
+		t.Fatalf("provisioned profile = %q, password placeholder %q", provisionedUsername, provisionedPassword)
 	}
 }

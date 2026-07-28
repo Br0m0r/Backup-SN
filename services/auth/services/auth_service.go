@@ -1,12 +1,14 @@
 package services
 
 import (
+	"context"
 	"database/sql"
 	"errors"
 	"strings"
 
 	"social-network/services/auth/db"
 	"social-network/services/auth/models"
+	"social-network/services/auth/usersclient"
 	"social-network/services/auth/utils"
 )
 
@@ -14,14 +16,20 @@ import (
 type AuthService struct {
 	database     *sql.DB
 	tokenService *TokenService
+	profiles     usersclient.Provisioner
 }
 
 // NewAuthService creates a new auth service instance
-func NewAuthService(database *sql.DB) *AuthService {
+func NewAuthService(database *sql.DB, profiles usersclient.Provisioner) *AuthService {
 	return &AuthService{
 		database:     database,
 		tokenService: NewTokenService(database),
+		profiles:     profiles,
 	}
+}
+
+func (s *AuthService) Ping(ctx context.Context) error {
+	return s.database.PingContext(ctx)
 }
 
 // Register creates a new user account
@@ -62,6 +70,17 @@ func (s *AuthService) Register(req *models.RegisterRequest) (*models.AuthRespons
 	user, err := db.CreateUser(s.database, req.Username, req.Email, hashedPassword, req.FirstName, req.LastName, req.DateOfBirth, req.Nickname, req.AboutMe)
 	if err != nil {
 		return nil, err
+	}
+	if s.profiles != nil {
+		err = s.profiles.Provision(context.Background(), usersclient.Profile{
+			AccountID: user.ID, Username: user.Username, Email: user.Email,
+			FirstName: req.FirstName, LastName: req.LastName,
+			DateOfBirth: req.DateOfBirth, Nickname: req.Nickname, AboutMe: req.AboutMe,
+		})
+		if err != nil {
+			_ = db.DeleteUser(s.database, user.ID)
+			return nil, errors.New("failed to provision user profile")
+		}
 	}
 
 	// Generate token

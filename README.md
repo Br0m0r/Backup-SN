@@ -21,7 +21,7 @@ A Facebook-like social network built with hybrid microservices architecture, fea
 
 **Backend:**
 - Go microservices (Auth, Users, Posts, Groups, Chat, Notifications)
-- Service-owned PostgreSQL for Notifications, Chat, Posts, and Groups; shared SQLite only for the remaining Auth/Users identity state
+- Service-owned PostgreSQL for Auth, Notifications, Chat, Posts, and Groups; shared SQLite only for the remaining Users profile/follow state
 - S3-compatible object storage for avatars, group images, post/comment media, and Chat attachments
 - Redis for distributed Gateway rate limits, Chat presence, and WebSocket fan-out
 - Gorilla WebSocket
@@ -64,7 +64,7 @@ For frontend-only development with `npm run dev`, Vite proxies `/api` HTTP and W
 
 Gateway request limits can be adjusted with `GATEWAY_RATE_LIMIT_RPS`, `GATEWAY_RATE_LIMIT_BURST`, and `GATEWAY_MAX_BODY_BYTES`. The token bucket is stored atomically in Redis and shared by every Gateway replica. If Redis becomes unavailable after startup, each Gateway temporarily falls back to its replica-local bucket and logs the degraded state.
 
-Backend containers run as UID `10001`. The transitional Auth/Users SQLite database is held in the `shared-sqlite-data` named volume rather than a tracked or host-bound file. Notifications, Chat message state, Posts, and Groups use service-owned PostgreSQL, and all uploaded media uses object storage; application containers have no database-file or upload-directory bind mounts.
+Backend containers run as UID `10001`. The transitional Users SQLite database is held in the `shared-sqlite-data` named volume rather than a tracked or host-bound file. Auth, Notifications, Chat, Posts, and Groups use service-owned PostgreSQL, and all uploaded media uses object storage; application containers have no database-file or upload-directory bind mounts.
    
 ## Default Structure
 
@@ -89,6 +89,7 @@ social-network/
 - [Current Service Boundary Inventory](docs/current-service-boundaries.md) - current table access, cross-service dependencies, and extraction order.
 - [Notification PostgreSQL Migration Runbook](docs/notification-postgresql-migration.md) - schema migration, SQLite data copy, verification, cutover, and rollback.
 - [Groups PostgreSQL Migration Runbook](docs/groups-postgresql-migration.md) - group/member/event schema migration, verified SQLite data copy, cutover, and rollback.
+- [Auth PostgreSQL Migration Runbook](docs/auth-postgresql-migration.md) - credentials/session migration, verified SQLite copy, profile provisioning, cutover, and rollback.
 - [Media Object Storage Migration](docs/media-object-storage-migration.md) - Chat media cutover, legacy-file migration, security model, and remaining domains.
 - [Redis Realtime State](docs/redis-realtime-state.md) - distributed rate limiting, presence, WebSocket fan-out, failure behavior, and production configuration.
 

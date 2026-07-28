@@ -5,6 +5,7 @@ networks:
 
 volumes:
   shared-sqlite-data:
+  auth-postgres-data:
   chat-postgres-data:
   posts-postgres-data:
   groups-postgres-data:
@@ -44,14 +45,61 @@ services:
     expose:
       - "8081"
     depends_on:
-      sqlite-migrations:
+      auth-migrations:
         condition: service_completed_successfully
     networks:
       - social-network
     environment:
-      - DATABASE_PATH=/data/social_network.db
+      - DATABASE_URL=postgres://auth:${AUTH_DB_PASSWORD:-auth-dev-only}@auth-db:5432/auth?sslmode=disable
+      - DB_MAX_OPEN_CONNS=${AUTH_DB_MAX_OPEN_CONNS:-25}
+      - DB_MAX_IDLE_CONNS=${AUTH_DB_MAX_IDLE_CONNS:-5}
+      - DB_CONN_MAX_LIFETIME=${AUTH_DB_CONN_MAX_LIFETIME:-30m}
+      - DB_CONN_MAX_IDLE_TIME=${AUTH_DB_CONN_MAX_IDLE_TIME:-5m}
+      - DB_CONNECT_TIMEOUT=${AUTH_DB_CONNECT_TIMEOUT:-10s}
+      - USERS_SERVICE_URL=http://user-service:8082
+      - USERS_SERVICE_TIMEOUT=${USERS_SERVICE_TIMEOUT:-3s}
+      - INTERNAL_SERVICE_TOKEN=${INTERNAL_SERVICE_TOKEN:?Set INTERNAL_SERVICE_TOKEN in .env}
+
+  auth-db:
+    image: postgres:17.10-alpine3.23
+    init: true
+    security_opt:
+      - no-new-privileges:true
+    expose:
+      - "5432"
+    networks:
+      - social-network
+    environment:
+      - POSTGRES_DB=auth
+      - POSTGRES_USER=auth
+      - POSTGRES_PASSWORD=${AUTH_DB_PASSWORD:-auth-dev-only}
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U auth -d auth"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
     volumes:
-      - shared-sqlite-data:/data
+      - auth-postgres-data:/var/lib/postgresql/data
+
+  auth-migrations:
+    build:
+      context: .
+      dockerfile: ./docker/backend.Dockerfile
+      args:
+        SERVICE: auth
+        PORT: "8081"
+    init: true
+    security_opt:
+      - no-new-privileges:true
+    entrypoint: ["./migrate"]
+    depends_on:
+      auth-db:
+        condition: service_healthy
+    networks:
+      - social-network
+    environment:
+      - DATABASE_URL=postgres://auth:${AUTH_DB_PASSWORD:-auth-dev-only}@auth-db:5432/auth?sslmode=disable
+      - DB_CONNECT_TIMEOUT=${AUTH_DB_CONNECT_TIMEOUT:-10s}
 
   # User Service - services/users/main.go runs on port 8082
   user-service:
@@ -67,6 +115,8 @@ services:
     expose:
       - "8082"
     depends_on:
+      sqlite-migrations:
+        condition: service_completed_successfully
       auth-service:
         condition: service_started  # User service needs auth service for token verification
       notification-service:

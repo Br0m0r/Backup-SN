@@ -22,6 +22,18 @@ func NewAuthHandlers(authService *services.AuthService) *AuthHandlers {
 	}
 }
 
+func (h *AuthHandlers) HealthCheck(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodGet {
+		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
+		return
+	}
+	if err := h.authService.Ping(r.Context()); err != nil {
+		utils.ErrorResponse(w, "Database unavailable", http.StatusServiceUnavailable)
+		return
+	}
+	utils.SuccessResponse(w, map[string]string{"status": "healthy", "service": "auth"})
+}
+
 // Register handles POST /register requests
 func (h *AuthHandlers) Register(w http.ResponseWriter, r *http.Request) {
 	if r.Method != "POST" {

@@ -1,11 +1,13 @@
 package handlers
 
 import (
+	"encoding/json"
 	"log"
 	"net/http"
 	"strconv"
 	"strings"
 
+	"social-network/services/users/models"
 	"social-network/services/users/services"
 	"social-network/services/users/utils"
 )
@@ -19,11 +21,15 @@ func NewInternalReadHandlers(service *services.UserService) *InternalReadHandler
 }
 
 func (h *InternalReadHandlers) ServeHTTP(w http.ResponseWriter, r *http.Request) {
+	path := strings.TrimPrefix(r.URL.Path, "/internal/v1/users/")
+	if path == "profiles" && r.Method == http.MethodPost {
+		h.provisionProfile(w, r)
+		return
+	}
 	if r.Method != http.MethodGet {
 		utils.ErrorResponse(w, "Method not allowed", http.StatusMethodNotAllowed)
 		return
 	}
-	path := strings.TrimPrefix(r.URL.Path, "/internal/v1/users/")
 	if path == "profiles" {
 		h.getProfiles(w, r)
 		return
@@ -53,6 +59,25 @@ func (h *InternalReadHandlers) ServeHTTP(w http.ResponseWriter, r *http.Request)
 		return
 	}
 	utils.SuccessResponse(w, map[string]any{"following_ids": followingIDs})
+}
+
+func (h *InternalReadHandlers) provisionProfile(w http.ResponseWriter, r *http.Request) {
+	var request models.ProvisionProfileRequest
+	if err := json.NewDecoder(http.MaxBytesReader(w, r.Body, 1<<20)).Decode(&request); err != nil {
+		utils.ErrorResponse(w, "Invalid request body", http.StatusBadRequest)
+		return
+	}
+	if request.AccountID <= 0 || strings.TrimSpace(request.Username) == "" ||
+		strings.TrimSpace(request.Email) == "" {
+		utils.ErrorResponse(w, "account_id, username, and email are required", http.StatusBadRequest)
+		return
+	}
+	if err := h.service.ProvisionProfile(request); err != nil {
+		log.Printf("Failed to provision user profile: %v", err)
+		utils.ErrorResponse(w, "Failed to provision profile", http.StatusInternalServerError)
+		return
+	}
+	utils.SuccessResponse(w, map[string]any{"profile_id": request.AccountID})
 }
 
 func (h *InternalReadHandlers) getChatPermission(w http.ResponseWriter, r *http.Request) {

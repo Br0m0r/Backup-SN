@@ -11,7 +11,7 @@ Update this document whenever a table, synchronous dependency, or public API mov
 | Service | Default port | External responsibilities | Synchronous dependencies |
 | --- | ---: | --- | --- |
 | Gateway | 8080 | Single public origin, API routing, WebSocket upgrades, frontend proxy | All application services, Frontend, Redis |
-| Auth | 8081 | Registration, login, logout, session verification | Shared SQLite database |
+| Auth | 8081 | Registration, login, logout, session verification | Authenticated Users profile provisioning; service-owned PostgreSQL |
 | Users | 8082 | Profiles, follows, user search, avatars | Auth verification; authenticated Posts and Groups reads; Notification creation; shared SQLite |
 | Posts | 8083 | Posts, feed, privacy, comments, post/comment images | Auth verification; authenticated Users profile/relationship reads; Notification creation; service-owned PostgreSQL; S3-compatible media storage |
 | Groups | 8084 | Groups, membership, invitations, events, group image | Auth verification; authenticated Users profile reads; Notification creation; service-owned PostgreSQL |
@@ -26,7 +26,7 @@ The Gateway adds browser security headers, rejects known request bodies above th
 
 All uploaded media now uses opaque, owner-scoped keys in S3-compatible object storage; the Gateway exposes read-only `/media` access while storage credentials remain private. Repeatable migration commands remain available for legacy Chat and post/comment files. The discarded development avatars and group images required no legacy copy, and their services no longer expose static file handlers or upload bind mounts.
 
-All Go services use `docker/backend.Dockerfile`, with the service name and port supplied as build arguments. Notifications, Chat, Posts, and Groups now have private PostgreSQL databases and embedded migration histories without cross-domain foreign keys. Posts, Groups, and Chat obtain profile/relationship data through Users contracts; Users obtains profile post lists through Posts and invite-search exclusions through Groups. Backend, Gateway, and Frontend runtime images run as non-root users, include health checks, use explicit base-image release lines, and are built in CI. Fixed Compose container names were removed so they do not block future replica scaling.
+All Go services use `docker/backend.Dockerfile`, with the service name and port supplied as build arguments. Auth, Notifications, Chat, Posts, and Groups now have private PostgreSQL databases and embedded migration histories without cross-domain foreign keys. Posts, Groups, and Chat obtain profile/relationship data through Users contracts; Auth provisions new profiles through Users; Users obtains profile post lists through Posts and invite-search exclusions through Groups. Backend, Gateway, and Frontend runtime images run as non-root users, include health checks, use explicit base-image release lines, and are built in CI. Fixed Compose container names were removed so they do not block future replica scaling.
 
 ## Current Table Access
 
@@ -34,8 +34,8 @@ The following table is based on SQL statements in each service. "Target owner" i
 
 | Current table | Services accessing it | Target owner | Required separation |
 | --- | --- | --- | --- |
-| `users` | Auth, Users | Split between Auth and Users | Posts, Groups, and Chat now use authenticated Users contracts. Split credentials from profile state. |
-| `sessions` | Auth | Auth | Move with Auth credentials and expose token/JWKS contracts. |
+| `users` | Users in shared SQLite; Auth data copied into its separate `accounts` table | Users | Auth credentials are separated. Move the remaining profile columns to Users-owned PostgreSQL. |
+| `sessions` | Auth only, in its service-owned PostgreSQL database | Auth | Database extraction is complete. |
 | `follows` | Users | Users | Posts and Chat now use authenticated Users relationship contracts. |
 | `posts` | Posts only, in its service-owned PostgreSQL database | Posts | Database extraction is complete; Users reads profile posts through the authenticated Posts contract. |
 | `comments` | Posts only, in its service-owned PostgreSQL database | Posts | Database extraction is complete. |
@@ -52,7 +52,11 @@ The following table is based on SQL statements in each service. "Target owner" i
 
 ### Shared identity record
 
-Auth creates and reads `users`, while Users updates the same record with profile data. The table combines credentials and profile information, so neither service can currently migrate or deploy its schema independently.
+**Partially resolved:** Auth credentials and sessions now live in Auth-owned
+PostgreSQL. Auth allocates stable account IDs and provisions Users profiles
+through an authenticated contract. Users temporarily retains the legacy
+combined SQLite row, with a non-credential compatibility placeholder for new
+profiles, until its PostgreSQL extraction removes `password_hash`.
 
 Target split:
 
@@ -156,6 +160,6 @@ The current access graph supports this order:
 3. **Chat messages:** database extraction and prerequisite synchronous Users/Groups contracts are complete; replace contracts with projections after event infrastructure exists.
 4. **Posts:** database extraction and prerequisite synchronous contracts are complete; replace contracts with projections after event infrastructure exists.
 5. **Groups:** database extraction and prerequisite synchronous contracts are complete; replace contracts with projections after event infrastructure exists.
-6. **Auth and Users:** split the combined `users` record last, once stable identity events and profile contracts exist.
+6. **Auth and Users:** Auth extraction is complete; move Users profiles/follows to PostgreSQL next, then replace synchronous provisioning with identity events after broker infrastructure exists.
 
 Each extraction must finish with database credentials that cannot access another service's data.

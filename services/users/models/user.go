@@ -73,6 +73,19 @@ type ChatContact struct {
 	IsMessageRequest bool `json:"is_message_request"`
 }
 
+// ProvisionProfileRequest is the authenticated Auth-to-Users registration
+// contract. AccountID is the stable identity allocated by Auth.
+type ProvisionProfileRequest struct {
+	AccountID   int     `json:"account_id"`
+	Username    string  `json:"username"`
+	Email       string  `json:"email"`
+	FirstName   string  `json:"first_name"`
+	LastName    string  `json:"last_name"`
+	DateOfBirth string  `json:"date_of_birth"`
+	Nickname    *string `json:"nickname"`
+	AboutMe     *string `json:"about_me"`
+}
+
 // FollowRequest represents a follow action request
 type FollowRequest struct {
 	UserID int `json:"user_id"`

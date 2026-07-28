@@ -50,6 +50,10 @@ func (s *UserService) GetChatContacts(userID int, recentSenderIDs []int) ([]mode
 	return db.GetChatContacts(s.database, userID, recentSenderIDs)
 }
 
+func (s *UserService) ProvisionProfile(request models.ProvisionProfileRequest) error {
+	return db.ProvisionProfile(s.database, request)
+}
+
 // UpdateProfile updates a user's profile
 func (s *UserService) UpdateProfile(userID int, req *models.UpdateProfileRequest) (*models.User, error) {
 	// Validate and sanitize first name
